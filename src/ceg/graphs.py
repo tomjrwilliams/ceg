@@ -351,7 +351,6 @@ def step(graph: Graph):
 
 
 
-
 # the graph is cyclic
 
 # so we need to avoid cases where we just cycle the same region and don't loop any others? 
