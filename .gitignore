@@ -171,3 +171,5 @@ cython_debug/
 .pypirc
 
 __local__/*
+
+.vscode/*
