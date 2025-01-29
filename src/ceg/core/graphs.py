@@ -232,8 +232,8 @@ def init_node(
     i = ref.i
     nodes = set_tuple(nodes, i, node, Node.null)
     acc: defaultdict[int, list[str]] = defaultdict(list)
-    for k, i in yield_params(node):
-        acc[i].append(k)
+    for k, p in yield_params(node):
+        acc[p].append(k)
     params: frozendict[int, tuple[str, ...]] = frozendict(
         zip(acc.keys(), map(tuple, acc.values()))
     )  # type: ignore
@@ -343,7 +343,7 @@ def step(
         heappush(queue, e)
 
     event = heappop(queue)
-    
+
     try:
         t, ref = event
     except:
@@ -400,6 +400,7 @@ def step(
     )
     return graph, event
 
+
 def steps(graph: Graph, *events: Event, n: int = 1):
     es = []
     for i in range(n):
@@ -409,6 +410,7 @@ def steps(graph: Graph, *events: Event, n: int = 1):
             graph, e = step(graph)
         es.append(e)
     return graph, tuple(es)
+
 
 #  ------------------
 

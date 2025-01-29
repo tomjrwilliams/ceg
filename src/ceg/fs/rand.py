@@ -3,7 +3,18 @@ from .. import core
 
 import numpy
 
-rng = numpy.random.default_rng(42069)
+#  ------------------
+
+RNG = {}
+
+
+def rng(seed: int, reset: bool = False):
+    if seed in RNG and not reset:
+        return RNG[seed]
+    gen = numpy.random.default_rng(seed)
+    RNG[seed] = gen
+    return gen
+
 
 #  ------------------
 
@@ -15,7 +26,7 @@ class gaussian_kw(NamedTuple):
     v: core.Ref.Col
     mean: float
     std: float
-    # TODO: seed?
+    seed: int
 
 
 class gaussian(gaussian_kw, core.Node.Col):
@@ -24,17 +35,18 @@ class gaussian(gaussian_kw, core.Node.Col):
     mean: float
     std: float
     >>> g = core.Graph.new()
+    >>> loop = core.loop.Fixed(1)
     >>> g, r = g.bind(None, ref=core.Ref.Col)
     >>> g, r = g.bind(
-    ...     gaussian.new(r).sync(
-    ...         v=core.loop.Fixed(1)
-    ...     ),
+    ...     gaussian.new(r).sync(v=loop),
     ...     ref=r,
     ... )
-    >>> g, (*es, e) = g.steps(core.Event(0, r), n = 5)
+    >>> g, (*es, e) = g.steps(
+    ...     core.Event(0, r), n=6
+    ... )
     >>> ts, vs = core.mask(r, e, g.data)
-    >>> numpy.round(vs, 2)
-    array([-1.03, -0.42,  0.33, -0.56,  0.05])
+    >>> list(numpy.round(vs, 2))
+    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     """
 
     DEF: ClassVar[core.Defn] = core.define(
@@ -47,12 +59,17 @@ class gaussian(gaussian_kw, core.Node.Col):
         v: core.Ref.Col,
         mean: float = 0.0,
         std: float = 1.0,
+        seed: int = 0,
     ):
-        return cls(*cls.args(), v, mean=mean, std=std)
+        return cls(
+            *cls.args(), v, mean=mean, std=std, seed=seed
+        )
 
     def __call__(self, event: core.Event, data: core.Data):
         ts, vs = core.mask(self.v, event, data)
-        step = rng.normal(self.mean, self.std, size=None)
+        step = rng(self.seed).normal(
+            self.mean, self.std, size=None
+        )
         if not len(vs):
             return step
         return vs[-1] + step

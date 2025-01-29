@@ -13,6 +13,8 @@ import numpy
 
 rng = numpy.random.default_rng(42069)
 
+# TODO: put the rng behind a cache, with different variations for if you want a fresh one (with that seed) or the current acc state
+
 
 class Wait(Sync):
     """ """
@@ -63,9 +65,7 @@ class Rand(RandKw, Wait):
             step = rng.normal(*self.params, size=None)
         else:
             raise ValueError(self)
-        return event._replace(
-            ref=ref, t=event.t + step
-        )
+        return event._replace(ref=ref, t=event.t + step)
 
 
 #  ------------------

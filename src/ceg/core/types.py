@@ -44,6 +44,7 @@ class Event(NamedTuple):
     t: int
     ref: Ref.Any
     """
+
     # means both fire and fired, dependending on context
     # means literally just "node i at time t"
     t: int
