@@ -1,4 +1,3 @@
-
 # TODO: register a plugin that on update of a node (say a table node)
 
 # pushes the table data as json with an ID

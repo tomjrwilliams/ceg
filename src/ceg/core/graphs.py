@@ -1,4 +1,3 @@
-
 # cyclic event graph (is the name)
 from __future__ import annotations
 
@@ -8,11 +7,15 @@ from typing import (
     ClassVar,
     Type,
     TypeVar,
+    Any,
     Optional,
     Callable,
     Iterable,
     Generator,
     Iterator,
+    get_type_hints,
+    get_origin,
+    get_args,
 )
 from heapq import heapify, heappush, heappop
 
@@ -39,7 +42,8 @@ T = TypeVar("T")
 
 
 def define(
-    t: Type[Node.Any], t_kw: Type[NamedTuple], 
+    t: Type[Node.Any],
+    t_kw: Type[NamedTuple],
 ):
 
     params = tuple(yield_param_keys(t_kw))
@@ -49,24 +53,68 @@ def define(
 
     return Defn(
         name=name,
-        params=params, # the keys
+        params=params,  # the keys
+        # dims, oritentation, etc. (from t)
     )
+
 
 #  ------------------
 
-def yield_params(node: Node.Any) -> Iterator[tuple[str, int]]:
-    # yield from recursively any fields that are ref
-    yield from []
+
+def rec_yield_param(k, v: Ref.Any | Iterable | Any):
+    if isinstance(v, Ref.Any):
+        yield (k, v.i)
+    elif isinstance(v, Iterable):
+        yield from rec_yield_params(k, v)
+
+
+def rec_yield_params(k: str, v: Iterable):
+    if isinstance(v, dict):
+        yield from rec_yield_params(k, v.keys())
+        yield from rec_yield_params(k, v.values())
+    elif isinstance(v, Iterable):
+        _ = list(map(partial(rec_yield_param, k), v))
+
+
+def yield_params(
+    node: Node.Any,
+) -> Iterator[tuple[str, int]]:
+    for k in node.DEF.params:
+        v = getattr(node, k)
+        yield from rec_yield_param(k, v)
+
+
+def rec_yield_hint_types(hint):
+    try:
+        o = get_origin(hint)
+        yield o
+    except:
+        pass
+    try:
+        args = get_args(hint)
+        for a in args:
+            yield from rec_yield_hint_types(a)
+    except:
+        pass
+    yield hint
+
 
 def yield_param_keys(t_kw: Type[NamedTuple]):
-    # yield from recursively any fields that are ref
-    yield from []
+    for k, h in get_type_hints(t_kw).items():
+        for h in rec_yield_hint_types(h):
+            if not isinstance(h, type):
+                continue
+            if issubclass(h, Ref.Any):
+                yield k
+                break
+
 
 #  ------------------
 
 
 class Scope(NamedTuple):
     pass
+
 
 class Plugin(NamedTuple):
 
@@ -93,13 +141,19 @@ class Plugin(NamedTuple):
 
 
 def use_plugins(
-    graph: Graph, node: Node.Any, ref: Ref.Any, using: Plugin | tuple[Plugin, ...] | None):
+    graph: Graph,
+    node: Node.Any,
+    ref: Ref.Any,
+    using: Plugin | tuple[Plugin, ...] | None,
+):
     return graph
+
 
 #  ------------------
 
 
 # TODO: null node and series would mean not having to constantly assert not none just for the type checker
+
 
 class Graph(NamedTuple):
     """
@@ -112,25 +166,26 @@ class Graph(NamedTuple):
     rows: tuple
     cols: tuple
     """
-    queue: list[Event] # heapify
+
+    queue: list[Event]  # heapify
     nodes: Nodes
     index: frozendict[Node.Any, int]
-    ustream: UStream # params
-    dstream: DStream # dependents
+    ustream: UStream  # params
+    dstream: DStream  # dependents
     data: Data
     plugins: frozendict[Plugin, Scope]
 
     # TODO: plugin is the key
     # and the acc is a generic accumulator object
-    # that 
+    # that
 
     @classmethod
     def new(cls):
         queue = []
         heapify(queue)
-        index: frozendict[Node.Any, int] = frozendict() # type: ignore
-        dstream: frozendict[int, tuple[int, ...]] = frozendict() # type: ignore
-        plugins: frozendict[Plugin, Scope] = frozendict() # type: ignore
+        index: frozendict[Node.Any, int] = frozendict()  # type: ignore
+        dstream: frozendict[int, tuple[int, ...]] = frozendict()  # type: ignore
+        plugins: frozendict[Plugin, Scope] = frozendict()  # type: ignore
         return cls(
             queue=queue,
             nodes=(),
@@ -145,21 +200,22 @@ class Graph(NamedTuple):
 
     def series(self, ref: Ref.Any, t: float):
         s = self.data[ref.i]
-        assert s is not None, (ref)
+        assert s is not None, ref
         return s.mask(t)
 
     def bind(
         self,
         node: Node.Any | None = None,
-        ref: Ref.Any | Type[Ref.Any] | None=None,
+        ref: Ref.Any | Type[Ref.Any] | None = None,
         using: Plugin | tuple[Plugin, ...] | None = None,
     ):
-        return bind(
-            self, node=node, ref=ref, using=using
-        )
+        return bind(self, node=node, ref=ref, using=using)
 
-    def step(self) -> Graph:
-        return step(self)
+    def step(self, *events: Event) -> tuple[Graph, Event]:
+        return step(self, *events)
+
+    def steps(self, *events: Event, n: int = 1):
+        return steps(self, *events, n=n)
 
 
 #  ------------------
@@ -178,24 +234,22 @@ def init_node(
     acc: defaultdict[int, list[str]] = defaultdict(list)
     for k, i in yield_params(node):
         acc[i].append(k)
-    params: frozendict[int, tuple[str, ...]] = frozendict(zip(
-        acc.keys(),
-        map(tuple, acc.values())
-    )) # type: ignore
+    params: frozendict[int, tuple[str, ...]] = frozendict(
+        zip(acc.keys(), map(tuple, acc.values()))
+    )  # type: ignore
     ustream = set_tuple(
-        ustream, i, params,
-        frozendict() # type: ignore
+        ustream, i, params, frozendict()  # type: ignore
     )
     dstream = fold_star(
-        dstream, set_tuple_add, zip(
-            params,
-            itertools.repeat(ref.i, len(params))
-        )
+        dstream,
+        set_tuple_add,
+        zip(params, itertools.repeat(ref.i, len(params))),
     )
     data = set_tuple(
         data, i, node.SERIES.new(), Series.null
     )
     return nodes, ustream, dstream, data
+
 
 #  ------------------
 
@@ -203,11 +257,10 @@ def init_node(
 def bind(
     graph: Graph,
     node: Node.Any | None = None,
-    ref: Ref.Any | Type[Ref.Any] | None=None,
+    ref: Ref.Any | Type[Ref.Any] | None = None,
     using: Plugin | tuple[Plugin, ...] | None = None,
-):
-    # TODO: node= optional int to prealloc many ref
-    #ref = int allowed as well as a ref type?
+) -> tuple[Graph, Ref.Any]:
+    # TODO: node= int to prealloc many ref
     # TODO: kwrg for only return graph (eg. if pre alloc ref and want to fold over)
 
     i: int
@@ -232,27 +285,25 @@ def bind(
         res = ref.new(i)
         #
         nodes = nodes + (Node.null,)
-        ustream = ustream + (frozendict(),) # type: ignore
+        ustream = ustream + (frozendict(),)  # type: ignore
         data = data + (Series.null,)
     elif isinstance(node, Node.Any) and ref is None:
         i = index.get(node, len(graph.nodes))
         res = node.ref(i)
         if i == len(graph.nodes):
             nodes, ustream, dstream, data = init_node(
-                node,
-                res,
-                nodes, ustream, dstream, data
-            ) # type: ignore
-    elif isinstance(node, Node.Any) and isinstance(ref, Ref.Any):
+                node, res, nodes, ustream, dstream, data
+            )  # type: ignore
+    elif isinstance(node, Node.Any) and isinstance(
+        ref, Ref.Any
+    ):
         i = index.get(node, ref.i)
         assert i == ref.i, (node, ref, i)
         res = ref
-        if nodes[i] is None:
+        if nodes[i] == Node.null:
             nodes, ustream, dstream, data = init_node(
-                node,
-                res,
-                nodes, ustream, dstream, data
-            ) # type: ignore
+                node, res, nodes, ustream, dstream, data
+            )  # type: ignore
     else:
         raise ValueError(node, ref)
 
@@ -271,10 +322,13 @@ def bind(
 
     return graph, res
 
+
 #  ------------------
 
 
-def step(graph: Graph):
+def step(
+    graph: Graph, *events: Event
+) -> tuple[Graph, Event]:
     (
         queue,
         nodes,
@@ -285,41 +339,43 @@ def step(graph: Graph):
         plugins,
     ) = graph
 
-    event = heappop(queue)
+    for e in events:
+        heappush(queue, e)
 
-    t, ref = event
+    event = heappop(queue)
+    
+    try:
+        t, ref = event
+    except:
+        raise ValueError(event)
     node = nodes[ref.i]
 
     assert node is not None, ref
 
-    n = node
+    for p, sc in plugins.items():
+        node = p.before(graph, node, event, sc)
+
+    res = node(event, data)
 
     for p, sc in plugins.items():
-        n = p.before(graph, n, event, sc)
-    
-    res = n(event, data)
-
-    for p, sc in plugins.items():
-        res, n = p.after(graph, res, node, event, sc)
+        res, node = p.after(graph, res, node, event, sc)
 
     s = series(ref, data)
     if isinstance(s, Series.Null):
         s = node.SERIES.new()
         assert not isinstance(s, Series.Null), s
-        data = set_tuple(
-            data, ref.i, s, Series.null
-        )
+        data = set_tuple(data, ref.i, s, Series.null)
 
     data: Data = set_tuple(
         data, ref.i, s.append(t, res), Series.null
     )
 
     for i in dstream.get(ref.i, ()):
-        n = nodes[i]
-        assert n is not None, ref
+        nd = nodes[i]
+        assert nd is not None, ref
 
-        e = n.schedule.next(
-            n, n.ref(i), event, ustream, data
+        e = nd.schedule.next(
+            nd, nd.ref(i), event, ustream, data
         )
 
         if e is None:
@@ -330,9 +386,9 @@ def step(graph: Graph):
             _ = list(map(partial(heappush, queue), e))
         else:
             raise ValueError(e)
-        
+
         # do we need a tie break on n (incr global event counter?)
-    
+
     graph = Graph(
         queue,
         nodes,
@@ -342,17 +398,25 @@ def step(graph: Graph):
         data,
         plugins,
     )
-    return graph
+    return graph, event
 
+def steps(graph: Graph, *events: Event, n: int = 1):
+    es = []
+    for i in range(n):
+        if i == 0:
+            graph, e = step(graph, *events)
+        else:
+            graph, e = step(graph)
+        es.append(e)
+    return graph, tuple(es)
 
 #  ------------------
 
 # until can be a user level code, loop step however you please
 
 
-
 # the graph is cyclic
 
-# so we need to avoid cases where we just cycle the same region and don't loop any others? 
+# so we need to avoid cases where we just cycle the same region and don't loop any others?
 
 # hence the queue for changes to be dealt with

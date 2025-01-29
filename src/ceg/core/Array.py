@@ -1,19 +1,24 @@
-
-from multiprocessing.sharedctypes import Value
 import operator
 from functools import reduce
 from typing import NamedTuple, Sequence, Union, ClassVar
 
 import numpy
 
+#  ------------------
 
 # TODO: prefix with float, int, bool (ArrayRow even multi d could in theory acc vertically, unpacking row fields into cols?)
 
 np = numpy.ndarray
 
+np_f64 = numpy.float64
+
+np_1D = numpy.ndarray[tuple[int], numpy.dtype[np_f64]]
+np_2D = numpy.ndarray[tuple[int, int], numpy.dtype[np_f64]]
+
 Shape = int | tuple[int, int] | tuple[int, int, int]
 
 #  ------------------
+
 
 class ArrayND(NamedTuple):
     """
@@ -24,6 +29,7 @@ class ArrayND(NamedTuple):
     method: str
     raw: numpy.ndarray
     """
+
     shape: tuple[int, ...]
     size: int
     n: int
@@ -31,36 +37,34 @@ class ArrayND(NamedTuple):
     method: str
     raw: numpy.ndarray
 
-    DIMS: ClassVar[int]
-
     @property
     def last(self):
         raise ValueError(self)
+
 
 Any = ArrayND
 
 #  ------------------
 
+
 class ArrayNull(ArrayND):
-    
+
     @classmethod
-    def new(
-        cls, 
-        incr: int = 2,
-        method: str = "exp"
-    ):
+    def new(cls, incr: int = 2, method: str = "exp"):
         return cls(
             shape=(),
             size=1,
             n=0,
             incr=incr,
             method=method,
-            raw=numpy.empty(0)
+            raw=numpy.empty(0),
         )
+
 
 Null = ArrayNull
 
 #  ------------------
+
 
 def needs_resize(
     arr: numpy.ndarray,
@@ -70,6 +74,7 @@ def needs_resize(
 ):
     required: int = (n_curr + n_new) * v_size
     return required > arr.size
+
 
 # TODO: numba jit
 def resize_lin(
@@ -88,6 +93,7 @@ def resize_lin(
         res[i] = arr[i]
     return res
 
+
 # TODO: numba jit
 def resize_exp(
     arr: numpy.ndarray,
@@ -104,9 +110,11 @@ def resize_exp(
         res[i] = arr[i]
     return res
 
+
 # TODO: factor out the update / write, so we can then call them in the call method of the relevant shape node
 
 #  ------------------
+
 
 def array_v_size(*shape: int):
     return reduce(operator.mul, shape, 1)
@@ -114,23 +122,20 @@ def array_v_size(*shape: int):
 
 #  ------------------
 
+
 class Array(ArrayND):
 
     DIMS: ClassVar[int] = 0
 
     @classmethod
-    def new(
-        cls, 
-        incr: int = 2,
-        method: str = "exp"
-    ):
+    def new(cls, incr: int = 2, method: str = "exp"):
         return cls(
             shape=(),
             size=1,
-            n=32,
+            n=0,
             incr=incr,
             method=method,
-            raw=numpy.empty(32)
+            raw=numpy.empty(32),
         )
 
     def needs_resize(self, n):
@@ -139,7 +144,7 @@ class Array(ArrayND):
     def resize(self):
         # TODO; swithc on method
         return self._replace(
-            raw = resize_exp(
+            raw=resize_exp(
                 self.raw, self.size, self.n, self.incr
             )
         )
@@ -148,9 +153,9 @@ class Array(ArrayND):
         if self.needs_resize(1):
             self = self.resize()
         self.raw[self.n] = v
-        self = self._replace(n = self.n + 1)
+        self = self._replace(n=self.n + 1)
         return self
-    
+
     def add_many(self, v: numpy.ndarray):
         assert len(v.shape) == 1, v.shape
         n: int = v.size
@@ -158,20 +163,22 @@ class Array(ArrayND):
             self = self.resize()
         for i in range(n):
             self.raw[self.n + i] = v[i]
-        self = self._replace(n = self.n + 1)
+        self = self._replace(n=self.n + 1)
         return self
 
     @property
     def data(self):
-        return self.raw[:self.size]
+        return self.raw[: self.n]
 
     @property
     def last(self):
-        if self.size == 0:
+        if self.n == 0:
             return None
-        return self.raw[self.size-1]
+        return self.raw[self.n - 1]
+
 
 D0 = Scalar = Array
+
 
 class Array1D(ArrayND):
     """
@@ -183,18 +190,14 @@ class Array1D(ArrayND):
     # TODO: possibly change to incremental rather than exponential re-sizing
 
     @classmethod
-    def new(
-        cls, 
-        incr: int = 2,
-        method: str = "exp"
-    ):
+    def new(cls, incr: int = 2, method: str = "exp"):
         return cls(
             shape=(),
             size=-1,
-            n=32,
+            n=0,
             incr=incr,
             method=method,
-            raw=numpy.empty(32)
+            raw=numpy.empty(32),
         )
 
     def needs_resize(self, n):
@@ -203,7 +206,7 @@ class Array1D(ArrayND):
     def resize(self):
         # TODO; swithc on method
         return self._replace(
-            raw = resize_exp(
+            raw=resize_exp(
                 self.raw, self.size, self.n, self.incr
             )
         )
@@ -217,29 +220,33 @@ class Array1D(ArrayND):
             self = self.resize()
         for i in range(v.size):
             self.raw[self.n + i] = v[i]
-        self = self._replace(n = self.n + v.size)
+        self = self._replace(n=self.n + v.size)
         return self
-    
+
     def add_many(self, v: numpy.ndarray):
         assert len(v.shape) == 2, v.shape
         if self.shape == ():
             self = self._replace(shape=v[:-1].shape)
-        assert v.shape[:-1] == self.shape, (self.shape, v.shape)
+        assert v.shape[:-1] == self.shape, (
+            self.shape,
+            v.shape,
+        )
         while self.needs_resize(v.shape[0]):
             self = self.resize()
         v_flat = numpy.ravel(v)
         for i in range(v.size):
             self.raw[self.n + i] = v_flat[i]
-        self = self._replace(n = self.n + v.size)
+        self = self._replace(n=self.n + v.size)
         return self
 
     @property
     def data(self):
-        width, = self.shape
-        data = self.raw[:self.size]
-        return numpy.reshape(data, (
-            int(len(data)/width), width
-        ))
+        (width,) = self.shape
+        data = self.raw[: self.n]
+        return numpy.reshape(
+            data, (int(len(data) / width), width)
+        )
+
 
 D1 = Vec = Vector = Array1D
 
@@ -247,10 +254,10 @@ D1 = Vec = Vector = Array1D
 
 
 class ArrayRow(ArrayND):
-    
+
     # allocate a c array of given size
     # fill with structs
-    
+
     def add(self, v):
         return
 

@@ -1,7 +1,6 @@
-
 from ..types import Sync
 
 Any = Sync
 
-from . import Loop
-from . import Wait
+from . import loop
+from . import wait
