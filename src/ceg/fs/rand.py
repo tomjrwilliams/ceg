@@ -41,11 +41,10 @@ class gaussian(gaussian_kw, core.Node.Col):
     ...     gaussian.new(r).sync(v=loop),
     ...     ref=r,
     ... )
-    >>> g, (*es, e) = g.steps(
+    >>> g, (*_, e) = g.steps(
     ...     core.Event(0, r), n=6
     ... )
-    >>> ts, vs = core.mask(r, e, g.data)
-    >>> list(numpy.round(vs, 2))
+    >>> list(numpy.round(g.select(r, e), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     """
 
@@ -65,8 +64,10 @@ class gaussian(gaussian_kw, core.Node.Col):
             *cls.args(), v, mean=mean, std=std, seed=seed
         )
 
-    def __call__(self, event: core.Event, data: core.Data):
-        ts, vs = core.mask(self.v, event, data)
+    def __call__(
+        self, event: core.Event, graph: core.Graph
+    ):
+        vs = graph.select(self.v, event)
         step = rng(self.seed).normal(
             self.mean, self.std, size=None
         )

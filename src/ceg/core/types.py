@@ -62,7 +62,7 @@ class Sync(NamedTuple):
         ref: Ref.Any,
         event: Event,
         params: frozendict[int, tuple[str, ...]],
-        data: Data,
+        graph: GraphLike,
     ):
         raise ValueError(self)
 
@@ -86,17 +86,21 @@ class Schedule(NamedTuple):
         node: NodeND,
         ref: Ref.Any,  # ref to self
         event: Event,  # ref might not be self (eg. might be param)
-        ustream: UStream,
-        data: Data,
+        graph: GraphLike,
     ) -> Event | list[Event] | None:
         return next_event(
             self,
             node,
             ref,
             event,
-            ustream,
-            data,
+            graph,
         )
+
+
+#  ------------------
+
+
+null_schedule = Schedule.new()
 
 
 def next_event(
@@ -104,22 +108,21 @@ def next_event(
     node: NodeND,
     ref: Ref.Any,  # ref to self
     event: Event,  # ref might not be self (eg. might be param)
-    ustream: UStream,
-    data: Data,
+    graph: GraphLike,
 ):
-    params = ustream[ref.i]
+    params = graph.ustream[ref.i]
     for k in params.get(ref.i, ()):
         sync = schedule.sync.get(k)
         if sync is None:
             continue
-        res = sync.next(node, ref, event, params, data)
+        res = sync.next(node, ref, event, params, graph)
         if res is not None:
             return res
     t = event.t
     assert ref.i not in params, (node, ref, params)
     # as will never fire
     if all_series(
-        params.keys(), data, lambda e: e.t.last == t
+        graph, params.keys(), lambda e: e.t.last == t
     ):
         return event._replace(ref=ref)
     return None
@@ -132,59 +135,127 @@ def next_event(
 # and harder to have plguins mask over res values
 # so probably do use that for now
 
+#  ------------------
+
 UStream = tuple[frozendict[int, tuple[str, ...]], ...]
 DStream = frozendict[int, tuple[int, ...]]
 
 Data = tuple[Series.Any, ...]
 
+#  ------------------
+
+# TODO: kwargs on if return t or v or even just mask?
+
 
 @overload
-def mask(
-    ref: Ref.Col, t: float | Event, data: Data
+def select(
+    graph: GraphLike,
+    ref: Ref.Col,
+    at: float | Event,
+    t: bool = True,
 ) -> tuple[Array.np_1D, Array.np_1D]: ...
 
 
 @overload
-def mask(
-    ref: Ref.Col1D, t: float | Event, data: Data
+def select(
+    graph: GraphLike,
+    ref: Ref.Col,
+    at: float | Event,
+    t: bool = False,
+) -> Array.np_1D: ...
+
+
+@overload
+def select(
+    graph: GraphLike,
+    ref: Ref.Col1D,
+    at: float | Event,
+    t: bool = True,
 ) -> tuple[Array.np_1D, Array.np_2D]: ...
 
 
-def mask(ref: Ref.Any, t: float | Event, data: Data):
-    return series(ref, data).mask(
-        t if isinstance(t, float) else t.t
+@overload
+def select(
+    graph: GraphLike,
+    ref: Ref.Col1D,
+    at: float | Event,
+    t: bool = False,
+) -> Array.np_2D: ...
+
+
+def select(
+    graph: GraphLike,
+    ref: Ref.Any,
+    at: float | Event,
+    t: bool = False,
+):
+    return series(graph, ref).select(
+        at if isinstance(at, float) else at.t, t=t
     )
 
+
+def mask(
+    graph: GraphLike, ref: Ref.Any, at: float | Event
+) -> Array.np_1D:
+    return series(graph, ref).mask(
+        at if isinstance(at, float) else at.t
+    )
+
+
+# TODO: implementations for other dtypes (eg. as jax, pd, polars, etc. - can arguably be a kwarg as well not a separate func?)
+
+#  ------------------
 
 # null Series
 SeriesToBool = Callable[[Series.Any], bool]
 
 
-def series(ref: Ref.Any | int, data: Data):
+# overlods on ref type -> series type
+
+
+def series(
+    graph: GraphLike, ref: Ref.Any | int
+) -> Series.Any:
+    data = graph.data
     if isinstance(ref, int):
         return data[ref]
     return data[ref.i]
 
 
 def is_series(
+    graph: GraphLike,
     ref: Ref.Any | int,
-    data: Data,
     f: SeriesToBool,
 ):
-    return f(series(ref, data))
+    return f(series(graph, ref))
 
 
 def all_series(
+    graph: GraphLike,
     refs: Iterable[Ref.Any | int],
-    data: Data,
     f: SeriesToBool,
 ):
-    return all((f(series(ref, data)) for ref in refs))
+    return all((f(series(graph, ref)) for ref in refs))
 
 
-Schedules = frozendict[str, Schedule]
+class GraphLike(Protocol):
 
-sync_null = Schedule.new()
+    @property
+    def data(self) -> Data: ...
+
+    @property
+    def ustream(self) -> UStream: ...
+
+    @property
+    def dstream(self) -> DStream: ...
+
+    series = series
+    is_series = is_series
+    all_series = all_series
+
+    select = select
+    mask = mask
+
 
 #  ------------------
 
@@ -203,7 +274,7 @@ class NodeND(NodeKW):
 
     @classmethod
     def args(cls) -> tuple[str, Schedule]:
-        return cls.DEF.name, sync_null
+        return cls.DEF.name, null_schedule
 
     def sync(self, **kwargs: Sync):
         return self._replace(
@@ -212,7 +283,9 @@ class NodeND(NodeKW):
             )
         )
 
-    def __call__(self, event: Event, data: Data) -> Any:
+    def __call__(
+        self, event: Event, graph: GraphLike
+    ) -> Any:
         raise ValueError(self)
 
     # TODO: if attr isn't needed, shape can be just *path: int?
@@ -242,11 +315,13 @@ __all__ = [
     "UStream",
     "DStream",
     "Data",
+    "GraphLike",
     "SeriesToBool",
     "series",
-    "mask",
     "is_series",
     "all_series",
+    "select",
+    "mask",
     "NodeND",
     "Nodes",
 ]

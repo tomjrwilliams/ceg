@@ -37,7 +37,7 @@ class Fixed(FixedKw, Wait):
         ref: Ref.Any,
         event: Event,
         params: frozendict[int, tuple[str, ...]],
-        data: Data,
+        graph: GraphLike,
     ):
         # assert event.ref == ref, (self, node, ref, event)
         return event._replace(
@@ -58,7 +58,7 @@ class Rand(RandKw, Wait):
         ref: Ref.Any,
         event: Event,
         params: frozendict[int, tuple[str, ...]],
-        data: Data,
+        graph: GraphLike,
     ):
         # assert event.ref == ref, (self, node, ref, event)
         if self.dist == "normal":

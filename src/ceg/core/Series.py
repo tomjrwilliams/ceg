@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import NamedTuple, overload
 from . import Array
 
 ValueAny = float | Array.np | dict | list
@@ -19,9 +19,13 @@ class SeriesND(NamedTuple):
     def append(self, t: float, v: ValueAny) -> SeriesND:
         raise ValueError(self)
 
-    def mask(
-        self, t: float
-    ) -> tuple[float | Array.np, ValueAny]:
+    def mask(self, at: float) -> Array.np:
+        ts = self.t.data
+        return ts <= at
+
+    def select(
+        self, at: float, t: bool = False
+    ) -> ValueAny | tuple[Array.np_1D, ValueAny]:
         raise ValueError()
 
 
@@ -51,10 +55,21 @@ class SeriesCol(SeriesND):
             v=self.v.add(v),
         )
 
-    def mask(self, t: float):
-        ts = self.t.data
-        mask = ts <= t
-        return ts[mask], self.v.data[mask]
+    @overload
+    def select(
+        self, at: float, t: bool = False
+    ) -> Array.np_1D: ...
+
+    @overload
+    def select(
+        self, at: float, t: bool = True
+    ) -> tuple[Array.np_1D, Array.np_1D]: ...
+
+    def select(self, at: float, t: bool = False):
+        mask = self.mask(at)
+        if t:
+            return self.t.data[mask], self.v.data[mask]
+        return self.v.data[mask]
 
 
 Col = SeriesCol
@@ -65,16 +80,16 @@ class SeriesCol1D(SeriesND):
     v: Array.Vec
 
     @classmethod
-    def new(cls, v: Array.np) -> SeriesND:
+    def new(cls, v: Array.np_1D) -> SeriesND:
         return cls(t=Array.Scalar.new(), v=Array.Vec.new())
 
-    def append(self, t: float, v: Array.np):
+    def append(self, t: float, v: Array.np_1D):
         return self._replace(
             t=self.t.add(t),
             v=self.v.add(v),
         )
 
-    def mask(self, t: float):
+    def select(self, at: float):
         return
 
 

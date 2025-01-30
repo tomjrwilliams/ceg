@@ -1,4 +1,3 @@
-# cyclic event graph (is the name)
 from __future__ import annotations
 
 from typing import (
@@ -16,6 +15,7 @@ from typing import (
     get_type_hints,
     get_origin,
     get_args,
+    cast,
 )
 from heapq import heapify, heappush, heappop
 
@@ -155,7 +155,18 @@ def use_plugins(
 # TODO: null node and series would mean not having to constantly assert not none just for the type checker
 
 
-class Graph(NamedTuple):
+class GraphKW(NamedTuple):
+
+    queue: list[Event]  # heapify
+    nodes: Nodes
+    index: frozendict[Node.Any, int]
+    ustream: UStream  # params
+    dstream: DStream  # dependents
+    data: Data
+    plugins: frozendict[Plugin, Scope]
+
+
+class Graph(GraphKW, GraphLike):
     """
     queue: list
     nodes: tuple
@@ -166,14 +177,6 @@ class Graph(NamedTuple):
     rows: tuple
     cols: tuple
     """
-
-    queue: list[Event]  # heapify
-    nodes: Nodes
-    index: frozendict[Node.Any, int]
-    ustream: UStream  # params
-    dstream: DStream  # dependents
-    data: Data
-    plugins: frozendict[Plugin, Scope]
 
     # TODO: plugin is the key
     # and the acc is a generic accumulator object
@@ -195,13 +198,6 @@ class Graph(NamedTuple):
             data=(),
             plugins=plugins,
         )
-
-    # overloads on ref dims
-
-    def series(self, ref: Ref.Any, t: float):
-        s = self.data[ref.i]
-        assert s is not None, ref
-        return s.mask(t)
 
     def bind(
         self,
@@ -355,12 +351,13 @@ def step(
     for p, sc in plugins.items():
         node = p.before(graph, node, event, sc)
 
-    res = node(event, data)
+    res = node(event, graph)
 
     for p, sc in plugins.items():
         res, node = p.after(graph, res, node, event, sc)
 
-    s = series(ref, data)
+    s = series(graph, ref)
+
     if isinstance(s, Series.Null):
         s = node.SERIES.new()
         assert not isinstance(s, Series.Null), s
@@ -370,12 +367,25 @@ def step(
         data, ref.i, s.append(t, res), Series.null
     )
 
+    graph = Graph(
+        queue,
+        nodes,
+        index,
+        ustream,
+        dstream,
+        data,
+        plugins,
+    )
+
     for i in dstream.get(ref.i, ()):
         nd = nodes[i]
         assert nd is not None, ref
 
         e = nd.schedule.next(
-            nd, nd.ref(i), event, ustream, data
+            nd,
+            nd.ref(i),
+            event,
+            graph,
         )
 
         if e is None:
@@ -387,29 +397,20 @@ def step(
         else:
             raise ValueError(e)
 
-        # do we need a tie break on n (incr global event counter?)
-
-    graph = Graph(
-        queue,
-        nodes,
-        index,
-        ustream,
-        dstream,
-        data,
-        plugins,
-    )
     return graph, event
 
 
-def steps(graph: Graph, *events: Event, n: int = 1):
-    es = []
+def steps(
+    graph: Graph, *events: Event, n: int = 1
+) -> tuple[Graph, tuple[Event, ...]]:
+    es: list[Event | None] = [None for _ in range(n)]
     for i in range(n):
         if i == 0:
             graph, e = step(graph, *events)
         else:
             graph, e = step(graph)
-        es.append(e)
-    return graph, tuple(es)
+        es[i] = e
+    return graph, tuple(cast(list[Event], es))
 
 
 #  ------------------
