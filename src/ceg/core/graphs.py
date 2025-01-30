@@ -344,8 +344,8 @@ def step(
         t, ref = event
     except:
         raise ValueError(event)
+        
     node = nodes[ref.i]
-
     assert node is not None, ref
 
     for p, sc in plugins.items():

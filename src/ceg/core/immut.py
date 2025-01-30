@@ -92,6 +92,11 @@ def set_tuple(
 
 
 if __name__ == "__main__":
+    # NOTE: trying out different implementations
+
+    # we can beat tuple for insert speed
+    # but at the cost of meaningfully slower iteration speed
+
     import random
     import time
 

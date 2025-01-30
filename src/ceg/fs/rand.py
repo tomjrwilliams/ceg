@@ -34,8 +34,9 @@ class gaussian(gaussian_kw, core.Node.Col):
     gaussian noise (pass v=self to get random walk)
     mean: float
     std: float
-    >>> g = core.Graph.new()
+    >>> rng(seed=0, reset=True)
     >>> loop = core.loop.Fixed(1)
+    >>> g = core.Graph.new()
     >>> g, r = g.bind(None, ref=core.Ref.Col)
     >>> g, r = g.bind(
     ...     gaussian.new(r).sync(v=loop),
