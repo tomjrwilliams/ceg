@@ -14,6 +14,9 @@
 
 # so we can pass events from the gui back into the graph (eg. a loop node)
 
+# TODO: move the below into io.interact
+# interact
+
 # https://github.com/ash2shukla/streamlit-stream/blob/master/producer/main.py
 
 # def example_producer():

@@ -14,6 +14,7 @@ from typing import (
     Generic,
     Protocol,
     overload,
+    Literal,
 )
 from typing_extensions import Self
 
@@ -147,40 +148,39 @@ Data = tuple[Series.Any, ...]
 # TODO: kwargs on if return t or v or even just mask?
 
 
-@overload
-def select(
-    graph: GraphLike,
-    ref: Ref.Col,
-    at: float | Event,
-    t: bool = True,
-) -> tuple[Array.np_1D, Array.np_1D]: ...
-
 
 @overload
 def select(
     graph: GraphLike,
     ref: Ref.Col,
     at: float | Event,
-    t: bool = False,
+    t: Literal[False] = False,
 ) -> Array.np_1D: ...
 
 
 @overload
 def select(
     graph: GraphLike,
-    ref: Ref.Col1D,
+    ref: Ref.Col,
     at: float | Event,
-    t: bool = True,
-) -> tuple[Array.np_1D, Array.np_2D]: ...
-
+    t: Literal[True] = True,
+) -> tuple[Array.np_1D, Array.np_1D]: ...
 
 @overload
 def select(
     graph: GraphLike,
     ref: Ref.Col1D,
     at: float | Event,
-    t: bool = False,
+    t: Literal[False] = False,
 ) -> Array.np_2D: ...
+
+@overload
+def select(
+    graph: GraphLike,
+    ref: Ref.Col1D,
+    at: float | Event,
+    t: Literal[True] = True,
+) -> tuple[Array.np_1D, Array.np_2D]: ...
 
 
 def select(

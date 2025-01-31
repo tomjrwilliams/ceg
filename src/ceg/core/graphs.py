@@ -113,17 +113,30 @@ def yield_param_keys(t_kw: Type[NamedTuple]):
 
 
 class Scope(NamedTuple):
-    pass
+    
+    def merge(
+        self,
+        node: Node.Any,
+        ref: Ref.Any,
+        scope: Scope | None,
+    ) -> Scope:
+        raise ValueError(self)
+
+    def contains(
+        self, graph: Graph, node: Node.Any, event: Event
+    ) -> bool:
+        raise ValueError(self, node, event)
 
 
 class Plugin(NamedTuple):
+
+    scope: Scope | None
 
     def before(
         self,
         graph: Graph,
         node: Node.Any,
         event: Event,
-        scope: Scope,
     ):
         # eg. cache might replace with a dummy node here that does nothing
         return node
@@ -134,10 +147,18 @@ class Plugin(NamedTuple):
         res,
         node: Node.Any,
         event: Event,
-        scope: Scope,
     ):
         # eg. cache might replace the dummy res with real data
         return res, node
+
+    def flush(
+        self,
+        graph: Graph,
+        event: Event,
+        acc: frozendict[Plugin, Any],
+        scope: Scope | None,
+    ) -> frozendict[Plugin, Any]:
+        return acc
 
 
 def use_plugins(
@@ -146,7 +167,28 @@ def use_plugins(
     ref: Ref.Any,
     using: Plugin | tuple[Plugin, ...] | None,
 ):
-    return graph
+    if using is None:
+        return graph
+    if isinstance(using, Plugin):
+        using = using,
+    plugins = graph.plugins
+    for p in using:
+        assert isinstance(p, Plugin), using
+        p_scope = p.scope
+        p = p._replace(scope = None)
+        g_scope = plugins.get(p)
+        #
+        if p_scope is None and g_scope is None:
+            raise ValueError(p, node, ref)
+        elif p_scope is None:
+            assert g_scope is not None, g_scope # type: sigh
+            scope = g_scope.merge(node, ref, scope=p_scope)
+        elif g_scope is None:
+            scope = p_scope.merge(node, ref, scope=g_scope)
+        else:
+            scope = g_scope.merge(node, ref, scope=p_scope)
+        plugins = plugins.set(p, scope)
+    return graph._replace(plugins=plugins)
 
 
 #  ------------------
@@ -213,6 +255,11 @@ class Graph(GraphKW, GraphLike):
     def steps(self, *events: Event, n: int = 1):
         return steps(self, *events, n=n)
 
+    def flush(self, event: Event):
+        acc: frozendict[Plugin, Any] = frozendict() # type: ignore
+        for p, sc in self.plugins.items():
+            acc = p.flush(self, event, acc, scope=sc)
+        return self, acc
 
 #  ------------------
 
@@ -344,17 +391,21 @@ def step(
         t, ref = event
     except:
         raise ValueError(event)
-        
+
     node = nodes[ref.i]
     assert node is not None, ref
 
     for p, sc in plugins.items():
-        node = p.before(graph, node, event, sc)
+        if sc is not None and not sc.contains(graph, node, event):
+            continue
+        node = p.before(graph, node, event)
 
     res = node(event, graph)
 
     for p, sc in plugins.items():
-        res, node = p.after(graph, res, node, event, sc)
+        if sc is not None and not sc.contains(graph, node, event):
+            continue
+        res, node = p.after(graph, res, node, event)
 
     s = series(graph, ref)
 
@@ -415,6 +466,8 @@ def steps(
 
 #  ------------------
 
+
+
 # until can be a user level code, loop step however you please
 
 
@@ -423,3 +476,12 @@ def steps(
 # so we need to avoid cases where we just cycle the same region and don't loop any others?
 
 # hence the queue for changes to be dealt with
+
+__all__ = [
+    "define",
+    "Graph",
+    "init_node",
+    "bind",
+    "step",
+    "steps",
+]
