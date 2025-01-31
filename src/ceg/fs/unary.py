@@ -1,5 +1,3 @@
-
-
 # abs, log, pow, shift, scale, clip, tanh
 
 # sq, sqrt, neg

@@ -18,10 +18,13 @@ from ... import core
 
 #  ------------------
 
+
 class Plot(core.Plugin.Aliased):
     pass
 
+
 Loc = tuple[str, int] | tuple[int, int]
+
 
 class Spec(NamedTuple):
     title: str
@@ -30,15 +33,18 @@ class Spec(NamedTuple):
 
     class Plot(NamedTuple):
         spec: Spec
-        
+
         def render(self, ax: matplotlib.axes.Axes):
             return
 
     def key(self):
         return (
-            self.title 
+            self.title
             if self.loc is None
-            else (self.title, self.loc,)
+            else (
+                self.title,
+                self.loc,
+            )
         )
 
     @classmethod
@@ -46,7 +52,7 @@ class Spec(NamedTuple):
         cls,
         title: str,
         loc: Loc = None,
-        labels: frozendict[str, str] = frozendict(), # type: ignore
+        labels: frozendict[str, str] = frozendict(),  # type: ignore
     ):
         return cls(
             title=title,
@@ -54,9 +60,8 @@ class Spec(NamedTuple):
             labels=labels,
         )
 
-def render(
-    acc: frozendict[core.Plugin.Any, Any]
-):
+
+def render(acc: frozendict[core.Plugin.Any, Any]):
     title_specs = defaultdict(list)
     for p, v in acc.items():
         if not isinstance(p, Plot):
@@ -71,25 +76,30 @@ def render(
         if not len(plot_specs):
             continue
         elif len(plot_specs) == 1:
-            plot_spec, = plot_specs
+            (plot_spec,) = plot_specs
             fig, axes = pyplot.subplots(
                 1,
                 1,
             )
             axes.set_title(title)
-            assert isinstance(axes, matplotlib.axes.Axes), axes
+            assert isinstance(
+                axes, matplotlib.axes.Axes
+            ), axes
             plot_spec.render(axes)
         else:
             raise ValueError(plot_specs)
         res = res.set(title, fig)
     return res
 
+
 #  ------------------
+
 
 class LineSpec_Kw(NamedTuple):
     spec: Spec
     x: core.Array.np_1D
     y: core.Array.np_1D
+
 
 class LineSpec(LineSpec_Kw, Spec.Plot):
 
@@ -105,15 +115,38 @@ class LineSpec(LineSpec_Kw, Spec.Plot):
             # ... kwargs()
         )
 
+
 #  ------------------
+
 
 class Line_Kw(NamedTuple):
     scope: core.Scope.Alias | None
     spec: Spec
-    
+
     # TODO: width, height, etc.
 
+
 class Line(Line_Kw, Plot):
+    """
+    >>> from ... import fs
+    >>> fs.rand.rng(seed=0, reset=True)
+    >>> g = core.Graph.new()
+    >>> g, ref = g.bind(None, ref=core.Ref.Col)
+    >>> g, ref = g.bind(
+    ...     fs.rand.gaussian.new(ref).sync(
+    ...         v=core.loop.Fixed(1)
+    ...     ),
+    ...     ref=ref,
+    ...     using=Line.new(title="rand").alias(
+    ...         "y"
+    ...     ),
+    ... )
+    >>> g, es = g.steps(core.Event(0, ref), n=10)
+    >>> g, res = g.flush(es[-1])
+    >>> res = render(res)
+    >>> {k: type(v) for k, v in res.items()}
+    {'rand': <class 'matplotlib.figure.Figure'>}
+    """
 
     # TODO: transpose kwarg
     # eg. plot y on the x axis, assume time as y
@@ -124,8 +157,10 @@ class Line(Line_Kw, Plot):
         cls,
         title: str,
         loc: Loc = None,
-        labels: frozendict[str, str] = frozendict(), # type: ignore
-        scope: core.Scope.Alias | None = core.Scope.Alias.new(),
+        labels: frozendict[str, str] = frozendict(),  # type: ignore
+        scope: (
+            core.Scope.Alias | None
+        ) = core.Scope.Alias.new(),
     ):
         return cls(
             scope=scope,
@@ -150,24 +185,28 @@ class Line(Line_Kw, Plot):
         acc: frozendict[core.Plugin.Any, Any],
         scope: core.Scope.Any | None,
     ):
-        assert isinstance(scope, core.Scope.Alias), (self, scope)
+        assert isinstance(scope, core.Scope.Alias), (
+            self,
+            scope,
+        )
 
         aliases = {
             k: ref for ref, k in scope.aliases.items()
         }
         x = aliases.get("x")
         y = aliases.get("y")
-        
+
         assert y is not None, self
         assert isinstance(y, core.Ref.Col), y
 
         if x is not None:
             assert isinstance(x, core.Ref.Col), x
-            v_x = graph.select(x, event, t = False)
-            v_y = graph.select(y, event, t = False)
+            v_x = graph.select(x, event, t=False)
+            v_y = graph.select(y, event, t=False)
         else:
-            v_x, v_y = graph.select(y, event, t = True)
-        
+            v_x, v_y = graph.select(y, event, t=True)
+
         return acc.set(self, self.plot_spec(v_x, v_y))
+
 
 #  ------------------

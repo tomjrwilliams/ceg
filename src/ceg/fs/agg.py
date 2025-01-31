@@ -1,5 +1,4 @@
-
-# sum 
+# sum
 # prod
 
 # weighted thereof

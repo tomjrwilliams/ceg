@@ -1,4 +1,3 @@
-
 from typing import NamedTuple
 from frozendict import frozendict
 
@@ -12,9 +11,11 @@ from .. import Ref
 
 #  ------------------
 
+
 class Alias_Kw(NamedTuple):
     alias: str | None
     aliases: frozendict[Ref.Any, str]
+
 
 class Alias(Alias_Kw, Scope):
 
@@ -22,10 +23,10 @@ class Alias(Alias_Kw, Scope):
     def new(
         cls,
         alias: str | None = None,
-        aliases: frozendict[Ref.Any, str] = frozendict() # type: ignore
+        aliases: frozendict[Ref.Any, str] = frozendict(),  # type: ignore
     ):
         return cls(alias, aliases)
-    
+
     def merge(
         self,
         node: Node.Any,
@@ -35,13 +36,13 @@ class Alias(Alias_Kw, Scope):
         if scope is None:
             return self._replace(
                 aliases=self.aliases.set(ref, self.alias),
-                alias=None
+                alias=None,
             )
         assert isinstance(scope, Alias), scope
         return self._replace(
-            aliases = (
-                self.aliases | scope.aliases
-            ).set(ref, self.alias),
+            aliases=(self.aliases | scope.aliases).set(
+                ref, self.alias
+            ),
             alias=None,
         )
 
@@ -49,5 +50,6 @@ class Alias(Alias_Kw, Scope):
         self, graph: Graph, node: Node.Any, event: Event
     ) -> bool:
         return event.ref in self.aliases
+
 
 #  ------------------

@@ -1,6 +1,5 @@
-
 # add
 # div
-# sub 
+# sub
 # mul
 # pow, log

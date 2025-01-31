@@ -55,12 +55,15 @@ class mean(mean_kw, core.Node.Col):
         self, event: core.Event, graph: core.Graph
     ):
         if self.window is None:
-            return numpy.nanmean(graph.select(self.v, event))
+            return numpy.nanmean(
+                graph.select(self.v, event)
+            )
         t, v = graph.select(self.v, event, t=True)
         return numpy.nanmean(v[t > event.t - self.window])
 
 
 #  ------------------
+
 
 class mean_w_kw(NamedTuple):
     type: str
@@ -68,20 +71,21 @@ class mean_w_kw(NamedTuple):
     #
     v: core.Ref.Col
 
+
 class mean_w(mean_w_kw, core.Node.Col):
-    
+
     DEF: ClassVar[core.Defn] = core.define(
         core.Node.Col, mean_w_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col,
+        cls,
+        v: core.Ref.Col,
     ):
         return cls(
             *cls.args(),
             v=v,
-
         )
 
     def __call__(
@@ -89,7 +93,9 @@ class mean_w(mean_w_kw, core.Node.Col):
     ):
         pass
 
+
 #  ------------------
+
 
 class mean_ew_kw(NamedTuple):
     type: str
@@ -97,20 +103,21 @@ class mean_ew_kw(NamedTuple):
     #
     v: core.Ref.Col
 
+
 class mean_ew(mean_ew_kw, core.Node.Col):
-    
+
     DEF: ClassVar[core.Defn] = core.define(
         core.Node.Col, mean_ew_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col,
+        cls,
+        v: core.Ref.Col,
     ):
         return cls(
             *cls.args(),
             v=v,
-
         )
 
     def __call__(
@@ -118,7 +125,9 @@ class mean_ew(mean_ew_kw, core.Node.Col):
     ):
         pass
 
+
 #  ------------------
+
 
 class std_kw(NamedTuple):
     type: str
@@ -126,20 +135,21 @@ class std_kw(NamedTuple):
     #
     v: core.Ref.Col
 
+
 class std(std_kw, core.Node.Col):
-    
+
     DEF: ClassVar[core.Defn] = core.define(
         core.Node.Col, std_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col,
+        cls,
+        v: core.Ref.Col,
     ):
         return cls(
             *cls.args(),
             v=v,
-
         )
 
     def __call__(
@@ -147,7 +157,9 @@ class std(std_kw, core.Node.Col):
     ):
         pass
 
+
 #  ------------------
+
 
 class std_w_kw(NamedTuple):
     type: str
@@ -155,20 +167,21 @@ class std_w_kw(NamedTuple):
     #
     v: core.Ref.Col
 
+
 class std_w(std_w_kw, core.Node.Col):
-    
+
     DEF: ClassVar[core.Defn] = core.define(
         core.Node.Col, std_w_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col,
+        cls,
+        v: core.Ref.Col,
     ):
         return cls(
             *cls.args(),
             v=v,
-
         )
 
     def __call__(
@@ -176,7 +189,9 @@ class std_w(std_w_kw, core.Node.Col):
     ):
         pass
 
+
 #  ------------------
+
 
 class std_ew_kw(NamedTuple):
     type: str
@@ -184,20 +199,21 @@ class std_ew_kw(NamedTuple):
     #
     v: core.Ref.Col
 
+
 class std_ew(std_ew_kw, core.Node.Col):
-    
+
     DEF: ClassVar[core.Defn] = core.define(
         core.Node.Col, std_ew_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col,
+        cls,
+        v: core.Ref.Col,
     ):
         return cls(
             *cls.args(),
             v=v,
-
         )
 
     def __call__(
@@ -205,7 +221,9 @@ class std_ew(std_ew_kw, core.Node.Col):
     ):
         pass
 
+
 #  ------------------
+
 
 class rms_kw(NamedTuple):
     type: str
@@ -213,20 +231,21 @@ class rms_kw(NamedTuple):
     #
     v: core.Ref.Col
 
+
 class rms(rms_kw, core.Node.Col):
-    
+
     DEF: ClassVar[core.Defn] = core.define(
         core.Node.Col, rms_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col,
+        cls,
+        v: core.Ref.Col,
     ):
         return cls(
             *cls.args(),
             v=v,
-
         )
 
     def __call__(
@@ -234,7 +253,9 @@ class rms(rms_kw, core.Node.Col):
     ):
         pass
 
+
 #  ------------------
+
 
 class rms_w_kw(NamedTuple):
     type: str
@@ -242,20 +263,21 @@ class rms_w_kw(NamedTuple):
     #
     v: core.Ref.Col
 
+
 class rms_w(rms_w_kw, core.Node.Col):
-    
+
     DEF: ClassVar[core.Defn] = core.define(
         core.Node.Col, rms_w_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col,
+        cls,
+        v: core.Ref.Col,
     ):
         return cls(
             *cls.args(),
             v=v,
-
         )
 
     def __call__(
@@ -263,7 +285,9 @@ class rms_w(rms_w_kw, core.Node.Col):
     ):
         pass
 
+
 #  ------------------
+
 
 class rms_ew_kw(NamedTuple):
     type: str
@@ -271,26 +295,28 @@ class rms_ew_kw(NamedTuple):
     #
     v: core.Ref.Col
 
+
 class rms_ew(rms_ew_kw, core.Node.Col):
-    
+
     DEF: ClassVar[core.Defn] = core.define(
         core.Node.Col, rms_ew_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col,
+        cls,
+        v: core.Ref.Col,
     ):
         return cls(
             *cls.args(),
             v=v,
-
         )
 
     def __call__(
         self, event: core.Event, graph: core.Graph
     ):
         pass
+
 
 #  ------------------
 
@@ -308,32 +334,35 @@ class rms_ew(rms_ew_kw, core.Node.Col):
 
 #  ------------------
 
+
 class ex_kw(NamedTuple):
     type: str
     schedule: core.Schedule
     #
     v: core.Ref.Col
 
+
 class ex(ex_kw, core.Node.Col):
-    
+
     DEF: ClassVar[core.Defn] = core.define(
         core.Node.Col, ex_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col,
+        cls,
+        v: core.Ref.Col,
     ):
         return cls(
             *cls.args(),
             v=v,
-
         )
 
     def __call__(
         self, event: core.Event, graph: core.Graph
     ):
         pass
+
 
 #  ------------------
 

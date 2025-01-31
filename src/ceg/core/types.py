@@ -148,7 +148,6 @@ Data = tuple[Series.Any, ...]
 # TODO: kwargs on if return t or v or even just mask?
 
 
-
 @overload
 def select(
     graph: GraphLike,
@@ -166,6 +165,7 @@ def select(
     t: Literal[True] = True,
 ) -> tuple[Array.np_1D, Array.np_1D]: ...
 
+
 @overload
 def select(
     graph: GraphLike,
@@ -173,6 +173,7 @@ def select(
     at: float | Event,
     t: Literal[False] = False,
 ) -> Array.np_2D: ...
+
 
 @overload
 def select(

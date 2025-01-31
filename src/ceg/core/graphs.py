@@ -113,7 +113,7 @@ def yield_param_keys(t_kw: Type[NamedTuple]):
 
 
 class Scope(NamedTuple):
-    
+
     def merge(
         self,
         node: Node.Any,
@@ -170,18 +170,20 @@ def use_plugins(
     if using is None:
         return graph
     if isinstance(using, Plugin):
-        using = using,
+        using = (using,)
     plugins = graph.plugins
     for p in using:
         assert isinstance(p, Plugin), using
         p_scope = p.scope
-        p = p._replace(scope = None)
+        p = p._replace(scope=None)
         g_scope = plugins.get(p)
         #
         if p_scope is None and g_scope is None:
             raise ValueError(p, node, ref)
         elif p_scope is None:
-            assert g_scope is not None, g_scope # type: sigh
+            assert (
+                g_scope is not None
+            ), g_scope  # type: sigh
             scope = g_scope.merge(node, ref, scope=p_scope)
         elif g_scope is None:
             scope = p_scope.merge(node, ref, scope=g_scope)
@@ -255,11 +257,27 @@ class Graph(GraphKW, GraphLike):
     def steps(self, *events: Event, n: int = 1):
         return steps(self, *events, n=n)
 
+    def using(
+        self,
+        ref: Ref.Any,
+        *using: Plugin,
+    ) -> Graph:
+        if not len(using):
+            return self
+        node = self.nodes[ref.i]
+        return use_plugins(self, node, ref, using=using)
+
     def flush(self, event: Event):
-        acc: frozendict[Plugin, Any] = frozendict() # type: ignore
+
+        # TODO: take predicates over plugins / parent types
+        # so we can run this repeatedly with different filters
+        # to generate / return different side effects
+
+        acc: frozendict[Plugin, Any] = frozendict()  # type: ignore
         for p, sc in self.plugins.items():
             acc = p.flush(self, event, acc, scope=sc)
         return self, acc
+
 
 #  ------------------
 
@@ -396,14 +414,18 @@ def step(
     assert node is not None, ref
 
     for p, sc in plugins.items():
-        if sc is not None and not sc.contains(graph, node, event):
+        if sc is not None and not sc.contains(
+            graph, node, event
+        ):
             continue
         node = p.before(graph, node, event)
 
     res = node(event, graph)
 
     for p, sc in plugins.items():
-        if sc is not None and not sc.contains(graph, node, event):
+        if sc is not None and not sc.contains(
+            graph, node, event
+        ):
             continue
         res, node = p.after(graph, res, node, event)
 
@@ -465,7 +487,6 @@ def steps(
 
 
 #  ------------------
-
 
 
 # until can be a user level code, loop step however you please

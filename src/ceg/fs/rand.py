@@ -1,4 +1,4 @@
-from typing import NamedTuple, ClassVar
+from typing import NamedTuple, ClassVar, overload, Literal
 from .. import core
 
 import numpy
@@ -7,12 +7,21 @@ import numpy
 
 RNG = {}
 
+@overload
+def rng(
+    seed: int, reset: Literal[False] = False
+) -> numpy.random.Generator: ...
+
+@overload
+def rng(seed: int, reset: Literal[True] = True) -> None: ...
 
 def rng(seed: int, reset: bool = False):
     if seed in RNG and not reset:
         return RNG[seed]
     gen = numpy.random.default_rng(seed)
     RNG[seed] = gen
+    if reset:
+        return
     return gen
 
 
