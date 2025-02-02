@@ -51,10 +51,8 @@ class gaussian(gaussian_kw, core.Node.Col):
     ...     gaussian.new(r).sync(v=loop),
     ...     ref=r,
     ... )
-    >>> g, (*_, e) = g.steps(
-    ...     core.Event(0, r), n=6
-    ... )
-    >>> list(numpy.round(g.select(r, e), 2))
+    >>> g, es = g.steps(core.Event(0, r), n=6)
+    >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     """
 

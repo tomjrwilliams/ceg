@@ -20,7 +20,9 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = []
+dependencies = [
+  "ibapi @ file:../TWS API/source/pythonclient",
+]
 
 [project.urls]
 Documentation = "https://github.com/tomjrwilliams/ceg#readme"

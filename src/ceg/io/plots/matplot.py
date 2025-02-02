@@ -199,6 +199,10 @@ class Line(Line_Kw, Plot):
         assert y is not None, self
         assert isinstance(y, core.Ref.Col), y
 
+        # TODO: i guess in theory alias can also be a list
+        # in which case can also be RefCol1D etc.
+        # zip the res cols to the alias list[str]
+
         if x is not None:
             assert isinstance(x, core.Ref.Col), x
             v_x = graph.select(x, event, t=False)
@@ -206,7 +210,14 @@ class Line(Line_Kw, Plot):
         else:
             v_x, v_y = graph.select(y, event, t=True)
 
+        # TODO: in theory we could even return a function that makes the query above
+        # so we don't take up extra memory until called
+        # so render can just iter, call, straight to graph
+
         return acc.set(self, self.plot_spec(v_x, v_y))
 
+#  ------------------
+
+# TODO: Lines (many refs)
 
 #  ------------------
