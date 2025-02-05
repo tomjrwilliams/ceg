@@ -33,9 +33,9 @@ class mean(mean_kw, core.Node.Col):
     >>> g, es = g.steps(core.Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(mu, e[-1]), 2))
+    >>> list(numpy.round(g.select(mu, es[-1]), 2))
     [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
-    >>> list(numpy.round(g.select(mu_3, e[-1]), 2))
+    >>> list(numpy.round(g.select(mu_3, es[-1]), 2))
     [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
     """
 

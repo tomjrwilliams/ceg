@@ -45,13 +45,13 @@ from .contracts import contract
 # https://interactivebrokers.github.io/tws-api/historical_bars.html
 
 
-def get_contract(
+def get_daily(
     # :contract
     contr: dict | Contract,
     # :request fields
     end: datetime.datetime | datetime.date | str,
-    duration: str,
-    bar_size: str,
+    duration: str, # replace to strat date, infer the duration from that
+    bar_size: str, # this is just always 1 D (caching methodology is totally different for intra-day, so needs a diff func)
     bar_method: str,
     use_rth=1,
     # connection fields
@@ -69,6 +69,32 @@ def get_contract(
 
     expects = int(duration.split(" ")[0])
 
+    # steps:
+    # TODO: check for any queries at all with done not set
+    # run through the done check flow (ie. n_results = n_expected, fill none in gaps)
+
+    # TODO: so on load, look fro synthetics overlappnig with range
+    # build queries between gaps as required
+
+    # TODO: store query, with start end contractid, rth, bar_method, query_asof, and expected size
+
+    # TODO: on final entry, set query done
+    # if so, fill date gaps between start end with none
+
+    # price pkey is date,con_id,query_id
+
+    # then have two price types: one the historic, stored per query
+    # and one maintained for the final synthetic aggregated query (s)
+    # so we can even do queries against particular historic queries without even joining to a new table
+
+    # TODO: check for synthetic queries with earliest start, and rhs within the query range
+    # merge query ranges (into synthetic)
+
+    # TODO: look for any now within / overlapping new range
+    # merge as required (deleting this time)
+
+    # TODO: then finalyl should be able to do a single query on the price table, join the final query id, with the given date range
+    
     requests, req = Requests.new().bind(
         "reqHistoricalData",
         expects=expects,
