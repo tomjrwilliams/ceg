@@ -12,12 +12,16 @@ from typing import (
     Iterable,
     Generator,
     Iterator,
+    Literal,
+    overload,
     get_type_hints,
     get_origin,
     get_args,
     cast,
 )
 from heapq import heapify, heappush, heappop
+
+import contextlib
 
 from collections import defaultdict
 
@@ -155,10 +159,10 @@ class Plugin(NamedTuple):
         self,
         graph: Graph,
         event: Event,
-        acc: frozendict[Plugin, Any],
+        state: State,
         scope: Scope | None,
-    ) -> frozendict[Plugin, Any]:
-        return acc
+    ) -> State:
+        return state
 
 
 def use_plugins(
@@ -198,6 +202,14 @@ def use_plugins(
 
 # TODO: null node and series would mean not having to constantly assert not none just for the type checker
 
+class Key(NamedTuple):
+    pass
+
+class Value(NamedTuple):
+    pass
+
+
+State = frozendict[Key, Value]
 
 class GraphKW(NamedTuple):
 
@@ -208,6 +220,19 @@ class GraphKW(NamedTuple):
     dstream: DStream  # dependents
     data: Data
     plugins: frozendict[Plugin, Scope]
+    state: State
+
+    # TODO: sounding like we need a state frozendict
+    # that just has unique keys and values
+
+    # for state that we don't track teh history, not in the grpah
+    # for plugins
+    # so eg. a grid, that's shared amongst plugins
+    
+    # so flush can return new plugin and the state, given the state
+    # so its up to the plugin to take a key into the state
+
+    # eg. to the grid
 
 
 class Graph(GraphKW, GraphLike):
@@ -241,6 +266,14 @@ class Graph(GraphKW, GraphLike):
             dstream=dstream,
             data=(),
             plugins=plugins,
+            state=frozendict()  # type: ignore
+        )
+    
+    def with_state(
+        self, key: Key, value: Value
+    ) -> Graph:
+        return self._replace(
+            state=self.state.set(key, value)
         )
 
     def bind(
@@ -273,10 +306,138 @@ class Graph(GraphKW, GraphLike):
         # so we can run this repeatedly with different filters
         # to generate / return different side effects
 
-        acc: frozendict[Plugin, Any] = frozendict()  # type: ignore
+        state = self.state
         for p, sc in self.plugins.items():
-            acc = p.flush(self, event, acc, scope=sc)
-        return self, acc
+            state = p.flush(self, event, state, scope=sc)
+        return self._replace(state=state)
+
+    @contextlib.contextmanager
+    def mutable(
+        self, partition: bool | Ref.Any | None = None
+    ):
+        ctxt, is_done = graph_context(
+            self, partition=partition, mutable=True
+        )
+        try:
+            yield ctxt
+        finally:
+            assert is_done(), ctxt
+
+    @contextlib.contextmanager
+    def implicit(
+        self, partition: bool | Ref.Any | None = None
+    ):
+        ctxt, is_done = graph_context(
+            self, partition=partition, mutable=False
+        )
+        try:
+            yield ctxt
+        finally:
+            assert is_done(), ctxt
+
+
+class MutableContext(NamedTuple):
+    bind: Callable[
+        [
+            # node:
+            Node.Any | None,
+            # ref:
+            Ref.Any | Type[Ref.Any] | None,
+            # using:
+            Plugin | tuple[Plugin, ...] | None,
+        ],
+        Ref.Any,
+    ]
+    state: Callable[[], Graph]
+    update: Callable[[Graph], None]
+    done: Callable[[], Graph]
+
+
+class ImplicitContext(NamedTuple):
+    bind: Callable[
+        [
+            # node:
+            Node.Any | None,
+            # ref:
+            Ref.Any | Type[Ref.Any] | None,
+            # using:
+            Plugin | tuple[Plugin, ...] | None,
+        ],
+        Ref.Any,
+    ]
+    done: Callable[[], Graph]
+    # TODO: partition function for nested partitions?
+
+
+@overload
+def graph_context(
+    g: Graph,
+    partition: bool | Ref.Any | None = None,
+    mutable: Literal[True] = True,
+) -> tuple[MutableContext, Callable[[], bool]]: ...
+
+
+@overload
+def graph_context(
+    g: Graph,
+    partition: bool | Ref.Any | None = None,
+    mutable: Literal[False] = False,
+) -> tuple[ImplicitContext, Callable[[], bool]]: ...
+
+
+def graph_context(
+    g: Graph,
+    partition: bool | Ref.Any | None = None,
+    mutable: bool = True,
+) -> tuple[
+    MutableContext | ImplicitContext,
+    Callable[[], bool],
+]:
+    # TODO: alternatively partition can be an existing ref
+
+    DONE: bool = False
+
+    def bind(
+        node: Node.Any | None = None,
+        ref: Ref.Any | Type[Ref.Any] | None = None,
+        using: Plugin | tuple[Plugin, ...] | None = None,
+    ):
+        nonlocal g
+        nonlocal DONE
+        assert not DONE, (node, ref, using)
+        # TODO: partition
+        g, res = g.bind(node=node, ref=ref, using=using)
+        return res
+
+    def state() -> Graph:
+        nonlocal g
+        nonlocal DONE
+        assert not DONE, DONE
+        return g
+
+    def update(g_new: Graph):
+        nonlocal g
+        nonlocal DONE
+        assert not DONE, DONE
+        g = g_new
+        return
+
+    def done():
+        nonlocal g
+        nonlocal DONE
+        assert not DONE, DONE
+        DONE = True
+        return g
+
+    def is_done():
+        return DONE
+
+    if mutable:
+        ctxt = MutableContext(bind, state, update, done)
+    else:
+        ctxt = ImplicitContext(bind, done)
+
+    return ctxt, is_done
 
 
 #  ------------------
@@ -324,6 +485,9 @@ def bind(
     # TODO: node= int to prealloc many ref
     # TODO: kwrg for only return graph (eg. if pre alloc ref and want to fold over)
 
+    # TODO: pass partition (all in partition should not be in batching together)
+    # else we assume batching is okay (cross partition)
+
     i: int
     res: Ref.Any
     ustream: UStream
@@ -336,6 +500,7 @@ def bind(
         dstream,
         data,
         plugins,
+        state,
     ) = graph
     #
     if node is None:
@@ -366,7 +531,7 @@ def bind(
                 node, res, nodes, ustream, dstream, data
             )  # type: ignore
     else:
-        raise ValueError(node, ref)
+        raise ValueError(type(node), type(ref), node, ref)
 
     graph = Graph(
         queue,
@@ -376,6 +541,7 @@ def bind(
         dstream,
         data,
         plugins,
+        state,
     )
 
     if isinstance(node, Node.Any):
@@ -398,6 +564,7 @@ def step(
         dstream,
         data,
         plugins,
+        state,
     ) = graph
 
     for e in events:
@@ -448,6 +615,7 @@ def step(
         dstream,
         data,
         plugins,
+        state,
     )
 
     for i in dstream.get(ref.i, ()):

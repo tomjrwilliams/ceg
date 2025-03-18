@@ -1,5 +1,3 @@
-
-
 # TODO: Writer
 
 # in theory flush could even return a function, that queries the graph for the data

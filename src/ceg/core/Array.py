@@ -252,6 +252,25 @@ D1 = Vec = Vector = Array1D
 
 #  ------------------
 
+class Array2D(ArrayND):
+    
+    DIMS: ClassVar[int] = 2
+
+    @classmethod
+    def new(cls, incr: int = 2, method: str = "exp"):
+        return cls(
+            shape=(),
+            size=-1,
+            n=0,
+            incr=incr,
+            method=method,
+            raw=numpy.empty(32),
+        )
+
+D2 = Array2D
+
+#  ------------------
+
 
 class ArrayRow(ArrayND):
 

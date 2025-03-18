@@ -34,3 +34,10 @@ class NodeCol1D(NodeND):
 
 
 Col1D = NodeCol1D
+
+class NodeCol2D(NodeND):
+    REF: ClassVar[Type[Ref.Any]] = Ref.Col2D
+    SERIES: ClassVar[Type[Series.Any]] = Series.Col2D
+
+
+Col2D = NodeCol2D

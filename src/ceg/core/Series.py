@@ -96,5 +96,25 @@ class SeriesCol1D(SeriesND):
 Col1D = SeriesCol1D
 
 
+class SeriesCol2D(SeriesND):
+    t: Array.Scalar
+    v: Array.Vec
+
+    @classmethod
+    def new(cls, v: Array.np_2D) -> SeriesND:
+        return cls(t=Array.Scalar.new(), v=Array.D2.new())
+
+    def append(self, t: float, v: Array.np_2D):
+        return self._replace(
+            t=self.t.add(t),
+            v=self.v.add(v),
+        )
+
+    def select(self, at: float):
+        return
+
+
+Col2D = SeriesCol2D
+
 # TODO: const just returns the value on mask (and the given t presumably?)
 # but you then have to check for if const - as will be different return type to a normal col?

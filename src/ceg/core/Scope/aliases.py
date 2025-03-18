@@ -1,3 +1,4 @@
+import re
 from typing import NamedTuple
 from frozendict import frozendict
 
@@ -12,20 +13,22 @@ from .. import Ref
 #  ------------------
 
 
-class Alias_Kw(NamedTuple):
+class Aliases_Kw(NamedTuple):
     alias: str | None
-    aliases: frozendict[Ref.Any, str]
+    kwargs: frozendict | None
+    aliases: frozendict[tuple[Ref.Any, str], frozendict]
 
 
-class Alias(Alias_Kw, Scope):
+class Aliases(Aliases_Kw, Scope):
 
     @classmethod
     def new(
         cls,
         alias: str | None = None,
-        aliases: frozendict[Ref.Any, str] = frozendict(),  # type: ignore
+        kwargs: frozendict | None = None,
+        aliases: frozendict[tuple[Ref.Any, str], frozendict] = frozendict(), # tpyE: ignore
     ):
-        return cls(alias, aliases)
+        return cls(alias, kwargs, aliases)
 
     def merge(
         self,
@@ -33,23 +36,31 @@ class Alias(Alias_Kw, Scope):
         ref: Ref.Any,
         scope: Scope | None,
     ) -> Scope:
+        assert self.alias is not None, self
         if scope is None:
             return self._replace(
-                aliases=self.aliases.set(ref, self.alias),
                 alias=None,
+                kwargs=None,
+                aliases=self.aliases.set(
+                    (ref, self.alias), self.kwargs
+                )
             )
-        assert isinstance(scope, Alias), scope
+        assert isinstance(scope, Aliases), scope
         return self._replace(
-            aliases=(self.aliases | scope.aliases).set(
-                ref, self.alias
-            ),
             alias=None,
+            kwargs=None,
+            aliases=(self.aliases | scope.aliases).set(
+                (ref, self.alias), self.kwargs
+            )
         )
 
     def contains(
         self, graph: Graph, node: Node.Any, event: Event
     ) -> bool:
-        return event.ref in self.aliases
-
+        # TODO: sensibly cache
+        for ref, _ in self.aliases.keys():
+            if event.ref == ref:
+                return True
+        return False
 
 #  ------------------

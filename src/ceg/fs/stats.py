@@ -19,23 +19,28 @@ class mean(mean_kw, core.Node.Col):
     scalar mean (optional rolling window)
     v: core.Ref.Col
     window: float | None
+    >>> g = core.Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> loop = core.loop.Fixed(1)
-    >>> g = core.Graph.new()
-    >>> g, r = g.bind(None, ref=core.Ref.Col)
-    >>> g, r = g.bind(
-    ...     rand.gaussian.new(r).sync(v=loop),
-    ...     ref=r,
-    ... )
-    >>> g, mu = g.bind(mean.new(r))
-    >>> g, mu_3 = g.bind(mean.new(r, window=3))
+    >>> with g.implicit() as (bind, done):
+    ...     r = bind(None, ref=core.Ref.Col)
+    ...     r = bind(
+    ...         rand.gaussian.new(r).sync(v=loop),
+    ...         ref=r,
+    ...     )
+    ...     mu = bind(mean.new(r))
+    ...     mu_3 = bind(mean.new(r, window=3))
+    ...     g = done()
+    ...
     >>> g, es = g.steps(core.Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     >>> list(numpy.round(g.select(mu, es[-1]), 2))
     [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
-    >>> list(numpy.round(g.select(mu_3, es[-1]), 2))
+    >>> list(
+    ...     numpy.round(g.select(mu_3, es[-1]), 2)
+    ... )
     [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
     """
 
