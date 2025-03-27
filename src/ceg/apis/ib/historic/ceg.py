@@ -47,7 +47,7 @@ class daily_bar_kw(NamedTuple):
     type: str
     schedule: core.Schedule
     #
-    d: core.Ref.Col
+    d: core.Ref.Object
     contract: Contract
     method: str | None
     db: str | None
@@ -85,7 +85,7 @@ class daily_bar(daily_bar_kw, core.Node.Col1D):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         method: str | None = None,
         db: str | None = None,
@@ -107,7 +107,7 @@ class daily_bars_kw(NamedTuple):
     type: str
     schedule: core.Schedule
     #
-    d: core.Ref.Col
+    d: core.Ref.Object
     contract: Contract
     window: int | datetime.timedelta | None
     method: str | None
@@ -182,7 +182,7 @@ class daily_bars(daily_bars_kw, core.Node.Col2D):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         window: int | datetime.timedelta | None,
         method: str | None = None,
@@ -208,7 +208,7 @@ class daily_level_kw(NamedTuple):
     type: str
     schedule: core.Schedule
     #
-    d: core.Ref.Col
+    d: core.Ref.Object
     contract: Contract
     field: str | int
     method: str | None
@@ -224,7 +224,7 @@ class daily_level(
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         field: str | int,
         method: str | None = None,
@@ -255,7 +255,7 @@ class daily_levels_kw(NamedTuple):
     type: str
     schedule: core.Schedule
     #
-    d: core.Ref.Col
+    d: core.Ref.Object
     contract: Contract
     field: str | int
     window: int | datetime.timedelta | None
@@ -270,7 +270,7 @@ class daily_levels(daily_levels_kw, core.Node.Col1D):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         window: int | datetime.timedelta | None,
         field: str | int,
@@ -307,7 +307,7 @@ class daily_open(daily_level):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         field: str | int = "open",
         method: str | None = None,
@@ -328,7 +328,7 @@ class daily_opens(daily_levels):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         window: int | None,
         field: str | int = "open",
@@ -352,7 +352,7 @@ class daily_high(daily_level):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         field: str | int = "high",
         method: str | None = None,
@@ -373,7 +373,7 @@ class daily_highs(daily_levels):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         window: int | None,
         field: str | int = "high",
@@ -396,7 +396,7 @@ class daily_low(daily_level):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         field: str | int = "low",
         method: str | None = None,
@@ -417,7 +417,7 @@ class daily_lows(daily_levels):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         window: int | None,
         field: str | int = "low",
@@ -440,7 +440,7 @@ class daily_close(daily_level):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         field: str | int = "close",
         method: str | None = None,
@@ -461,7 +461,7 @@ class daily_closes(daily_levels):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         window: int | None,
         field: str | int = "close",
@@ -484,7 +484,7 @@ class daily_volume(daily_level):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         field: str | int = "volume",
         method: str | None = None,
@@ -505,7 +505,7 @@ class daily_volumes(daily_levels):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         window: int | None,
         field: str | int = "volume",
@@ -528,7 +528,7 @@ class daily_wap(daily_level):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         field: str | int = "wap",
         method: str | None = None,
@@ -549,7 +549,7 @@ class daily_waps(daily_levels):
     @classmethod
     def new(
         cls,
-        d: core.Ref.Col,
+        d: core.Ref.Object,
         contract: Contract,
         window: int | None,
         field: str | int = "wap",

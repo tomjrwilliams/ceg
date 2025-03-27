@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import NamedTuple, overload
 from . import Array
 
-ValueAny = float | Array.np | dict | list
+ValueAny = int | float | Array.np | dict | list
 
 
 class SeriesND(NamedTuple):
@@ -25,7 +25,11 @@ class SeriesND(NamedTuple):
 
     def select(
         self, at: float, t: bool = False
-    ) -> ValueAny | tuple[Array.np_1D, ValueAny]:
+    ) -> ValueAny | tuple[
+        Array.np_1D, ValueAny
+    ] | tuple[
+            list[float], list
+        ]:
         raise ValueError()
 
 

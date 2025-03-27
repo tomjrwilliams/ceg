@@ -148,6 +148,23 @@ Data = tuple[Series.Any, ...]
 
 # TODO: kwargs on if return t or v or even just mask?
 
+@overload
+def select(
+    graph: GraphLike,
+    ref: Ref.Object,
+    at: float | Event,
+    t: Literal[False] = False,
+) -> list: ...
+
+
+@overload
+def select(
+    graph: GraphLike,
+    ref: Ref.Object,
+    at: float | Event,
+    t: Literal[True] = True,
+) -> tuple[list[float], list]: ...
+
 
 @overload
 def select(
