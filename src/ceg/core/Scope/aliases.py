@@ -36,8 +36,9 @@ class Aliases(Aliases_Kw, Scope):
         ref: Ref.Any,
         scope: Scope | None,
     ) -> Scope:
-        assert self.alias is not None, self
-        if scope is None:
+        if scope is None and self.alias is None:
+            return self
+        elif scope is None:
             return self._replace(
                 alias=None,
                 kwargs=None,
@@ -46,12 +47,18 @@ class Aliases(Aliases_Kw, Scope):
                 )
             )
         assert isinstance(scope, Aliases), scope
+        if self.alias is not None:
+            self = self._replace(
+                alias=None,
+                kwargs=None,
+                aliases=self.aliases.set(
+                    (ref, self.alias), self.kwargs
+                )
+            )
         return self._replace(
             alias=None,
             kwargs=None,
-            aliases=(self.aliases | scope.aliases).set(
-                (ref, self.alias), self.kwargs
-            )
+            aliases=(self.aliases | scope.aliases)
         )
 
     def contains(

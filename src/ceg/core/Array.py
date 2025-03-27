@@ -20,7 +20,7 @@ Shape = int | tuple[int, int] | tuple[int, int, int]
 #  ------------------
 
 
-class ArrayND(NamedTuple):
+class ArrayAny(NamedTuple):
     """
     shape: tuple[int, ...]
     size: int
@@ -35,14 +35,33 @@ class ArrayND(NamedTuple):
     n: int
     incr: int
     method: str
-    raw: numpy.ndarray
+    raw: numpy.ndarray | list
 
     @property
     def last(self):
         raise ValueError(self)
 
+Any = ArrayAny
 
-Any = ArrayND
+class ArrayList(ArrayAny):
+
+    shape: tuple[int, ...]
+    size: int
+    n: int
+    incr: int
+    method: str
+    raw: list
+
+class ArrayND(ArrayAny):
+
+    shape: tuple[int, ...]
+    size: int
+    n: int
+    incr: int
+    method: str
+    raw: numpy.ndarray
+
+
 
 #  ------------------
 
@@ -122,6 +141,39 @@ def array_v_size(*shape: int):
 
 #  ------------------
 
+class ArrayObject(ArrayList):
+
+    DIMS: ClassVar[int] = 0
+
+    @classmethod
+    def new(cls, incr: int = 2, method: str = "exp"):
+        return cls(
+            shape=(),
+            size=1,
+            n=0,
+            incr=incr,
+            method=method,
+            raw=[],
+        )
+
+
+    def add(self, v: float):
+        self.raw.append(v)
+        self = self._replace(n=self.n + 1)
+        return self
+
+
+    @property
+    def data(self):
+        return self.raw[: self.n]
+
+    @property
+    def last(self):
+        if self.n == 0:
+            return None
+        return self.raw[self.n - 1]
+
+Object = ArrayObject
 
 class Array(ArrayND):
 

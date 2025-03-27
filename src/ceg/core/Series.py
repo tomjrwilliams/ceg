@@ -37,6 +37,41 @@ Any = SeriesND
 Null = SeriesNull
 null = SeriesNull.new()
 
+class SeriesObject(SeriesND):
+    t: Array.Scalar
+    v: Array.Object
+    # possibly c array
+
+    @classmethod
+    def new(cls) -> SeriesND:
+        return cls(
+            t=Array.Scalar.new(), v=Array.Object.new()
+        )
+
+    def append(self, t: float, v: float):
+        return self._replace(
+            t=self.t.add(t),
+            v=self.v.add(v),
+        )
+
+    @overload
+    def select(
+        self, at: float, t: bool = False
+    ) -> list: ...
+
+    @overload
+    def select(
+        self, at: float, t: bool = True
+    ) -> tuple[list[float], list]: ...
+
+    def select(self, at: float, t: bool = False):
+        mask = self.mask(at)
+        f_take = lambda v: [vv for vv, b in zip(v, mask) if b > 0]
+        if t:
+            return f_take(self.t.data), f_take(self.v.data)
+        return f_take(self.v.data)
+
+Object = SeriesObject
 
 class SeriesCol(SeriesND):
     t: Array.Scalar

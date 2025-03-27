@@ -33,6 +33,12 @@ ColND = RefColND
 RowND = RefRowND
 
 
+class RefObject(Ref):
+    pass
+
+Object = RefObject
+
+
 class Ref0D(Ref):
     pass
 

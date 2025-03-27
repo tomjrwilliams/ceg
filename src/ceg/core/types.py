@@ -117,10 +117,11 @@ def next_event(
         if sync is None:
             continue
         res = sync.next(node, ref, event, params, graph)
-        if res is not None:
-            return res
+        # if res is not None:
+        return res
+
     t = event.t
-    assert ref.i not in params, (node, ref, params)
+    # assert ref.i not in params, (node, ref, params)
     # as will never fire
     if all_series(
         graph, params.keys(), lambda e: e.t.last == t

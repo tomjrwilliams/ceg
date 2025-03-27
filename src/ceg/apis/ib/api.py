@@ -68,8 +68,6 @@ class API(EWrapper, EClient):
 
     def headTimestamp(self, reqId, headTimestamp: str):
 
-        print(reqId, headTimestamp)
-
         self.check_queue_in()
 
         self.n_messages[reqId] += 1
@@ -245,6 +243,8 @@ class Connection(NamedTuple):
     queue_i: queue.Queue
     queue_o: queue.Queue
 
+from io import StringIO
+from contextlib import redirect_stdout, redirect_stderr
 
 def connect(db: str, id: int):
 
@@ -252,7 +252,21 @@ def connect(db: str, id: int):
     q_o = queue.Queue()
 
     api = API(db, q_i, q_o)
-    api.connect(host="127.0.0.1", port=7496, clientId=id)
+    
+    out = StringIO()
+
+    with redirect_stdout(out) as _, redirect_stderr(out) as _:
+        api.connect(host="127.0.0.1", port=7496, clientId=id)
+
+    out_s = out.getvalue()
+
+    if "Couldn't connect to TWS." in out_s:
+        raise ValueError(out_s)
+    elif not "Market data farm connection is OK" in out_s:
+        raise ValueError(out_s)
+    # else:
+    #     print(out_s)
+    #     print("Connection good!")
 
     def run():
         api.run()

@@ -3,6 +3,8 @@ from .contracts import *
 
 from .api import connect, Requests, Request
 
+from . import db
+
 from .historic import *
 from .fundamentals import *
 

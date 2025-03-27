@@ -120,7 +120,7 @@ class Scope(NamedTuple):
 
     def merge(
         self,
-        node: Node.Any,
+        node: Node.Any | None,
         ref: Ref.Any,
         scope: Scope | None,
     ) -> Scope:
@@ -167,7 +167,7 @@ class Plugin(NamedTuple):
 
 def use_plugins(
     graph: Graph,
-    node: Node.Any,
+    node: Node.Any | None,
     ref: Ref.Any,
     using: Plugin | tuple[Plugin, ...] | None,
 ):
@@ -192,7 +192,7 @@ def use_plugins(
         elif g_scope is None:
             scope = p_scope.merge(node, ref, scope=g_scope)
         else:
-            scope = g_scope.merge(node, ref, scope=p_scope)
+            scope = p_scope.merge(node, ref, scope=g_scope)
         plugins = plugins.set(p, scope)
     return graph._replace(plugins=plugins)
 
@@ -544,7 +544,7 @@ def bind(
         state,
     )
 
-    if isinstance(node, Node.Any):
+    if using is not None:
         graph = use_plugins(graph, node, res, using)
 
     return graph, res

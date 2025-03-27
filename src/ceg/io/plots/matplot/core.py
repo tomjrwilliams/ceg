@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, NamedTuple, Union, Callable
+from typing import Optional, NamedTuple, Union, Callable, cast
 
 from frozendict import frozendict
 
@@ -8,6 +8,7 @@ from functools import lru_cache
 import numpy as np
 import pandas as pd
 
+import matplotlib
 import matplotlib.figure
 import matplotlib.axis
 import matplotlib.axes
@@ -45,7 +46,7 @@ class AxisRef(NamedTuple):
         return self._replace(twinned=True)
 
     @property
-    def obj(self) -> matplotlib.axes.Axes:
+    def obj(self) -> matplotlib.axes.Axes | TwinnedAxes:
         fig = self.fig
         assert fig.grid is not None, fig
         grid = fig.grid
@@ -58,14 +59,27 @@ class AxisRef(NamedTuple):
                 axes = grid.twins[fig.figure]
             else:
                 axes = grid.axes[fig.figure]
+            if self.axis is None:
+                assert isinstance(
+                    axes, (matplotlib.axes.Axes, TwinnedAxes)
+                )
+                return axes
+            assert isinstance(axes, frozendict), axes
             return axes[self.axis]
         assert fig.figure is None, (
             grid.figures,
             fig.figure
         )
-        if self.twinned:
-            return grid.twins[self.axis]
-        return grid.axes[self.axis]
+        assert self.axis is not None, self
+        if self.twinned and self.axis:
+            res = grid.twins[self.axis]
+            assert isinstance(res, matplotlib.axes.Axes)
+        else:
+            res = grid.axes[self.axis]
+        assert isinstance(
+            res, (matplotlib.axes.Axes, TwinnedAxes)
+        )
+        return res
 
 class FigureRef(NamedTuple):
     grid: Optional[Grid]
@@ -83,6 +97,7 @@ class FigureRef(NamedTuple):
                 grid.figures, self.figure
             )
             return grid.figure
+        assert grid.figures is not None, grid.figures
         return grid.figures[self.figure]
     
     @property
@@ -91,13 +106,19 @@ class FigureRef(NamedTuple):
     ]:
         assert self.grid is not None, self
         grid = self.grid
+        assert grid.axes is not None, grid
         if self.figure is None:
             assert grid.figures is None, (
                 grid.figures, self.figure
             )
-            # assert no nested?
-            return grid.axes
-        return grid.axes[self.figure]
+            return cast(
+                frozendict[str, matplotlib.axes.Axes],
+                grid.axes
+            )
+        res = grid.axes[self.figure]
+        assert isinstance(res, frozendict), res
+        # are we sure? don't sometimes want singular? no, should be via figure
+        return res
 
     @property
     def axis(self) -> AxisRef:
@@ -166,7 +187,42 @@ class TwinnedAxes(NamedTuple):
 
 # -----------------
 
-class Grid(NamedTuple):
+from .... import core as ceg
+
+class Grid_Key_Kw(NamedTuple):
+    name: str
+
+class Grid_Key(Grid_Key_Kw, ceg.Key):
+    
+    def get(self, graph: ceg.Graph):
+        res: ceg.Value | None = graph.state.get(self)
+        assert res is not None, self
+        assert isinstance(res, Grid), self
+        return res
+
+class Grid_Kw(NamedTuple):
+
+    figure: matplotlib.figure.Figure
+    figures: Optional[
+        frozendict[str, matplotlib.figure.SubFigure]
+    ]
+    axes: frozendict[
+        str, Union[
+            matplotlib.axes.Axes,
+            frozendict[str, matplotlib.axes.Axes]
+        ]
+    ]
+    # TODO: specify which is twinned so we can check
+    twins: frozendict[
+        str, Union[
+            TwinnedAxes,
+            frozendict[str, TwinnedAxes]
+        ]
+    ]
+    charts: tuple[Mark, ...]
+    dfs: frozendict[str, pd.DataFrame]
+
+class Grid(Grid_Kw, ceg.Value):
 
     figure: matplotlib.figure.Figure
     figures: Optional[
@@ -207,10 +263,10 @@ class Grid(NamedTuple):
         return cls(
             figure=fig,
             figures=None,
-            axes=frozendict(),
-            twins=frozendict(),
+            axes=frozendict(),  #type: ignore
+            twins=frozendict(),  #type: ignore
             charts=(),
-            dfs=frozendict()
+            dfs=frozendict()  #type: ignore
         )
     
     def with_sub_figures(
@@ -229,11 +285,10 @@ class Grid(NamedTuple):
         )), (n_cols)
         f_figures = lambda: self.figure.subfigures(
             nrows=n_rows,
-            ncols=n_cols,
+            ncols=n_cols[0],
             width_ratios=width_ratios,
             height_ratios=height_ratios,
         )
-        n_cols = n_cols[0]
         if n_rows == 1 and n_cols == 1:
             sub_figures = [[f_figures()]]
         elif n_rows == 1:
@@ -251,6 +306,7 @@ class Grid(NamedTuple):
             for label, sub_fig
             in zip(label_row, fig_row)
         })
+        assert self.figures is not None, self
         for label, sub_fig in self.figures.items():
             sub_fig.suptitle(label)
         return self
@@ -279,7 +335,7 @@ class Grid(NamedTuple):
             )
             fig = self.figures[figure]
         axes = frozendict(fig.subplot_mosaic(
-            labels,
+            labels, # type: ignore
             sharex=sharex,
             sharey=sharey,
             subplot_kw=subplot_kw,
@@ -310,12 +366,12 @@ class Grid(NamedTuple):
         axis: AxisRef,
         chart: Mark,
     ) -> Grid:
-        axis = axis.with_grid(self)
+        axis_ref = axis.with_grid(self)
         chart = chart._replace(
-            figure=axis.fig.figure,
-            axis=axis.axis,
+            figure=axis_ref.fig.figure,
+            axis=axis_ref.axis,
         )
-        chart.apply(axis, self)
+        chart.apply(axis_ref, self)
         return self._replace(
             charts = self.charts + (chart,)
         )
@@ -332,14 +388,16 @@ class Grid(NamedTuple):
         self: Grid,
         col: ArrayOrCol,
         data: Optional[str] = None,
-        axis: Optional[np.ndarray] = None,
-    ) -> np.ndarray:
+        axis: Optional[np.ndarray | list] = None,
+    ) -> np.ndarray | list:
         if isinstance(col, (int, float)):
             assert axis is not None, (col, axis)
             return [col for _ in axis]
         if isinstance(col, str):
             assert data is not None, (col, data)
-            return self.dfs[data][col]
+            df = self.dfs[data]
+            assert isinstance(df, pd.DataFrame), df
+            return df[col].to_numpy()
         assert isinstance(col, (list, np.ndarray)), col
         return col
     
@@ -347,11 +405,11 @@ class Grid(NamedTuple):
         self: Grid,
         cols: ArrayOrCols,
         data: Optional[str] = None,
-        axis: Optional[np.ndarray] = None,
-    ) -> np.ndarray:
+        axis: Optional[np.ndarray | list] = None,
+    ) -> np.ndarray | list:
         if isinstance(cols, np.ndarray):
             return [
-                cols[:, i]
+                cols[:, i] # type: ignore
                 for i in range(cols.shape[1])
             ]
         assert isinstance(cols, list), cols
@@ -379,7 +437,7 @@ ArrayOrCols = Union[
 def cols_shape(
     y: Optional[ArrayOrCols]=None,
     y2: Optional[ArrayOrCols]=None,
-) -> tuple[int, ...]:
+) -> tuple[int, ...] | None:
     v = (
         y if y is not None
         else y2 if y2 is not None
@@ -426,12 +484,13 @@ def cmap_unique_colors(
     cmap: Union[
         matplotlib.colors.ListedColormap,
         matplotlib.colors.LinearSegmentedColormap,
+        matplotlib.colors.Colormap
     ],
     n: int
 ):
     cmap = cmap.resampled(n)
     colors: np.ndarray = cmap.__dict__["colors"]
-    rgba = map(tuple(colors.tolist()))
+    rgba = map(tuple(colors.tolist())) # type: ignore
     return len(set(rgba))
 
 @lru_cache(maxsize=128)
@@ -523,6 +582,7 @@ class Colors(NamedTuple):
 
     def boundaries(self):
         n = self.n_colors()
+        assert n is not None, self
         l, r = self.range()
         width = (r - l) / n
         return np.array([
@@ -532,7 +592,7 @@ class Colors(NamedTuple):
 
     def sample(
         self, cval: Union[int, float]
-    ) -> tuple[float, float, float, float]:
+    ) -> Color:
         bins = self.n_colors()
         if isinstance(cval, int):
             assert bins is not None, (cval, self)
@@ -547,7 +607,7 @@ class Colors(NamedTuple):
         l, r = self.range()
         cval_unit = (cval - l) / (r-l)
         rgba = cmap(cval_unit)
-        return Color(rgba=rgba).with_hex()
+        return Color.new(rgba=rgba).with_hex()
 
     def __getattr__(self, key: str) -> Colors:
         assert self.cmap is None, self
@@ -569,7 +629,9 @@ class Color(NamedTuple):
         if self.hex:
             return self.hex
         assert self.rgba is not None, self
-        return self.with_hex().hex
+        s = self.with_hex().hex
+        assert s is not None, self
+        return s
 
     def with_hex(self) -> Color:
         assert self.rgba is not None, self
@@ -596,11 +658,11 @@ colors = Colors.new()
 
 def color(name: str) -> Color:
     # TODO: with_hex / rgba
-    return Color(name=name)
+    return Color.new(name=name)
 
 def hex(s: str) -> Color:
     # TODO: with rgba
-    return Color(hex=s)
+    return Color.new(hex=s)
 
 def rgba(
     arg: Union[
@@ -617,7 +679,7 @@ def rgba(
         args = (arg,) + args
         assert len(args) == 4, args
         rgba = args
-    return Color(rgba=rgba).with_hex()
+    return Color.new(rgba=rgba).with_hex()
 
 # -----------------
 
@@ -629,7 +691,7 @@ class Mark(Mark_Kw):
     
     def apply(
         self,
-        axis: matplotlib.axes.Axes,
+        axis: AxisRef,
         grid: Grid,
     ):
         raise ValueError(self)
@@ -688,7 +750,10 @@ class Mark_2D(Mark_2D_Kw, Mark):
         grid: Grid,
     ):
         if self.x is None and self.y is None:
+            assert self.x2 is not None, self
+            assert self.y2 is not None, self
             assert axis.twinned, self
+            assert isinstance(axis.obj, TwinnedAxes), axis
             ax, x_twin, y_twin = axis.obj
             assert x_twin and y_twin, axis
             x = grid.unpack_col(
@@ -698,7 +763,10 @@ class Mark_2D(Mark_2D_Kw, Mark):
                 self.y2, data=self.data
             )
         elif self.x is None:
+            assert self.x2 is not None, self
+            assert self.y is not None, self
             assert axis.twinned, self
+            assert isinstance(axis.obj, TwinnedAxes), axis
             ax, x_twin, y_twin = axis.obj
             assert x_twin and not y_twin, axis
             x = grid.unpack_col(
@@ -708,7 +776,10 @@ class Mark_2D(Mark_2D_Kw, Mark):
                 self.y, data=self.data
             )
         elif self.y is None:
+            assert self.x is not None, self
+            assert self.y2 is not None, self
             assert axis.twinned, self
+            assert isinstance(axis.obj, TwinnedAxes), axis
             ax, x_twin, y_twin = axis.obj
             assert y_twin and not x_twin, axis
             x = grid.unpack_col(
@@ -718,6 +789,7 @@ class Mark_2D(Mark_2D_Kw, Mark):
                 self.y2, data=self.data
             )
         else:
+            assert isinstance(axis.obj, matplotlib.axes.Axes)
             ax = axis.obj
             x = grid.unpack_col(
                 self.x, data=self.data
@@ -825,6 +897,7 @@ class Marks_2D(Marks_2D_Kw, Mark):
         **shared
     ):
         shape = cols_shape(y=y, y2=y2)
+        assert shape is not None, shape
         if isinstance(colors, Colors) and c is None:
             c = list(np.linspace(
                 0,
@@ -855,7 +928,10 @@ class Marks_2D(Marks_2D_Kw, Mark):
         grid: Grid,
     ):
         if self.x is None and self.y is None:
+            assert self.x2 is not None, self
+            assert self.y2 is not None, self
             assert axis.twinned, self
+            assert isinstance(axis.obj, TwinnedAxes), axis
             ax, x_twin, y_twin = axis.obj
             assert x_twin and y_twin, axis
             x = grid.unpack_col(
@@ -865,7 +941,10 @@ class Marks_2D(Marks_2D_Kw, Mark):
                 self.y2, data=self.data
             )
         elif self.x is None:
+            assert self.x2 is not None, self
+            assert self.y is not None, self
             assert axis.twinned, self
+            assert isinstance(axis.obj, TwinnedAxes), axis
             ax, x_twin, y_twin = axis.obj
             assert x_twin and not y_twin, axis
             x = grid.unpack_col(
@@ -875,7 +954,10 @@ class Marks_2D(Marks_2D_Kw, Mark):
                 self.y, data=self.data
             )
         elif self.y is None:
+            assert self.x is not None, self
+            assert self.y2 is not None, self
             assert axis.twinned, self
+            assert isinstance(axis.obj, TwinnedAxes), axis
             ax, x_twin, y_twin = axis.obj
             assert y_twin and not x_twin, axis
             x = grid.unpack_col(
@@ -885,6 +967,13 @@ class Marks_2D(Marks_2D_Kw, Mark):
                 self.y2, data=self.data
             )
         else:
+            assert isinstance(axis.obj, matplotlib.axes.Axes)
+            x = grid.unpack_col(
+                self.x, data=self.data
+            )
+            y = grid.unpack_cols(
+                self.y, data=self.data
+            )
             ax = axis.obj
         
         kwargs = self.kwargs
@@ -944,7 +1033,7 @@ class Marks_2D(Marks_2D_Kw, Mark):
                 x[ii],
                 y[ii],
                 color=cc[ii][0],
-                **self.kwargs,
+                **kw,
             )
 
 # -----------------

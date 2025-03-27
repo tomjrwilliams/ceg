@@ -20,6 +20,13 @@ Null = NodeNull
 null = Null.new()
 
 
+
+class NodeObject(NodeND):
+    REF: ClassVar[Type[Ref.Any]] = Ref.Object
+    SERIES: ClassVar[Type[Series.Any]] = Series.Object
+
+Object = NodeObject
+
 class NodeCol(NodeND):
     REF: ClassVar[Type[Ref.Any]] = Ref.Col
     SERIES: ClassVar[Type[Series.Any]] = Series.Col
