@@ -298,3 +298,94 @@ class Scatter(Mark_2D):
 # x and c are the same
 
 #  ------------------
+
+class Patches_Kw(NamedTuple):
+    scope: ceg.Aliases | None
+    grid: Grid_Key
+    figure: Optional[str]
+    axis: str
+    x: str | None = None
+    y: str | None = None
+    c: str | None = None
+    slice: int | None = None # or slice
+    colors: Optional[core.Color | core.Colors] = None
+
+class Patches(Patches_Kw, ceg.Plugin.Aliased):
+
+    @classmethod
+    def new(
+        cls,
+        grid: Grid_Key, # needs all plots already added
+        axis: str,
+        scope: ceg.Aliases | None = None,
+        figure: Optional[str] = None,
+        # x / y etc. refer to aliases
+        x: Optional[str] = None,
+        y: Optional[str] = None, # label for series
+        c: Optional[str] = None,
+        colors: Optional[core.Color | core.Colors] = None,
+    ):
+        return cls(
+            scope=scope,
+            grid=grid,
+            axis=axis,
+            figure=figure,
+            x=x,
+            y=y,
+            c=c,
+            colors=colors,
+        )
+
+    def plot(self) -> Type[core.Patch]:
+        raise ValueError(self)
+
+    def flush(
+        self,
+        graph: ceg.Graph,
+        event: ceg.Event,
+        state: ceg.State,
+        scope: ceg.Aliases | None,
+    ):
+        assert isinstance(scope, ceg.Aliases), (
+            self,
+            scope,
+        )
+        cells = []
+        x: list[str] = []
+        y: list[str] = []
+        c = []
+
+        for (ref, key), kwargs in scope.aliases.items():
+            cells.append(key)
+
+            assert self.x is not None, self
+            x.append(kwargs[self.x])
+
+            assert self.y is not None, self
+            y.append(kwargs[self.y])
+
+            v = graph.select(ref, event, t = False)[-1] # type: ignore
+            c.append(v)
+
+        grid: core.Grid = self.grid.get(graph)
+
+        grid = grid.with_chart(
+            # TODO: figure etc.
+            getattr(core.fig.axis, self.axis),
+            self.plot().new(
+                x,
+                y,
+                c,
+                colors=self.colors,
+                # TODO: other kwargs?
+            ),
+        )
+        
+        return state.set(self.grid, grid)
+
+class Heatmap(Patches):
+
+    def plot(self) -> Type[core.Patch]:
+        return core.Rectangle
+
+#  ------------------

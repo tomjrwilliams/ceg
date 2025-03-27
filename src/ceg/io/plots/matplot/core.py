@@ -698,6 +698,147 @@ class Mark(Mark_Kw):
 
 # -----------------
 
+class Patch_Kw(NamedTuple):
+    figure: Optional[str]
+    axis: Optional[str]
+    x: list[str]
+    y: list[str]
+    c: ArrayOrCol
+    colors: Optional[Union[Color, Colors]]
+    data: Optional[str]
+    kwargs: dict
+
+class Patch(Patch_Kw, Mark):
+
+    def plot(
+        self, axes: matplotlib.axes.Axes
+    ) -> Callable:
+        raise ValueError(self)
+
+    @classmethod
+    def new(
+        cls, 
+        x: list[str],
+        y: list[str],
+        c: ArrayOrCol,
+        data: Optional[str] = None,
+        colors: Optional[Union[Color, Colors]]=None,
+        **kwargs
+    ):
+        return cls(
+            figure=None,
+            axis=None,
+            x=x,
+            y=y,
+            c=c,
+            colors=colors,
+            data=data,
+            kwargs=kwargs,
+        )
+
+    def apply(
+        self,
+        axis: AxisRef,
+        grid: Grid,
+    ):
+        assert isinstance(axis.obj, matplotlib.axes.Axes)
+        ax = axis.obj
+        x = self.x
+        y = self.y
+        assert isinstance(self.colors, Colors), self
+        c = grid.unpack_col(
+            self.c, data=self.data, axis=x,
+        )
+        cs = [
+            None if c == np.NaN
+            else self.colors.sample(cc).with_hex().hex
+            for cc in c
+        ]
+        # TODO: widths, lengths - possibly via x2, y2?
+
+        xs = {}
+        ys = {}
+        xy_cs = {}
+        xy_vs = {}
+
+        plot = self.plot(ax)
+
+        # TODO: assert same length
+        
+        for xx, yy, cc, v in zip(x, y, cs, c):
+            xs[xx] = None
+            ys[yy] = None
+            xy_cs[(xx, yy)] = cc
+            xy_vs[(xx, yy)] = v
+
+        xrange = np.array(range(len(xs)))
+        yrange = np.array(range(len(ys)))
+        
+        ax.scatter(xrange + 1, yrange + 1, color="white")
+
+        for ix, xx in enumerate(xs.keys()):
+            for iy, yy in enumerate(ys.keys()):
+
+                cc = xy_cs.get((xx, yy), None)
+                v = xy_vs.get((xx, yy), None)
+
+                if cc is None:
+                    continue
+
+                plot(
+                    ix,
+                    iy,
+                    color=cc,
+                    xlabel=xx,
+                    ylabel=yy,
+                    text=v,
+                )
+        
+        ax.set_xticks(xrange + .5, list(xs.keys()))
+        ax.set_yticks(yrange + .5, list(ys.keys()))
+
+    
+import matplotlib.patches
+
+class Rectangle(Patch):
+
+    def plot(self, axes: matplotlib.axes.Axes):
+        def f(ix, iy, color, xlabel, ylabel, text):
+            width = 1
+            height = 1
+            patch = matplotlib.patches.Rectangle(
+                (ix, iy),
+                width,
+                height,
+                color=color,
+                fill=True,
+            )
+
+            if isinstance(color, tuple):
+                rgb = color
+            else:
+                rgb = matplotlib.colors.hex2color(color)
+
+            grey = sum(rgb) / len(rgb)
+
+            text_color = "black" if grey > 0.5 else "white"
+
+            # w_per_char = (width / 2) / len(text)
+            # offset = int(len(text) / 2) * w_per_char
+
+            axes.annotate(
+                text,
+                (
+                    ix + 0.1 * width,
+                    iy + 0.1 * height
+                ), 
+                color=text_color
+            )
+            axes.add_patch(patch)
+        return f
+
+# -----------------
+
 class Mark_2D_Kw(NamedTuple):
     figure: Optional[str]
     axis: Optional[str]

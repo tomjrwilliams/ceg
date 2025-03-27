@@ -1,4 +1,4 @@
-from typing import NamedTuple, ClassVar, overload, Literal
+from typing import NamedTuple, ClassVar, overload, Literal, cast
 from .. import core
 
 import numpy
@@ -49,14 +49,7 @@ class gaussian(gaussian_kw, core.Node.Col):
     >>> rng(seed=0, reset=True)
     >>> loop = core.loop.Fixed(1)
     >>> g = core.Graph.new()
-    >>> with g.implicit() as (bind, done):
-    ...     r = bind(None, ref=core.Ref.Col)
-    ...     r = bind(
-    ...         gaussian.new(r).sync(v=loop),
-    ...         ref=r,
-    ...     )
-    ...     g = done()
-    ...
+    >>> g, r = gaussian.bind(g)
     >>> g, es = g.steps(core.Event(0, r), n=6)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
@@ -77,6 +70,30 @@ class gaussian(gaussian_kw, core.Node.Col):
         return cls(
             *cls.args(), v, mean=mean, std=std, seed=seed
         )
+
+    @classmethod
+    def bind(
+        cls,
+        g: core.Graph,
+        mean: float = 0.0,
+        std: float = 1.0,
+        seed: int = 0,
+        step=1.,
+        using: core.TPlugin | tuple[core.TPlugin, ...] | None = None,
+        # TODO: using
+    ):
+        loop = core.loop.Fixed(step)
+        with g.implicit() as (bind, done):
+            r = bind(None, core.Ref.Object, using)
+            r = cast(core.Ref.Col, r)
+            r = bind(
+                cls.new(r, mean, std, seed).sync(v=loop),
+                r,
+                None,
+            )
+            g = done()
+        r = cast(core.Ref.Col, r)
+        return g, r
 
     def __call__(
         self, event: core.Event, graph: core.Graph

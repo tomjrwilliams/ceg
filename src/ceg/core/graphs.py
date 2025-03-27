@@ -104,13 +104,17 @@ def rec_yield_hint_types(hint):
 
 
 def yield_param_keys(t_kw: Type[NamedTuple]):
+    seen: set[str] = set()
     for k, h in get_type_hints(t_kw).items():
         for h in rec_yield_hint_types(h):
+            if k in seen:
+                continue
             if not isinstance(h, type):
                 continue
             if issubclass(h, Ref.Any):
+                seen.add(k)
                 yield k
-                break
+                
 
 
 #  ------------------
@@ -570,7 +574,11 @@ def step(
     for e in events:
         heappush(queue, e)
 
-    event = heappop(queue)
+    try:
+        event = heappop(queue)
+    except IndexError:
+        # implies done?
+        return graph, None
 
     try:
         t, ref = event
@@ -650,6 +658,9 @@ def steps(
             graph, e = step(graph, *events)
         else:
             graph, e = step(graph)
+        if e is None:
+            es = es[:i]
+            break
         es[i] = e
     return graph, tuple(cast(list[Event], es))
 
