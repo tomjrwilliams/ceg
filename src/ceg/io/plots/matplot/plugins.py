@@ -309,6 +309,7 @@ class Patches_Kw(NamedTuple):
     c: str | None = None
     slice: int | None = None # or slice
     colors: Optional[core.Color | core.Colors] = None
+    format: str | None = None
 
 class Patches(Patches_Kw, ceg.Plugin.Aliased):
 
@@ -324,6 +325,7 @@ class Patches(Patches_Kw, ceg.Plugin.Aliased):
         y: Optional[str] = None, # label for series
         c: Optional[str] = None,
         colors: Optional[core.Color | core.Colors] = None,
+        format: str | None = None,
     ):
         return cls(
             scope=scope,
@@ -334,6 +336,7 @@ class Patches(Patches_Kw, ceg.Plugin.Aliased):
             y=y,
             c=c,
             colors=colors,
+            format=format,
         )
 
     def plot(self) -> Type[core.Patch]:
@@ -377,6 +380,7 @@ class Patches(Patches_Kw, ceg.Plugin.Aliased):
                 y,
                 c,
                 colors=self.colors,
+                format=self.format,
                 # TODO: other kwargs?
             ),
         )

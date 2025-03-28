@@ -288,7 +288,7 @@ class Graph(GraphKW, GraphLike):
     ):
         return bind(self, node=node, ref=ref, using=using)
 
-    def step(self, *events: Event) -> tuple[Graph, Event]:
+    def step(self, *events: Event) -> tuple[Graph, Event | None]:
         return step(self, *events)
 
     def steps(self, *events: Event, n: int = 1):
@@ -559,7 +559,7 @@ def bind(
 
 def step(
     graph: Graph, *events: Event
-) -> tuple[Graph, Event]:
+) -> tuple[Graph, Event | None]:
     (
         queue,
         nodes,

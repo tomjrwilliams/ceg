@@ -32,6 +32,7 @@ class API(EWrapper, EClient):
         self.q_i = q_i
         self.q_o = q_o
 
+        self.req_done = {}
         self.n_messages = defaultdict(int)
 
     def keyboardInterrupt(self):
@@ -90,7 +91,11 @@ class API(EWrapper, EClient):
         db.insert_start(contract_id, dt)
 
         self.q_o.put(
-            {"id": reqId, "n": self.n_messages[reqId]}
+            {
+                "id": reqId,
+                "n": self.n_messages[reqId],
+                "done": True,
+            }
         )
 
     def historicalData(self, reqId, bar):
@@ -133,7 +138,76 @@ class API(EWrapper, EClient):
         # _ = db.insert_bar(bar, historic=True)
 
         self.q_o.put(
-            {"id": reqId, "n": self.n_messages[reqId]}
+            {
+                "id": reqId,
+                "n": self.n_messages[reqId],
+                "done": False,
+            }
+        )
+
+    def historicalDataEnd(self, reqId: int, start: str, end: str):
+        self.check_queue_in()
+        self.req_done[reqId] = True
+        self.q_o.put(
+            {
+                "id": reqId,
+                "done": True,
+                "start": start,
+                "end": end,
+                "n": None,
+            }
+        )
+
+    def contractDetails(self, reqId, contractDetails):
+        det = contractDetails
+
+        self.check_queue_in()
+        self.n_messages[reqId] += 1
+
+        con = det.contract
+
+        con_dict = {
+            "id": con.conId,
+            "type": con.secType,
+            "symbol": con.symbol,
+            "currency": con.currency,
+            "exchange": con.exchange,
+            # "underlying": con,
+            "primary_exchange": con.primaryExchange,
+            "expiry": con.lastTradeDateOrContractMonth,
+            "last_trade": con.lastTradeDate,
+            "local_symbol": con.localSymbol,
+            "strike": con.strike,
+            "right": con.right,
+            "multiplier": con.multiplier,
+            "sec_id": con.secId,
+            "sec_id_type": con.secIdType,
+            "description": con.description,
+            "include_expired": con.includeExpired,
+        }
+        db = DB(self.db_fp)
+        res = db.insert_contract(con_dict)
+
+        # TODO: valid exchanges, long name, contract month, industry, category, subcategory, trading hours, liquid hours, time zone id, last trade time, real expiration date
+        # (in the details not the contract)
+
+        self.q_o.put(
+            {
+                "id": reqId,
+                "n": self.n_messages[reqId],
+                "done": False,
+            }
+        )
+
+    def contractDetailsEnd(self, reqId):
+        self.check_queue_in()
+        self.req_done[reqId] = True
+        self.q_o.put(
+            {
+                "id": reqId,
+                "done": True,
+                "n": None,
+            }
         )
 
     def nullify(self, v, null_if=-1):
@@ -165,7 +239,9 @@ class Request(NamedTuple):
                 break
             if (
                 res["id"] == self.id
-                and res["n"] == self.expects
+                and (
+                    res["done"] or res["n"] == self.expects
+                )
             ):
                 if done:
                     q_i.put("EXIT")
@@ -173,14 +249,13 @@ class Request(NamedTuple):
                 break
         return res
 
-
 class Requests(NamedTuple):
     offset: int
     kwargs: frozendict[int, Request]
     results: dict[int, list]
 
     @classmethod
-    def new(cls, offset=0):
+    def new(cls, offset = 0):
         return cls(offset, frozendict(), {})  # type: ignore
 
     def bind(
@@ -214,6 +289,7 @@ class Requests(NamedTuple):
                 timeout = req.timeout
             expects[req_id] = req.expects
         results = defaultdict(int)
+        done = {}
         while True:
             try:
                 res = q_o.get(timeout=timeout)
@@ -221,10 +297,12 @@ class Requests(NamedTuple):
                 q_i.put("EXIT")
                 thread.join()
                 break
-            results[res["id"]] += 1
+            req_id = res["id"]
+            done[req_id] = done.get(req_id, False) or res["done"]
+            results[req_id] += 1
             if all(
                 [
-                    results.get(id) == e
+                    (results.get(id) == e) or (done.get(id))
                     for id, e in expects.items()
                 ]
             ):
@@ -258,23 +336,27 @@ def connect(db: str, id: int):
     with redirect_stdout(out) as _, redirect_stderr(out) as _:
         api.connect(host="127.0.0.1", port=7496, clientId=id)
 
+        def run():
+            api.run()
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+
+        time.sleep(1)
+
     out_s = out.getvalue()
+    exit = False
 
     if "Couldn't connect to TWS." in out_s:
         raise ValueError(out_s)
     elif not "Market data farm connection is OK" in out_s:
+        exit = True
+
+    if exit:
+        q_i.put("EXIT")
+        thread.join()
+
         raise ValueError(out_s)
-    # else:
-    #     print(out_s)
-    #     print("Connection good!")
-
-    def run():
-        api.run()
-
-    thread = threading.Thread(target=run, daemon=True)
-    thread.start()
-
-    time.sleep(1)
 
     conn = Connection(api, thread, q_i, q_o)
 

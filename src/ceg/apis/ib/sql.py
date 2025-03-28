@@ -283,10 +283,9 @@ def create_table(
         return {
             k: c for k, c in cols.items() if k in schema
         }
-    s = ""
     for k, t in schema.items():
         if k not in cols:
-            s = s + f"ALTER TABLE {table} "
+            s = f"ALTER TABLE {table} "
             s = (
                 s
                 + f"ADD COLUMN {field_str(k, t, flags, not_null)};"
@@ -297,15 +296,14 @@ def create_table(
                     s
                     + f"CREATE UNIQUE INDEX {uniq_key} on {table}({k});"
                 )
-    assert len(s), dict(schema=schema, cols=cols)
-    with connect(db) as cur:
-        try:
-            cur.execute(s)
-            cols = cur.execute(
-                f"PRAGMA table_info({table})"
-            ).fetchall()
-        except:
-            raise ValueError(s)
+            with connect(db) as cur:
+                try:
+                    cur.execute(s)
+                    cols = cur.execute(
+                        f"PRAGMA table_info({table})"
+                    ).fetchall()
+                except:
+                    raise ValueError(s)
     return parse_table_info(cols)
 
 
@@ -453,7 +451,7 @@ def add_where_str(
                 [
                     " AND ".join(
                         [
-                            f"{table}.{f} {cond}"
+                            f"{table}.{f}{cond}"
                             for f, cond in conds.items()
                         ]
                     )
@@ -521,7 +519,10 @@ def select(
     s = add_order_str(s, order)
 
     with connect(db, read_only=True) as cur:
-        q = cur.execute(s)
+        try:
+            q = cur.execute(s)
+        except:
+            raise ValueError(s)
         res = q.fetchall()
 
     if parser is None:

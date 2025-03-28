@@ -1,10 +1,45 @@
 import datetime
 
-from typing import NamedTuple, ClassVar, overload, Literal
+from types import SimpleNamespace
+from typing import NamedTuple, ClassVar, overload, Literal, Protocol
 
 from . import sql
 
 #  ------------------
+
+class StringNamespace(SimpleNamespace):
+
+    def __getattribute__(self, k: str) -> str:
+        return SimpleNamespace.__getattribute__(self, k)
+
+T = TYPES = StringNamespace(
+    FX="CASH",
+    CRYPT="CRYPTO",
+    EQ="STK",
+    STOCK="STK",
+    INDEX="IND",
+    CFD="CFD",
+    FUT="FUT",
+    GENERIC="CONTFUT",
+    CHAIN="FUT+CONTFUT",
+    OPTION="OPT",
+    FUT_OPT="FOP",
+    BOND="BOND",
+    MUTUAL="FUND",
+    CO="CMDTY",
+    WARRANT="WAR",
+    STRUCT="IOPT",
+)
+E = EXCH = EXCHANGES = StringNamespace(
+    ARCA="ARCA",
+    BATS="BATS",
+    CBOE="CBOE",
+    #
+    SMART="SMART",
+)
+C = CURRENCY = StringNamespace(
+    USD="USD"
+)
 
 
 class Contract(NamedTuple):
@@ -17,13 +52,65 @@ class Contract(NamedTuple):
     exchange: str
     """
 
-    id: int
+    id: int | None
     type: str
     symbol: str
-    underlying: str
-    currency: str
-    exchange: str
+    currency: str | None
+    exchange: str | None
+    # underlying: str | None
+    primary_exchange: str | None # for uniquely identifiying where many traded; echange = SMART primary = ARCA, say
+    expiry: str | None # futures
+    last_trade: str | None
+    local_symbol: str | None # also futures eg. FGBL MAR 23
+    strike: float | None
+    right: str | None # C or P
+    multiplier: str | None #
+    sec_id: str | None
+    sec_id_type: str | None # eg. FIGI
+    description: str | None # for search
+    # issuer_id: str | None 
+    include_expired: bool | None
 
+    @classmethod
+    def new(
+        cls,
+        type: str,
+        symbol: str,
+        currency: str | None = None,
+        exchange: str | None = None,
+        id: int | None = None,
+        # underlying: str | None=None,
+        primary_exchange: str | None=None,
+        expiry: str | None=None,
+        last_trade: str | None=None,
+        local_symbol: str | None=None,
+        strike: float | None=None,
+        right: str | None=None,
+        multiplier: str | None=None,
+        sec_id: str | None=None,
+        sec_id_type: str | None=None,
+        description: str | None=None,
+        include_expired: bool | None=None,
+    ):
+        return cls(
+            id=id,
+            type=type,
+            symbol=symbol,
+            currency=currency,
+            exchange=exchange,
+            # underlying=underlying,
+            primary_exchange=primary_exchange,
+            expiry=expiry,
+            last_trade=last_trade,
+            local_symbol=local_symbol,
+            strike=strike,
+            right=right,
+            multiplier=multiplier,
+            sec_id=sec_id,
+            sec_id_type=sec_id_type,
+            description=description,
+            include_expired=include_expired,
+        )
 
 class Query(NamedTuple):
     """
@@ -82,14 +169,23 @@ table_contracts = sql.Table.new(
     id=int,
     type=str,
     symbol=str,
-    underlying=str,
     currency=str,
     exchange=str,
+    # underlying=str ,
+    primary_exchange=str ,
+    expiry=str ,
+    last_trade=str,
+    local_symbol=str ,
+    strike=float,
+    right=str ,
+    multiplier=str ,
+    sec_id=str ,
+    sec_id_type=str ,
+    description=str ,
+    include_expired=bool,
     primary_key=(
         "id",
-        # exchange?
     ),
-    # futures expiry etc.
 )
 table_contract_dates = sql.Table.new(
     "contract_dates",
@@ -160,6 +256,63 @@ class DB(DB_KW):
     bars: ClassVar[sql.Table] = table_bars
     history: ClassVar[sql.Table] = table_historic
 
+    def list_contracts(self, **kwargs) -> list[Contract]:
+        cls = type(self)
+        res = sql.select(
+            self.fp,
+            {cls.contracts: dict(cls.contracts.schema)},
+            where={
+                cls.contracts: {
+                    k: (
+                        f"={v}"
+                        if not isinstance(v, str)
+                        else f'="{v}"'
+                    )
+                    for k, v in kwargs.items()
+                }
+            },
+        )
+        return [
+            Contract(**drop_prefix(d))
+            for d in res
+        ]
+
+    def get_contract(self, id: int) -> Contract | None:
+        cls = type(self)
+        res = sql.select(
+            self.fp,
+            {cls.contracts: dict(cls.contracts.schema)},
+            where={cls.contracts: dict(id=f"={id}")},
+        )
+        if len(res) == 0:
+            res = None
+        elif len(res) == 1:
+            res = res[0]
+        else:
+            raise ValueError("Duplicates:", res)
+        if res is None:
+            return res
+        return Contract(**drop_prefix(res))  # type: ignore
+
+    def insert_contract(self, con: dict | Contract):
+        cls = type(self)
+        if isinstance(con, Contract):
+            con = con._asdict()
+        id: int | None = con.get("id")
+        if id is None:
+            raise ValueError(con)
+        d = self.get_contract(id)
+        if d is not None:
+            con = {**d._asdict(), **con}
+        # print(con)
+        sql.insert(
+            self.fp,
+            cls.contracts,
+            [con],
+            if_exists="REPLACE",
+        )
+        return Contract(**con)
+
     def get_start(self, id: int) -> datetime.date | None:
         cls = type(self)
         res = sql.select(
@@ -205,42 +358,6 @@ class DB(DB_KW):
             ],
             if_exists="REPLACE",
         )
-
-    def get_contract(self, id: int) -> Contract | None:
-        cls = type(self)
-        res = sql.select(
-            self.fp,
-            {cls.contracts: dict(cls.contracts.schema)},
-            where={cls.contracts: dict(id=f"={id}")},
-        )
-        if len(res) == 0:
-            res = None
-        elif len(res) == 1:
-            res = res[0]
-        else:
-            raise ValueError("Duplicates:", res)
-        if res is None:
-            return res
-        return Contract(**drop_prefix(res))  # type: ignore
-
-    def insert_contract(self, con: dict | Contract):
-        cls = type(self)
-        if isinstance(con, Contract):
-            con = con._asdict()
-        id: int | None = con.get("id")
-        if id is None:
-            raise ValueError(con)
-        d = self.get_contract(id)
-        if d is not None:
-            con = {**d._asdict(), **con}
-        # print(con)
-        sql.insert(
-            self.fp,
-            cls.contracts,
-            [con],
-            if_exists="REPLACE",
-        )
-        return Contract(**con)
 
     @overload
     def get_queries(

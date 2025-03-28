@@ -11,7 +11,7 @@ from ibapi.contract import Contract
 # eg. oil acts as a geopolitical, gas to specific storage and supply options
 # and all are contextual over time to slowly changing supply and demand balances
 
-
+#  ------------------
 
 # int 	ConId [get, set]
 #  	The unique IB contract identifier.
@@ -72,12 +72,20 @@ from ibapi.contract import Contract
 
 #  ------------------
 
+# https://interactivebrokers.github.io/tws-api/contract_details.html
+
+# either 
+
 FIELD_MAP = {
     "contract_id": "conId",
     "id": "conId",
-    #
     "type": "secType",
-    #
+    "sec_id": "secId",
+    "sec_id_type": "secIdType",
+    "symbol_local": "localSymbol",
+    "primary_exchange": "primaryExchange",
+    "expiry": "lastTradeDateOrContractMonth",
+    "include_expired": "includeExpired",
 }
 
 
@@ -86,6 +94,8 @@ def contract(
 ):
     contr = Contract()
     for k, v in kwargs.items():
+        if v is None:
+            continue
         setattr(contr, FIELD_MAP.get(k, k), v)
 
     # contract.symbol = symbol

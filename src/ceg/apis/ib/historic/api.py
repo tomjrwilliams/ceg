@@ -57,7 +57,7 @@ BAR_FIELD_INDICES = {
 
 def get_daily_level(
     fp: str,
-    con: dict | Contract,
+    con: Contract,
     start: datetime.date,
     end: datetime.date,
     bar_method: str,
@@ -123,7 +123,7 @@ get_daily_wap = partial(
 
 class CacheKey(NamedTuple):
     fp: str
-    id: int
+    con: Contract
     bar_method: str
     use_rth: bool
     
@@ -139,7 +139,7 @@ CACHE: dict[
 @overload
 def get_daily_bars(
     fp: str,
-    con: dict | Contract,
+    con: Contract,
     start: datetime.date,
     end: datetime.date,
     bar_method: str,
@@ -151,7 +151,7 @@ def get_daily_bars(
 @overload
 def get_daily_bars(
     fp: str,
-    con: dict | Contract,
+    con: Contract,
     start: datetime.date,
     end: datetime.date,
     bar_method: str,
@@ -163,7 +163,7 @@ def get_daily_bars(
 @overload
 def get_daily_bars(
     fp: str,
-    con: dict | Contract,
+    con: Contract,
     start: datetime.date,
     end: datetime.date,
     bar_method: str,
@@ -174,7 +174,7 @@ def get_daily_bars(
 
 def get_daily_bars(
     fp: str,
-    con: dict | Contract,
+    con: Contract,
     start: datetime.date,
     end: datetime.date,
     bar_method: str,
@@ -182,13 +182,8 @@ def get_daily_bars(
     df: bool = False,
     at: datetime.date | None = None,
 ):
-    id: int
-    if isinstance(con, dict):
-        id = con["id"]
-    else:
-        id = con.id
     key = CacheKey(
-        fp, id, bar_method, use_rth
+        fp, con, bar_method, use_rth
     )
     if key not in CACHE:
         cache_end = end
@@ -208,14 +203,8 @@ def get_daily_bars(
             df=True,
         )
         res = numpy.vstack((
-            bars.select(
-                "open",
-                "high",
-                "low",
-                "close",
-                "volume",
-                "wap",
-            ).to_numpy(),
+            bars.select(*list(BARS_SCHEMA.keys())[1:])
+            .to_numpy(),
             res,
         ))
         cache_start = start
@@ -230,8 +219,8 @@ def get_daily_bars(
             df=True,
         )
         res = numpy.vstack((
-            bars.select(*BARS_SCHEMA.keys())
-            .to_numpy()[:, 1:],
+            bars.select(*list(BARS_SCHEMA.keys())[1:])
+            .to_numpy(),
             res,
         ))
         cache_end = end
@@ -282,7 +271,7 @@ def get_daily_bars(
 def req_daily_bars(
     fp: str,
     # :contract
-    con: dict | Contract,
+    con: Contract,
     # :request fields
     start: datetime.date,
     end: datetime.date,
@@ -298,7 +287,7 @@ def req_daily_bars(
 def req_daily_bars(
     fp: str,
     # :contract
-    con: dict | Contract,
+    con: Contract,
     # :request fields
     start: datetime.date,
     end: datetime.date,
@@ -313,7 +302,7 @@ def req_daily_bars(
 def req_daily_bars(
     fp: str,
     # :contract
-    con: dict | Contract,
+    con: Contract,
     # :request fields
     start: datetime.date,
     end: datetime.date,
@@ -327,147 +316,191 @@ def req_daily_bars(
     conn = None
     db = DB(fp)
 
-    print(con)
-
     db.contracts.create(db.fp)
     db.contract_dates.create(db.fp)
     db.queries.create(db.fp)
     db.bars.create(db.fp)
     db.history.create(db.fp)
 
-    contr = db.insert_contract(con)
-    contract_id = contr.id
+    try:
+        if con.id is None:
+            contrs = db.list_contracts(**{
+                k: v for k, v in con._asdict().items()
+                if v is not None
+            })
 
-    contr_start = db.get_start(contract_id)
+            if not len(contrs):
+                conn = connect(fp, instance)
+                
+                requests, req = Requests.new().bind(
+                    "reqContractDetails",
+                    expects=-1,
+                    timeout=timeout,
+                    contract=contract(**con._asdict()),
+                )
 
-    if contr_start is None:
+                _ = req.run(conn, done=False)
 
-        conn = connect(fp, instance)
+        contrs = db.list_contracts(**{
+            k: v for k, v in con._asdict().items()
+            if v is not None
+        })
 
-        requests, req = Requests.new().bind(
-            "reqHeadTimeStamp",
-            expects=1,
-            timeout=timeout,
-            contract=contract(**contr._asdict()),
-            whatToShow=bar_method,
-            useRTH=0,
-            formatDate=1,
-        )
+        assert len(contrs) == 1, contrs
+        contr = contrs[0]
 
-        conn.queue_i.put(
-            ("contract_id", req.id, contract_id)
-        )
+        contract_id = contr.id
+        assert contract_id is not None, contract_id
+        contr_start = db.get_start(contract_id)
 
-        _ = req.run(conn, done=False)
+        if contr_start is None:
 
-    contr_start = db.get_start(contract_id)
-    assert contr_start is not None, contr
+            if conn is None:
+                conn = connect(fp, instance)
 
-    old_start = start
-    if start < contr_start:
-        start = contr_start
+            requests, req = Requests.new().bind(
+                "reqHeadTimeStamp",
+                expects=1,
+                timeout=timeout,
+                contract=contract(**contr._asdict()),
+                whatToShow=bar_method,
+                useRTH=0,
+                formatDate=1,
+            )
 
-    if start >= end:
-        queries = []
-        required = []
-    else:
-        queries = db.get_queries(
-            fields=None,
-            where=dict(
-                contract_id=f"={contract_id}",
-                # TODO: this is one case where the encoding would be useful, capturing that int maps to bool
-            ),
-        )
+            conn.queue_i.put(
+                ("contract_id", req.id, contract_id)
+            )
 
-        queries = [finalise_query(db, q) for q in queries]
+            _ = req.run(conn, done=False)
 
-        required = required_queries(
-            db,
-            start,
-            end,
-            queries,
-            #
-            contract_id=contract_id,
-            rth=use_rth,
-            method=bar_method,
-            asof=datetime.date.today(),
-            bound=0,
-            done=None,
-        )
+        contr_start = db.get_start(contract_id)
+        assert contr_start is not None, contr
 
-    if len(required) and conn is None:
-        conn = connect(fp, instance)
+        old_start = start
+        if start < contr_start:
+            start = contr_start
 
-    for i, q in enumerate(required):
-        assert conn is not None, contr
-
-        print("required", q.start, q.end)
-
-        query_id = q.id
-
-        delta = (q.end - q.start).days
-
-        duration = f"{delta} D"
-        bar_size = "1 day"
-
-        expects = delta
-
-        requests, req = Requests.new(offset=1).bind(
-            "reqHistoricalData",
-            expects=expects,
-            timeout=timeout,
-            contract=contract(**contr._asdict()),
-            endDateTime=datetime_to_str(end),
-            durationString=duration,
-            barSizeSetting=bar_size,
-            whatToShow=bar_method,
-            useRTH=int(use_rth),
-            formatDate=1,
-            keepUpToDate=0,
-            chartOptions=[],
-        )
-        conn.queue_i.put(("query_id", req.id, query_id))
-        conn.queue_i.put(
-            ("contract_id", req.id, contract_id)
-        )
-
-        if len(required) and i == len(required) - 1:
-            res = requests.run(conn)
-
-    # if not len(required):
-    #     conn.queue_i.put("EXIT")
-
-    required = [finalise_query(db, q) for q in required]
-
-    # merged = merge_queries(db, queries, required)
-
-    res = query_bars(db, contr, start, end)
-
-    if not len(res) or old_start < res[0].date:
-        if not len(res):
-            null_end = end
+        if start >= end:
+            queries = []
+            required = []
         else:
-            null_end = res[0].date + datetime.timedelta(
-                days=-1
+            queries = db.get_queries(
+                fields=None,
+                where=dict(
+                    contract_id=f"={contract_id}",
+                    # TODO: this is one case where the encoding would be useful, capturing that int maps to bool
+                ),
             )
-        res = [
-            Bar(
-                contract_id,
-                d,
-                query_id=None,  # type: ignore
-                open=None,  # type: ignore
-                high=None,  # type: ignore
-                low=None,  # type: ignore
-                close=None,  # type: ignore
-                volume=None,  # type: ignore
-                wap=None,  # type: ignore
-            )
-            for d in dates_between(old_start, null_end)
-        ] + res
 
-    if df:
-        return polars.DataFrame([r._asdict() for r in res])
-    return res
+            queries = [finalise_query(db, q) for q in queries]
+
+            for q in queries:
+                print(q)
+
+            required = required_queries(
+                db,
+                start,
+                end,
+                queries,
+                #
+                contract_id=contract_id,
+                rth=use_rth,
+                method=bar_method,
+                asof=datetime.date.today(),
+                bound=0,
+                done=None,
+            )
+
+        if len(required) and conn is None:
+            conn = connect(fp, instance)
+
+        requests = Requests.new()
+
+        for i, q in enumerate(required):
+            assert conn is not None, contr
+
+            print(
+                "required",
+                con.type,
+                con.symbol,
+                con.exchange,
+                q.start,
+                q.end,
+            )
+
+            query_id = q.id
+
+            delta = (q.end - q.start).days
+
+            duration = f"{delta} D"
+            bar_size = "1 day"
+
+            expects = delta
+
+            requests, req = requests.bind(
+                "reqHistoricalData",
+                expects=expects,
+                timeout=timeout,
+                contract=contract(**contr._asdict()),
+                endDateTime=datetime_to_str(end),
+                durationString=duration,
+                barSizeSetting=bar_size,
+                whatToShow=bar_method,
+                useRTH=int(use_rth),
+                formatDate=1,
+                keepUpToDate=0,
+                chartOptions=[],
+            )
+            conn.queue_i.put(("query_id", req.id, query_id))
+            conn.queue_i.put(
+                ("contract_id", req.id, contract_id)
+            )
+
+            if len(required) and i == len(required) - 1:
+                res = requests.run(conn)
+
+        # if not len(required):
+        #     conn.queue_i.put("EXIT")
+
+        required = [finalise_query(db, q) for q in required]
+
+        # merged = merge_queries(db, queries, required)
+
+        res = query_bars(db, contr, start, end)
+
+        if not len(res) or old_start < res[0].date:
+            if not len(res):
+                null_end = end
+            else:
+                null_end = res[0].date + datetime.timedelta(
+                    days=-1
+                )
+            res = [
+                Bar(
+                    contract_id,
+                    d,
+                    query_id=None,  # type: ignore
+                    open=None,  # type: ignore
+                    high=None,  # type: ignore
+                    low=None,  # type: ignore
+                    close=None,  # type: ignore
+                    volume=None,  # type: ignore
+                    wap=None,  # type: ignore
+                )
+                for d in dates_between(old_start, null_end)
+            ] + res
+
+        if conn is not None:
+            conn.queue_i.put("EXIT")
+        if df:
+            return polars.DataFrame([r._asdict() for r in res])
+        return res
+
+    except Exception as e:
+        if conn is not None:
+            conn.queue_i.put("EXIT")
+        raise e
 
 
 def required_queries(
@@ -507,7 +540,7 @@ def required_queries(
                         id=None,  # type: ignore
                         start=lhs,
                         end=rhs,
-                        expected=(e - s).days,
+                        expected=(rhs - lhs).days,
                         **kwargs,
                     )
                 )
@@ -519,7 +552,7 @@ def required_queries(
 
 
 def finalise_query(db: DB, query: Query):
-    if query.done is not None:
+    if query.done:
         return query
     bar_dates = db.get_bars(
         {"date": datetime.date},

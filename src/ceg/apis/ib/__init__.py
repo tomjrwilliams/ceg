@@ -1,9 +1,9 @@
 from .utils import *
-from .contracts import *
 
 from .api import connect, Requests, Request
 
 from . import db
+from .db import Contract, T, TYPES, E, EXCH, EXCHANGES, C, CURRENCY, Query, Bar, StringNamespace
 
 from .historic import *
 from .fundamentals import *

@@ -1,7 +1,16 @@
 from typing import NamedTuple, ClassVar
 import numpy
+import numpy as np
 
 from .. import core
+
+#  ------------------
+
+def window_mask(v, t, at):
+    return v[t >= at]
+
+def window_null_mask(v, t, at):
+    return v[(t >= at) & ~np.isnan(v)]
 
 #  ------------------
 
@@ -54,7 +63,8 @@ class mean(mean_kw, core.Node.Col):
     ):
         window = event.t + 1 if self.window is None else self.window
         t, v = graph.select(self.v, event, t=True)
-        return numpy.nanmean(v[t > event.t - window])
+        v = window_null_mask(v, t, event.t - window)
+        return np.NAN if not len(v) else numpy.nanmean(v)
 
 
 #  ------------------
@@ -431,16 +441,20 @@ class cov(cov_kw, core.Node.Col):
         # TODO: assert aligned?
         t1, v1 = graph.select(self.v1, event, t=True)
         t2, v2 = graph.select(self.v2, event, t=True)
+        v1 = window_mask(v1, t1, event.t - window)
+        v2 = window_mask(v2, t2, event.t - window)
         if self.mu_1 is None:
-            mu_1 = numpy.nanmean(v1[t1 > event.t - window])
+            mu1 = np.NAN if not len(v1) else numpy.nanmean(v1)
         else:
-            mu_1 = graph.select(self.mu_1, event)[-1]
+            mu1 = graph.select(self.mu_1, event)[-1]
         if self.mu_2 is None:
-            mu_2 = numpy.nanmean(v2[t2 > event.t - window])
+            mu2 = np.NAN if not len(v2) else numpy.nanmean(v2)
         else:
-            mu_2 = graph.select(self.mu_2, event)[-1]
+            mu2 = graph.select(self.mu_2, event)[-1]
+        if mu1 == np.NAN and mu2 == np.NAN:
+            return np.NAN
         return numpy.nanmean(
-            (v1 - mu_1) * (v2 - mu_2)
+            (v1 - mu1) * (v2 - mu2)
             # assume elementwise?
         )
 

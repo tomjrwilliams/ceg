@@ -705,6 +705,7 @@ class Patch_Kw(NamedTuple):
     y: list[str]
     c: ArrayOrCol
     colors: Optional[Union[Color, Colors]]
+    format: str | None
     data: Optional[str]
     kwargs: dict
 
@@ -723,6 +724,7 @@ class Patch(Patch_Kw, Mark):
         c: ArrayOrCol,
         data: Optional[str] = None,
         colors: Optional[Union[Color, Colors]]=None,
+        format: str | None = None,
         **kwargs
     ):
         return cls(
@@ -732,6 +734,7 @@ class Patch(Patch_Kw, Mark):
             y=y,
             c=c,
             colors=colors,
+            format=format,
             data=data,
             kwargs=kwargs,
         )
@@ -749,6 +752,8 @@ class Patch(Patch_Kw, Mark):
         c = grid.unpack_col(
             self.c, data=self.data, axis=x,
         )
+        if self.format == "pct":
+            c = [cc * 100 for cc in c]
         cs = [
             None if c == np.NaN
             else self.colors.sample(cc).with_hex().hex
@@ -784,6 +789,11 @@ class Patch(Patch_Kw, Mark):
 
                 if cc is None:
                     continue
+
+                if self.format == "pct" and isinstance(
+                    v, (int, float)
+                ):
+                    v = f"{round(v, 3)}%"
 
                 plot(
                     ix,
