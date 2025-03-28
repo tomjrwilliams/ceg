@@ -395,8 +395,8 @@ def req_daily_bars(
 
             queries = [finalise_query(db, q) for q in queries]
 
-            for q in queries:
-                print(q)
+            # for q in queries:
+            #     print(q)
 
             required = required_queries(
                 db,
