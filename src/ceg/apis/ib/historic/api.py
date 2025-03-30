@@ -36,235 +36,6 @@ def dates_between(start, end):
 
 ONE_DAY = datetime.timedelta(days=1)
 
-BARS_SCHEMA = {
-    "date": polars.Date,
-    "open": polars.Float64,
-    "high": polars.Float64,
-    "low": polars.Float64,
-    "close": polars.Float64,
-    "volume": polars.Float64,
-    "wap": polars.Float64,
-}
-
-BAR_FIELD_INDICES = {
-    k: i - 1
-    for i, k in enumerate(BARS_SCHEMA)
-    if k != "date"
-}
-
-
-#  ------------------
-
-def get_daily_level(
-    fp: str,
-    con: Contract,
-    start: datetime.date,
-    end: datetime.date,
-    bar_method: str,
-    field: str | int,
-    use_rth: bool = True,
-    df: bool = False,
-    at: datetime.date | None = None,
-):
-    if df:
-        assert isinstance(field, str), field
-        return get_daily_bars(
-            fp,
-            con,
-            start,
-            end,
-            bar_method,
-            use_rth=use_rth,
-            # TODO: just rth?
-            df=True,
-            at=at,
-        ).select("date", field)
-    i = (
-        field if isinstance(field, int)
-        else BAR_FIELD_INDICES[field]
-    )
-    return get_daily_bars(
-        fp,
-        con,
-        start,
-        end,
-        bar_method,
-        use_rth=use_rth,
-        df=df,
-        at=at,
-    )[:, i]
-
-get_daily_open = partial(
-    get_daily_level,
-    field=BAR_FIELD_INDICES["open"]
-)
-get_daily_high = partial(
-    get_daily_level,
-    field=BAR_FIELD_INDICES["high"]
-)
-get_daily_low = partial(
-    get_daily_level,
-    field=BAR_FIELD_INDICES["low"]
-)
-get_daily_close = partial(
-    get_daily_level,
-    field=BAR_FIELD_INDICES["close"]
-)
-get_daily_volume = partial(
-    get_daily_level,
-    field=BAR_FIELD_INDICES["volume"]
-)
-get_daily_wap = partial(
-    get_daily_level,
-    field=BAR_FIELD_INDICES["wap"]
-)
-
-#  ------------------
-
-class CacheKey(NamedTuple):
-    fp: str
-    con: Contract
-    bar_method: str
-    use_rth: bool
-    
-CACHE: dict[
-    CacheKey, 
-    tuple[
-        datetime.date, 
-        datetime.date,
-        core.Array.np_2D
-    ]
-] = {}
-
-@overload
-def get_daily_bars(
-    fp: str,
-    con: Contract,
-    start: datetime.date,
-    end: datetime.date,
-    bar_method: str,
-    use_rth: bool = True,
-    df: Literal[False] = False,
-    at: Literal[None] = None,
-) -> core.Array.np_2D: ...
-
-@overload
-def get_daily_bars(
-    fp: str,
-    con: Contract,
-    start: datetime.date,
-    end: datetime.date,
-    bar_method: str,
-    use_rth: bool = True,
-    df: Literal[False] = False,
-    at: datetime.date = None,
-) -> core.Array.np_1D: ...
-
-@overload
-def get_daily_bars(
-    fp: str,
-    con: Contract,
-    start: datetime.date,
-    end: datetime.date,
-    bar_method: str,
-    use_rth: bool = True,
-    df: Literal[True] = True,
-    at: datetime.date | None = None,
-) -> polars.DataFrame: ...
-
-def get_daily_bars(
-    fp: str,
-    con: Contract,
-    start: datetime.date,
-    end: datetime.date,
-    bar_method: str,
-    use_rth: bool = True,
-    df: bool = False,
-    at: datetime.date | None = None,
-):
-    key = CacheKey(
-        fp, con, bar_method, use_rth
-    )
-    if key not in CACHE:
-        cache_end = end
-        cache_start = end + ONE_DAY
-        res = numpy.empty((0, 6))
-    else:
-        cache_start, cache_end, res = CACHE[key]
-        
-    if start < cache_start:
-        bars: polars.DataFrame = req_daily_bars(
-            fp,
-            con,
-            start,
-            cache_start - ONE_DAY,
-            bar_method=bar_method,
-            use_rth=use_rth,
-            df=True,
-        )
-        res = numpy.vstack((
-            bars.select(*list(BARS_SCHEMA.keys())[1:])
-            .to_numpy(),
-            res,
-        ))
-        cache_start = start
-    if end > cache_end:
-        bars: polars.DataFrame = req_daily_bars(
-            fp,
-            con,
-            end + ONE_DAY,
-            cache_end,
-            bar_method=bar_method,
-            use_rth=use_rth,
-            df=True,
-        )
-        res = numpy.vstack((
-            bars.select(*list(BARS_SCHEMA.keys())[1:])
-            .to_numpy(),
-            res,
-        ))
-        cache_end = end
-    if (
-        cache_start == start
-        or cache_end == end
-    ):
-        CACHE[key] = (
-            cache_start,
-            cache_end,
-            res,
-        )
-    if at is not None:
-        i_l = (at - cache_start).days
-        i_r = i_l + 1
-    else:
-        i_l = (start - cache_start).days
-        i_r = (cache_end - end).days
-
-    if at is not None:
-        res = res[i_l]
-    elif i_r > 0:
-        res = res[i_l:-i_r,:]
-    else:
-        res = res[i_l:]
-        
-    if df:
-        return polars.DataFrame(
-            res.T,
-            schema = {
-                "open": polars.Float64,
-                "high": polars.Float64,
-                "low": polars.Float64,
-                "close": polars.Float64,
-                "volume": polars.Float64,
-                "wap": polars.Float64,
-            }
-        ).with_columns(
-            polars.date_range(
-                start, end
-            ).alias("date")
-        ).select(*BARS_SCHEMA.keys())
-    return res
-
 #  ------------------
 
 @overload
@@ -321,6 +92,9 @@ def req_daily_bars(
     db.queries.create(db.fp)
     db.bars.create(db.fp)
     db.history.create(db.fp)
+
+    if con.type=="IND":
+        bar_method="TRADES"
 
     try:
         if con.id is None:
@@ -443,7 +217,11 @@ def req_daily_bars(
                 expects=expects,
                 timeout=timeout,
                 contract=contract(**contr._asdict()),
-                endDateTime=datetime_to_str(end),
+                endDateTime=(
+                    datetime_to_str(end)
+                    if contr.type != "CONTFUT"
+                    else ""
+                ),
                 durationString=duration,
                 barSizeSetting=bar_size,
                 whatToShow=bar_method,

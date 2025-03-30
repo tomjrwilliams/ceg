@@ -3,7 +3,7 @@ import datetime
 from types import SimpleNamespace
 from typing import NamedTuple, ClassVar, overload, Literal, Protocol
 
-from . import sql
+from .. import sql
 
 #  ------------------
 
@@ -34,6 +34,11 @@ E = EXCH = EXCHANGES = StringNamespace(
     ARCA="ARCA",
     BATS="BATS",
     CBOE="CBOE",
+    CBOT="CBOT",
+    CME="CME",
+    COMEX="COMEX",
+    IPE="IPE",
+    NYMEX="NYMEX",
     #
     SMART="SMART",
 )

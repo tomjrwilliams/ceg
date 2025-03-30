@@ -87,6 +87,8 @@ class API(EWrapper, EClient):
 
         dt = datetime.date(int(y), int(m), int(d))
 
+        print(dt)
+
         db = DB(self.db_fp)
         db.insert_start(contract_id, dt)
 
@@ -130,6 +132,7 @@ class API(EWrapper, EClient):
             "volume": self.nullify(bar.volume),
             "wap": self.nullify(bar.wap),
         }
+        print(bar)
 
         db = DB(self.db_fp)
 
@@ -188,6 +191,8 @@ class API(EWrapper, EClient):
         db = DB(self.db_fp)
         res = db.insert_contract(con_dict)
 
+        print(res)
+
         # TODO: valid exchanges, long name, contract month, industry, category, subcategory, trading hours, liquid hours, time zone id, last trade time, real expiration date
         # (in the details not the contract)
 
@@ -213,8 +218,13 @@ class API(EWrapper, EClient):
     def nullify(self, v, null_if=-1):
         if v == null_if:
             return None
+        if isinstance(v, decimal.Decimal):
+            v = float(v)
+            if v == 0:
+                return None
         return v
 
+import decimal
 
 class Request(NamedTuple):
     id: int

@@ -1,4 +1,92 @@
-from ..db import E, T, C, StringNamespace
+from types import SimpleNamespace
+from ..db import E, T, C, StringNamespace, Contract
+
+class NestedStringNamespace(SimpleNamespace):
+
+    def __getattribute__(self, k: str) -> StringNamespace:
+        return SimpleNamespace.__getattribute__(self, k)
+
+CONTRACTS: dict[tuple[str, str], Contract] = {
+    (T.GENERIC, "ES"): Contract.new(
+        T.GENERIC,
+        "ES",
+        exchange=E.CME,
+        currency=C.USD,
+    )
+}
+
+INDICES = StringNamespace(
+    ITRX_HY_5Y_TR="ITRXTX5I",
+    ITRX_IG_5Y_TR="ITRXTE5I",
+
+    ITRX_HY_5Y_VOL="VIXXO",
+    ITRX_IG_5Y_VOL="VIXIE",
+
+    CDX_HY_5Y_1M_VOL="VIXHY",
+    CDX_IG_5Y_1M_VOL="VIXIG",
+)
+
+FUT = NestedStringNamespace(
+    # CME except djia=cbot
+    CRUDE=StringNamespace(
+        BRENT="BZ", # nymex
+        BRENT_ICE="COIL", # ipe
+        LIGHT_SWEET="CL", # nymex
+        LIGHT_SWEET_MINI="QM",
+        WTI="WTI", # ipe,
+        WTI_MICRO="MCL", # nymex
+    ),
+    US_EQ_MINI=StringNamespace(
+        NQ_BIO="BQX",
+        DJIA="YM",
+        NQ_100="NQ",
+        NQ_COMP="QCN",
+        PHLX_SEMIS="SPSOX",
+        R1K="RS1",
+        R1K_GROWTH="RSG",
+        R1K_VALUE="RSV",
+        R2K="RTY",
+        SP_500="ES",
+        SP_500_ESG="SPXESUP",
+        SP_MID_400="EMD",
+        SP_SMALL_600="SMC",
+        VIX="VXM",
+        # various micros
+    ),
+    EU_EQ_MINI=StringNamespace(
+        IBEX_35="IBEX",
+    ),
+    AP_EQ_MINI=StringNamespace(
+        TOPIX="MNTPX", # ose.jpn
+    ),
+    US_GOV = StringNamespace(
+        # cbot
+        Y30Y_MICRO="30Y",
+        P20Y="TWE",
+        P10Y_ULTRA_MICRO="MTN",
+        P10Y_ULTRA="TN",
+        P10Y="ZN",
+        Y10Y_MICRO="10Y", # micro
+        Y05Y_MICRO="5YY",
+        P05Y="ZF",
+        P03Y="Z3N",
+        P02Y="ZT",
+        Y02Y_MICRO="2YY",
+        P13W="TBF3",
+        T_BOND_ULTRA_MICRO="MWN",
+        T_BOND="ZB",
+        T_BOND_ULTRA="UB",
+    ),
+    AU_GOV=StringNamespace(
+        P10Y="XT", # 6%
+        P03Y="YT",
+    ),
+    KO_GOV=StringNamespace(
+        P30Y="30KTB",
+        P10Y="XLKTB",
+        P03Y="3KTB",
+    )
+)
 
 ISHARES = StringNamespace(
     DEFENSE="ITA",
