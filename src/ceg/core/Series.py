@@ -119,7 +119,7 @@ class SeriesCol1D(SeriesND):
     v: Array.Vec
 
     @classmethod
-    def new(cls, v: Array.np_1D) -> SeriesND:
+    def new(cls) -> SeriesND:
         return cls(t=Array.Scalar.new(), v=Array.Vec.new())
 
     def append(self, t: float, v: Array.np_1D):
@@ -128,8 +128,11 @@ class SeriesCol1D(SeriesND):
             v=self.v.add(v),
         )
 
-    def select(self, at: float):
-        return
+    def select(self, at: float, t: bool = False):
+        mask = self.mask(at)
+        if t:
+            return self.t.data[mask], self.v.data[mask]
+        return self.v.data[mask]
 
 
 Col1D = SeriesCol1D
@@ -137,10 +140,10 @@ Col1D = SeriesCol1D
 
 class SeriesCol2D(SeriesND):
     t: Array.Scalar
-    v: Array.Vec
+    v: Array.Mat
 
     @classmethod
-    def new(cls, v: Array.np_2D) -> SeriesND:
+    def new(cls) -> SeriesND:
         return cls(t=Array.Scalar.new(), v=Array.D2.new())
 
     def append(self, t: float, v: Array.np_2D):
@@ -149,8 +152,8 @@ class SeriesCol2D(SeriesND):
             v=self.v.add(v),
         )
 
-    def select(self, at: float):
-        return
+    def select(self, at: float, t: bool = False):
+        raise ValueError(self)
 
 
 Col2D = SeriesCol2D

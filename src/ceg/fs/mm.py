@@ -1,26 +1,23 @@
-# add
-# div
-# sub
-# mul
-# pow, log
-
 from typing import NamedTuple, ClassVar
 import numpy
 import numpy as np
 
 from .. import core
+from . import stats
+
+from .stats import window_mask, window_null_mask
 
 #  ------------------
 
-class ratio_kw(NamedTuple):
+class vs_x_vec_kw(NamedTuple):
     type: str
     schedule: core.Schedule
     #
-    l: core.Ref.Col
-    r: core.Ref.Col
+    vs: tuple[core.Ref.Col, ...]
+    vec: core.Ref.Col1D
 
 
-class ratio(ratio_kw, core.Node.Col):
+class vs_x_vec(vs_x_vec_kw, core.Node.Col):
     """
     scalar mean (optional rolling window)
     v: core.Ref.Col
@@ -30,7 +27,8 @@ class ratio(ratio_kw, core.Node.Col):
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r = gaussian.bind(g)
     >>> with g.implicit() as (bind, done):
-    ...     rat = bind(ratio.new(r, r))
+    ...     mu = bind(mean.new(r))
+    ...     mu_3 = bind(mean.new(r, window=3))
     ...     g = done()
     ...
     >>> g, es = g.steps(core.Event(0, r), n=18)
@@ -45,20 +43,26 @@ class ratio(ratio_kw, core.Node.Col):
     """
 
     DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, ratio_kw
+        core.Node.Col, vs_x_vec_kw
     )
 
     @classmethod
     def new(
-        cls, l: core.Ref.Col, r: core.Ref.Col
+        cls,
+        vs: tuple[core.Ref.Col, ...],
+        vec: core.Ref.Col1D,
     ):
-        return cls(*cls.args(), l=l, r=r)
+        return cls(
+            *cls.args(), vs=vs, vec=vec
+        )
 
     def __call__(
         self, event: core.Event, graph: core.Graph
     ):
-        l = graph.select(self.l, event, t=False)[-1]
-        r = graph.select(self.r, event, t= False)[-1]
-        if l == np.NAN or r == np.NAN:
-            return np.NAN
-        return l / r
+        vs = list(map(
+            lambda v: graph.select(v, event, t=False)[-1],
+            self.vs,
+        ))
+        vec = graph.select(self.vec, event, t=False)[-1]
+        vs = np.array(vs)
+        return np.dot(vs, vec)

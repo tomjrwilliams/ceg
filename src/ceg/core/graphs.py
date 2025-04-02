@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import types
 from typing import (
     TYPE_CHECKING,
     NamedTuple,
@@ -7,6 +7,7 @@ from typing import (
     Type,
     TypeVar,
     Any,
+    Union,
     Optional,
     Callable,
     Iterable,
@@ -68,7 +69,7 @@ def define(
 def rec_yield_param(k, v: Ref.Any | Iterable | Any):
     if isinstance(v, Ref.Any):
         yield (k, v.i)
-    elif isinstance(v, Iterable):
+    elif isinstance(v, (tuple, Iterable)):
         yield from rec_yield_params(k, v)
 
 
@@ -76,8 +77,9 @@ def rec_yield_params(k: str, v: Iterable):
     if isinstance(v, dict):
         yield from rec_yield_params(k, v.keys())
         yield from rec_yield_params(k, v.values())
-    elif isinstance(v, Iterable):
-        _ = list(map(partial(rec_yield_param, k), v))
+    elif isinstance(v, (tuple, Iterable)):
+        for vv in v:
+            yield from rec_yield_param(k, vv)
 
 
 def yield_params(
@@ -97,6 +99,8 @@ def rec_yield_hint_types(hint):
     try:
         args = get_args(hint)
         for a in args:
+            if a == Ellipsis:
+                continue
             yield from rec_yield_hint_types(a)
     except:
         pass
@@ -105,7 +109,9 @@ def rec_yield_hint_types(hint):
 
 def yield_param_keys(t_kw: Type[NamedTuple]):
     seen: set[str] = set()
-    for k, h in get_type_hints(t_kw).items():
+    for k, h in get_type_hints(
+        t_kw
+    ).items():
         for h in rec_yield_hint_types(h):
             if k in seen:
                 continue
@@ -460,6 +466,9 @@ def init_node(
     acc: defaultdict[int, list[str]] = defaultdict(list)
     for k, p in yield_params(node):
         acc[p].append(k)
+    print(node)
+    print(node.DEF.params)
+    print(acc)
     params: frozendict[int, tuple[str, ...]] = frozendict(
         zip(acc.keys(), map(tuple, acc.values()))
     )  # type: ignore
@@ -611,9 +620,12 @@ def step(
         assert not isinstance(s, Series.Null), s
         data = set_tuple(data, ref.i, s, Series.null)
 
-    data: Data = set_tuple(
-        data, ref.i, s.append(t, res), Series.null
-    )
+    try:
+        data: Data = set_tuple(
+            data, ref.i, s.append(t, res), Series.null
+        )
+    except:
+        raise ValueError(graph.nodes[ref.i])
 
     graph = Graph(
         queue,

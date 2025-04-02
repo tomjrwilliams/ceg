@@ -92,7 +92,7 @@ def needs_resize(
     n_new: int,
 ):
     required: int = (n_curr + n_new) * v_size
-    return required > arr.size
+    return required >= arr.size
 
 
 # TODO: numba jit
@@ -108,7 +108,8 @@ def resize_lin(
     # if required <= arr.size:
     #     return arr
     res = numpy.empty((arr.size + n_incr))
-    for i in range(n_curr * v_size):
+    for i in range(n_curr):
+        # TODO if n was the number of instances, we'd multiply by size, but given it coutns the number of filled cells in the vector, we just iterate directly
         res[i] = arr[i]
     return res
 
@@ -125,7 +126,7 @@ def resize_exp(
     # if required <= arr.size:
     #     return arr
     res = numpy.empty((arr.size * n_incr))
-    for i in range(n_curr * v_size):
+    for i in range(n_curr):
         res[i] = arr[i]
     return res
 
@@ -195,10 +196,11 @@ class Array(ArrayND):
 
     def resize(self):
         # TODO; swithc on method
+        raw = resize_exp(
+            self.raw, self.size, self.n, self.incr
+        )
         return self._replace(
-            raw=resize_exp(
-                self.raw, self.size, self.n, self.incr
-            )
+            raw=raw,
         )
 
     def add(self, v: float):
@@ -245,7 +247,7 @@ class Array1D(ArrayND):
     def new(cls, incr: int = 2, method: str = "exp"):
         return cls(
             shape=(),
-            size=-1,
+            size=0,
             n=0,
             incr=incr,
             method=method,
@@ -257,28 +259,38 @@ class Array1D(ArrayND):
 
     def resize(self):
         # TODO; swithc on method
+        raw=resize_exp(
+            self.raw, self.size, self.n, self.incr
+        )
         return self._replace(
-            raw=resize_exp(
-                self.raw, self.size, self.n, self.incr
-            )
+            raw=raw
         )
 
     def add(self, v: numpy.ndarray):
         assert len(v.shape) == 1, v.shape
         if self.shape == ():
-            self = self._replace(shape=v.shape)
+            self = self._replace(
+                shape=v.shape,
+                size=v.size,
+            )
         assert v.shape == self.shape, (self.shape, v.shape)
         while self.needs_resize(1):
             self = self.resize()
         for i in range(v.size):
-            self.raw[self.n + i] = v[i]
+            try:
+                self.raw[self.n + i] = v[i]
+            except:
+                raise ValueError(self)
         self = self._replace(n=self.n + v.size)
         return self
 
     def add_many(self, v: numpy.ndarray):
         assert len(v.shape) == 2, v.shape
         if self.shape == ():
-            self = self._replace(shape=v[:-1].shape)
+            self = self._replace(
+                shape=v[:-1].shape,
+                size=v.size,
+            )
         assert v.shape[:-1] == self.shape, (
             self.shape,
             v.shape,
@@ -286,9 +298,9 @@ class Array1D(ArrayND):
         while self.needs_resize(v.shape[0]):
             self = self.resize()
         v_flat = numpy.ravel(v)
-        for i in range(v.size):
+        for i in range(v_flat.size):
             self.raw[self.n + i] = v_flat[i]
-        self = self._replace(n=self.n + v.size)
+        self = self._replace(n=self.n + v_flat.size)
         return self
 
     @property
@@ -312,14 +324,14 @@ class Array2D(ArrayND):
     def new(cls, incr: int = 2, method: str = "exp"):
         return cls(
             shape=(),
-            size=-1,
+            size=1,
             n=0,
             incr=incr,
             method=method,
             raw=numpy.empty(32),
         )
 
-D2 = Array2D
+D2 = Matrix = Mat = Array2D
 
 #  ------------------
 

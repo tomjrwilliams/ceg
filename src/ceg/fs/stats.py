@@ -139,9 +139,33 @@ class std_kw(NamedTuple):
     schedule: core.Schedule
     #
     v: core.Ref.Col
+    window: float | None
 
 
 class std(std_kw, core.Node.Col):
+    """
+    scalar mean (optional rolling window)
+    v: core.Ref.Col
+    window: float | None
+    >>> g = core.Graph.new()
+    >>> from . import rand
+    >>> _ = rand.rng(seed=0, reset=True)
+    >>> g, r = gaussian.bind(g)
+    >>> with g.implicit() as (bind, done):
+    ...     mu = bind(std.new(r))
+    ...     mu_3 = bind(std.new(r, window=3))
+    ...     g = done()
+    ...
+    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> list(numpy.round(g.select(r, es[-1]), 2))
+    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
+    >>> list(numpy.round(g.select(mu, es[-1]), 2))
+    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
+    >>> list(
+    ...     numpy.round(g.select(mu_3, es[-1]), 2)
+    ... )
+    [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
+    """
 
     DEF: ClassVar[core.Defn] = core.define(
         core.Node.Col, std_kw
@@ -149,18 +173,18 @@ class std(std_kw, core.Node.Col):
 
     @classmethod
     def new(
-        cls,
-        v: core.Ref.Col,
+        cls, v: core.Ref.Col, window: float | None = None
     ):
-        return cls(
-            *cls.args(),
-            v=v,
-        )
+        return cls(*cls.args(), v=v, window=window)
 
     def __call__(
         self, event: core.Event, graph: core.Graph
     ):
-        pass
+        window = event.t + 1 if self.window is None else self.window
+        t, v = graph.select(self.v, event, t=True)
+        v = window_null_mask(v, t, event.t - window)
+        return np.NAN if not len(v) else numpy.nanstd(v)
+
 
 
 #  ------------------
@@ -230,14 +254,39 @@ class std_ew(std_ew_kw, core.Node.Col):
 #  ------------------
 
 
+
 class rms_kw(NamedTuple):
     type: str
     schedule: core.Schedule
     #
     v: core.Ref.Col
+    window: float | None
 
 
 class rms(rms_kw, core.Node.Col):
+    """
+    scalar mean (optional rolling window)
+    v: core.Ref.Col
+    window: float | None
+    >>> g = core.Graph.new()
+    >>> from . import rand
+    >>> _ = rand.rng(seed=0, reset=True)
+    >>> g, r = gaussian.bind(g)
+    >>> with g.implicit() as (bind, done):
+    ...     mu = bind(rms.new(r))
+    ...     mu_3 = bind(rms.new(r, window=3))
+    ...     g = done()
+    ...
+    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> list(numpy.round(g.select(r, es[-1]), 2))
+    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
+    >>> list(numpy.round(g.select(mu, es[-1]), 2))
+    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
+    >>> list(
+    ...     numpy.round(g.select(mu_3, es[-1]), 2)
+    ... )
+    [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
+    """
 
     DEF: ClassVar[core.Defn] = core.define(
         core.Node.Col, rms_kw
@@ -245,18 +294,21 @@ class rms(rms_kw, core.Node.Col):
 
     @classmethod
     def new(
-        cls,
-        v: core.Ref.Col,
+        cls, v: core.Ref.Col, window: float | None = None
     ):
-        return cls(
-            *cls.args(),
-            v=v,
-        )
+        return cls(*cls.args(), v=v, window=window)
 
     def __call__(
         self, event: core.Event, graph: core.Graph
     ):
-        pass
+        window = event.t + 1 if self.window is None else self.window
+        t, v = graph.select(self.v, event, t=True)
+        v = window_null_mask(v, t, event.t - window)
+        ms = np.NAN if not len(v) else (
+            numpy.nanmean(numpy.square(v))
+        )
+        return np.NAN if ms == np.NAN else np.sqrt(ms)
+
 
 
 #  ------------------
@@ -457,5 +509,244 @@ class cov(cov_kw, core.Node.Col):
             (v1 - mu1) * (v2 - mu2)
             # assume elementwise?
         )
+
+#  ------------------
+
+
+class pca_kw(NamedTuple):
+    type: str
+    schedule: core.Schedule
+    #
+    vs: tuple[core.Ref.Col, ...]
+    window: float | None
+    keep: int | None
+    mus: tuple[core.Ref.Col, ...] | None
+    signs: tuple[int | None] | None
+    centre: bool
+
+
+class pca(pca_kw, core.Node.Col1D):
+    """
+    scalar mean (optional rolling window)
+    v: core.Ref.Col
+    window: float | None
+    >>> g = core.Graph.new()
+    >>> from . import rand
+    >>> _ = rand.rng(seed=0, reset=True)
+    >>> g, r = gaussian.bind(g)
+    >>> with g.implicit() as (bind, done):
+    ...     mu = bind(mean.new(r))
+    ...     mu_3 = bind(mean.new(r, window=3))
+    ...     g = done()
+    ...
+    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> list(numpy.round(g.select(r, es[-1]), 2))
+    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
+    >>> list(numpy.round(g.select(mu, es[-1]), 2))
+    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
+    >>> list(
+    ...     numpy.round(g.select(mu_3, es[-1]), 2)
+    ... )
+    [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
+    """
+
+    DEF: ClassVar[core.Defn] = core.define(
+        core.Node.Col1D, pca_kw
+    )
+
+    @classmethod
+    def new(
+        cls,
+        vs: tuple[core.Ref.Col, ...],
+        window: float | None=None,
+        keep: int | None=None,
+        mus: tuple[core.Ref.Col, ...] | None=None,
+        signs: tuple[int | None] | None = None,
+        centre: bool = False,
+    ):
+        return cls(
+            *cls.args(), vs=vs, window=window, keep=keep, mus=mus,signs=signs, centre=centre
+        )
+
+    def __call__(
+        self, event: core.Event, graph: core.Graph
+    ):
+        window = event.t + 1 if self.window is None else self.window
+        ts, vs = zip(*map(
+            lambda v: graph.select(v, event, t=True),
+            self.vs,
+        ))
+        vs = list(map(
+            lambda v_t: window_mask(*v_t, event.t - window),
+            zip(vs, ts)
+        ))
+        # TODO: assert aligned?
+        mus = [None for _ in vs] if self.mus is None else self.mus
+        assert len(mus) == len(vs), dict(mus=mus, vs=vs)
+        mus = list(map(
+            lambda v_mu: (lambda v, mu: (
+                graph.select(mu, event)[-1] if mu is not None
+                else np.NAN if not len(v)
+                else numpy.nanmean(v)
+            ))(*v_mu),
+            zip(vs, mus)
+        ))
+        if self.centre:
+            vs = [v - mu for v, mu in zip(vs, mus)]
+
+        vs = numpy.vstack([
+            np.expand_dims(v, 0) for v in vs
+        ]).T
+        
+        vs = vs[
+            ~np.any(np.isnan(vs), axis=1)
+        ].T
+
+        if vs.size <= len(mus):
+            e = np.array([np.NAN for _ in range(self.keep)])
+            u = np.array([np.NAN for _ in mus])
+            U = np.hstack([
+                np.expand_dims(u, 1)
+                for _ in range(self.keep)
+            ])
+            return np.vstack([
+                np.expand_dims(e, 0),
+                U
+            ]).reshape(
+                (self.keep * (len(mus) + 1))
+            )
+
+        # (window, n variables)
+
+        U, e, _ = np.linalg.svd(vs, full_matrices=False)
+
+        if self.signs is not None:
+            for i, s in enumerate(self.signs):
+                if s is None:
+                    continue
+                elif s == 0:
+                    raise ValueError(dict(
+                        message="signs start from 1 for symmetry",
+                        self=self,
+                    ))
+                elif s < 0:
+                    s = -1 * (s + 1)
+                    if U[s, i] < 0:
+                        continue
+                else:
+                    s -= 1
+                    if U[s, i] > 0:
+                        continue
+                U[:, s] *= -1
+
+        if self.keep is not None:
+            U = U[:, :self.keep]
+            e = e[:self.keep]
+            # Vt = Vt[:, :self.keep]
+
+        try:
+            return np.vstack([
+                np.expand_dims(e, 0),
+                U
+            ]).reshape(
+                (self.keep * (len(mus) + 1))
+            )
+        except:
+            raise ValueError(vs, U, e)
+
+# singular value decomposition factorises your data matrix such that:
+# 
+#   M = U*S*V.T     (where '*' is matrix multiplication)
+# 
+# * U and V are the singular matrices, containing orthogonal vectors of
+#   unit length in their rows and columns respectively.
+#
+# * S is a diagonal matrix containing the singular values of M - these 
+#   values squared divided by the number of observations will give the 
+#   variance explained by each PC.
+#
+# * if M is considered to be an (observations, features) matrix, the PCs
+#   themselves would correspond to the rows of S^(1/2)*V.T. if M is 
+#   (features, observations) then the PCs would be the columns of
+#   U*S^(1/2).
+#
+# * since U and V both contain orthonormal vectors, U*V.T is equivalent 
+#   to a whitened version of M.
+
+# S = np.diag(s)
+# Mhat = np.dot(U, np.dot(S, V.T))
+
+class pca_scale_kw(NamedTuple):
+    type: str
+    schedule: core.Schedule
+    #
+    v: core.Ref.Col
+    factor: int
+
+class pca_scale(pca_scale_kw, core.Node.Col):
+
+    DEF: ClassVar[core.Defn] = core.define(
+        core.Node.Col, pca_scale_kw
+    )
+
+    @classmethod
+    def new(
+        cls,
+        v: core.Ref.Col,
+        factor: int,
+    ):
+        return cls(
+            *cls.args(), v=v, factor=factor
+        )
+
+    def __call__(
+        self, event: core.Event, graph: core.Graph
+    ):
+        # first row is the eignenvalues
+        n = graph.nodes[self.v.i]
+        keep = n.keep
+        vs = graph.select(self.v, event, False)
+        vs = vs[-1]
+        vs = vs.reshape(
+            int(vs.shape[0] / keep), keep, 
+        )
+        return vs[0,self.factor]
+
+class pca_weights_kw(NamedTuple):
+    type: str
+    schedule: core.Schedule
+    #
+    v: core.Ref.Col
+    factor: int
+
+class pca_weights(pca_weights_kw, core.Node.Col1D):
+
+    DEF: ClassVar[core.Defn] = core.define(
+        core.Node.Col1D, pca_weights_kw
+    )
+
+    @classmethod
+    def new(
+        cls,
+        v: core.Ref.Col,
+        factor: int,
+    ):
+        return cls(
+            *cls.args(), v=v, factor=factor
+        )
+
+    def __call__(
+        self, event: core.Event, graph: core.Graph
+    ):
+        # first row is eigenvalues. then weights are cols of remainder
+        n = graph.nodes[self.v.i]
+        keep = n.keep
+        vs = graph.select(self.v, event, False)
+        vs = vs[-1]
+        vs = vs.reshape(
+            int(vs.shape[0] / keep), keep, 
+        )
+        w = vs[1:,self.factor]
+        return w
 
 #  ------------------

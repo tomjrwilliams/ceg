@@ -698,7 +698,7 @@ class Mark(Mark_Kw):
 
 # -----------------
 
-class Patch_Kw(NamedTuple):
+class Discrete_Pairwise_Kw(NamedTuple):
     figure: Optional[str]
     axis: Optional[str]
     x: list[str]
@@ -709,7 +709,7 @@ class Patch_Kw(NamedTuple):
     data: Optional[str]
     kwargs: dict
 
-class Patch(Patch_Kw, Mark):
+class Discrete_Pairwise(Discrete_Pairwise_Kw, Mark):
 
     def plot(
         self, axes: matplotlib.axes.Axes
@@ -810,7 +810,7 @@ class Patch(Patch_Kw, Mark):
     
 import matplotlib.patches
 
-class Rectangle(Patch):
+class Rectangle(Discrete_Pairwise):
 
     def plot(self, axes: matplotlib.axes.Axes):
         def f(ix, iy, color, xlabel, ylabel, text):
@@ -849,7 +849,115 @@ class Rectangle(Patch):
 
 # -----------------
 
-class Mark_2D_Kw(NamedTuple):
+class Discrete_1D_Kw(NamedTuple):
+    figure: Optional[str]
+    axis: Optional[str]
+    x: Optional[list[str]]
+    x2: Optional[list[str]]
+    y: Optional[ArrayOrCol]
+    y2: Optional[ArrayOrCol]
+    # c tbc?
+    c: Optional[ArrayOrCol]
+    colors: Optional[Union[Color, Colors]]
+    data: Optional[str]
+    kwargs: dict
+
+class Discrete_1D(Discrete_1D_Kw, Mark):
+
+    def plot(
+        self, axes: matplotlib.axes.Axes
+    ) -> Callable:
+        raise ValueError(self)
+
+    @classmethod
+    def new(
+        cls, 
+        x: Optional[list[str]]=None,
+        y: Optional[ArrayOrCol]=None,
+        x2: Optional[list[str]]=None,
+        y2: Optional[ArrayOrCol]=None,
+        c: Optional[ArrayOrCol]=None,
+        data: Optional[str] = None,
+        colors: Optional[Union[Color, Colors]]=None,
+        **kwargs
+    ):
+        assert x is None or x2 is None, (x, x2)
+        assert y is None or y2 is None, (y, y2)
+        return cls(
+            figure=None,
+            axis=None,
+            x=x,
+            y=y,
+            x2=x2,
+            y2=y2,
+            c=c,
+            colors=colors,
+            data=data,
+            kwargs=kwargs,
+        )
+
+    def apply(
+        self,
+        axis: AxisRef,
+        grid: Grid,
+    ):
+        if self.x is None and self.y is None:
+            assert self.x2 is not None, self
+            assert self.y2 is not None, self
+            assert axis.twinned, self
+            assert isinstance(axis.obj, TwinnedAxes), axis
+            ax, x_twin, y_twin = axis.obj
+            assert x_twin and y_twin, axis
+            x = self.x2
+            y = grid.unpack_col(
+                self.y2, data=self.data
+            )
+        elif self.x is None:
+            assert self.x2 is not None, self
+            assert self.y is not None, self
+            assert axis.twinned, self
+            assert isinstance(axis.obj, TwinnedAxes), axis
+            ax, x_twin, y_twin = axis.obj
+            assert x_twin and not y_twin, axis
+            x = self.x2
+            y = grid.unpack_col(
+                self.y, data=self.data
+            )
+        elif self.y is None:
+            assert self.x is not None, self
+            assert self.y2 is not None, self
+            assert axis.twinned, self
+            assert isinstance(axis.obj, TwinnedAxes), axis
+            ax, x_twin, y_twin = axis.obj
+            assert y_twin and not x_twin, axis
+            x = self.x
+            y = grid.unpack_col(
+                self.y2, data=self.data
+            )
+        else:
+            assert isinstance(axis.obj, matplotlib.axes.Axes)
+            ax = axis.obj
+            x = self.x
+            y = grid.unpack_col(
+                self.y, data=self.data
+            )
+
+        plot = self.plot(ax)
+        plot(
+            x,
+            y,
+            # color=c, # TODO: colors mapping?
+            **self.kwargs,
+        )
+
+class Bar(Discrete_1D):
+
+    def plot(self, axes: matplotlib.axes.Axes):
+        return axes.bar
+        
+# -----------------
+
+class Continuous_1D_Kw(NamedTuple):
     figure: Optional[str]
     axis: Optional[str]
     x: Optional[ArrayOrCol]
@@ -861,7 +969,7 @@ class Mark_2D_Kw(NamedTuple):
     data: Optional[str]
     kwargs: dict
 
-class Mark_2D(Mark_2D_Kw, Mark):
+class Continuous_1D(Continuous_1D_Kw, Mark):
 
     def plot(
         self, axes: matplotlib.axes.Axes
@@ -996,24 +1104,19 @@ class Mark_2D(Mark_2D_Kw, Mark):
 
 # -----------------
 
-class Scatter(Mark_2D):
+class Scatter(Continuous_1D):
     
     def plot(self, axes: matplotlib.axes.Axes):
         return axes.scatter
 
-class Line(Mark_2D):
+class Line(Continuous_1D):
 
     def plot(self, axes: matplotlib.axes.Axes):
         return axes.plot
-
-class Bar(Mark_2D):
-
-    def plot(self, axes: matplotlib.axes.Axes):
-        return axes.bar
     
 # -----------------
 
-class Marks_2D_Kw(NamedTuple):
+class Continuous_2D_Kw(NamedTuple):
     figure: Optional[str]
     axis: Optional[str]
     x: Optional[ArrayOrCol]
@@ -1027,7 +1130,7 @@ class Marks_2D_Kw(NamedTuple):
     shared: dict
 
 
-class Marks_2D(Marks_2D_Kw, Mark):
+class Continuous_2D(Continuous_2D_Kw, Mark):
 
     def plot(
         self, axes: matplotlib.axes.Axes
@@ -1189,20 +1292,15 @@ class Marks_2D(Marks_2D_Kw, Mark):
 
 # -----------------
 
-class Scatters(Marks_2D):
+class Scatters(Continuous_2D):
     
     def plot(self, axes: matplotlib.axes.Axes):
         return axes.scatter
 
-class Lines(Marks_2D):
+class Lines(Continuous_2D):
 
     def plot(self, axes: matplotlib.axes.Axes):
         return axes.plot
-
-class Bars(Marks_2D):
-
-    def plot(self, axes: matplotlib.axes.Axes):
-        return axes.bar
 
 # -----------------
 
