@@ -328,9 +328,9 @@ def get_daily_bars(
             cache_end,
         )
         res = numpy.vstack((
+            res,
             bars.select(*list(schema.keys())[1:])
             .to_numpy(),
-            res,
         ))
         cache_end = end
     if (
@@ -447,8 +447,7 @@ def f_daily_bar(
     event: core.Event,
     graph: core.Graph
 ):
-    ds = graph.select(self.d, event, t = False)
-    dx = ds[-1]
+    dx = graph.select(self.d, event, t = False, i = -1)
 
     d = graph.nodes[self.d.i]
 

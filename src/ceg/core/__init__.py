@@ -25,6 +25,8 @@ from .graphs import (
     bind,
     step,
     steps,
+    step_until,
+    step_until_done,
     Plugin as TPlugin
     # TODO: rename the plugin above to plugins (else name conflicts...)
 )

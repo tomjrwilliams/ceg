@@ -173,6 +173,7 @@ def _read_daily_file(
             .cast(polars.Float64)
             .alias("open_interest")
         )
+    assert "date_right" not in df.schema, df.schema
     if start is not None:
         df = df.filter(
             polars.col("date") >= start
@@ -187,16 +188,15 @@ def _read_daily_file(
         end = df.get_column("date").max() # type: ignore
     assert start is not None, start
     assert end is not None, end
-    df = df.join(
-        polars.select(
-            polars.date_range(start, end)
-            .alias("date")
-        ),
-        how="outer",
-        on="date"
-    ).sort(
-        by=polars.col("date")
+    df = polars.select(
+        polars.date_range(start, end)
+        .alias("date")
+    ).join(
+        df,
+        how="left",
+        on="date",
     )
+    assert "date_right" not in df.schema, df.schema
     return df
 
 def read_daily_file(

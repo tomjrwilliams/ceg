@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from frozendict import frozendict
 
-import numpy
+import numpy as np
 
 import matplotlib
 import matplotlib.lines
@@ -22,17 +22,30 @@ from .core import Grid_Key
 
 t_slice = slice
 
-def continuous_1d_y(
-    mark: Continuous_1D,
+def unpack_aliases_1d_y(
+    mark: Continuous_1D | Continuous_2D,
     ref: ceg.Ref.Col | ceg.Ref.Col1D,
     graph: ceg.Graph,
     event: ceg.Event,
     slice: int | slice | None=None,
     t: str | None = None,
     c: str | None = None,
+    label: str | None = None,
+    prev: ceg.Event | None = None,
+    transform: str | None = None,
 ):
     x = x2 = c = None
-    tt, y = graph.select(ref, at=event, t=True)
+    where = None if prev is None else dict(t=lambda t: t >= prev.t)
+    tt, y = graph.select(ref, at=event, t=True, where=where)
+    y_nan = np.isnan(y)
+    if transform == "cum":
+        y = np.nan_to_num(y, nan=0)
+        y = np.cumsum(y)
+        y[y_nan] = np.NAN
+    elif transform == "commpound":
+        y = np.nan_to_num(y, nan=0)
+        y = np.cumprod(1 + y)
+        y[y_nan] = np.NAN
     if isinstance(slice, (int, t_slice)):
         y = y[slice]
         tt = tt[slice]
@@ -59,13 +72,15 @@ def continuous_1d_y(
     #     assert c is None
     return y, x, x2, c
 
-def continuous_1d_x(
+def unpack_aliases_1d_x(
     ref: ceg.Ref.Col | ceg.Ref.Col1D,
     graph: ceg.Graph,
     event: ceg.Event,
     slice: int | slice | None=None,
+    prev: ceg.Event | None = None,
 ):
-    x = graph.select(ref, at=event, t=False)
+    where = None if prev is None else dict(t=lambda t: t>=prev.t)
+    x = graph.select(ref, at=event, where=where)
     if isinstance(slice, (int, t_slice)):
         x = x[slice]
     elif isinstance(ref, ceg.Ref.Col):
@@ -74,13 +89,16 @@ def continuous_1d_x(
         x = x[-1]
     return x
 
-def continuous_1d_c(
+def unpack_aliases_1d_c(
     ref: ceg.Ref.Col | ceg.Ref.Col1D,
     graph: ceg.Graph,
     event: ceg.Event,
     slice: int | slice | None=None,
+    prev: ceg.Event | None = None,
 ):
-    x = graph.select(ref, at=event, t=False)
+    t, x = graph.select(ref, at=event, t=True)
+    if prev is not None:
+        x = x[t >= prev.t]
     if isinstance(slice, (int, t_slice)):
         x = x[slice]
     elif isinstance(ref, ceg.Ref.Col):
@@ -89,13 +107,14 @@ def continuous_1d_c(
         x = x[-1]
     return x
 
-def continuous_1d_kwargs(
+def unpack_aliases_1d_xyc(
     mark: Continuous_1D,
     aliases: frozendict[
         str, tuple[ceg.Ref.Any, frozendict]
     ],
     graph: ceg.Graph,
-    event: ceg.Event
+    event: ceg.Event,
+    prev: ceg.Event | None = None,
 ):
     x = None
     y = None
@@ -105,40 +124,56 @@ def continuous_1d_kwargs(
 
     if mark.y is not None and mark.y in aliases:
         ref, kwargs = aliases[mark.y]
-        y, x, x2, c = continuous_1d_y(
+        y, x, x2, c = unpack_aliases_1d_y(
             mark,
             ref, # type: ignore
-            graph, event, **kwargs
+            graph, event, prev=prev,**kwargs
         )
 
     if mark.y2 is not None and mark.y2 in aliases:
         ref, kwargs = aliases[mark.y2]
-        y2, x, x2, c = continuous_1d_y(
+        y2, x, x2, c = unpack_aliases_1d_y(
             mark,
             ref, # type: ignore
-            graph, event, **kwargs
+            graph, event, prev=prev, **kwargs
         )
 
     assert y is not None or y2 is not None, aliases
 
+    return x, y, x2, y2, c
+
+def unpack_aliases_continuous_1d(
+    mark: Continuous_1D,
+    aliases: frozendict[
+        str, tuple[ceg.Ref.Any, frozendict]
+    ],
+    graph: ceg.Graph,
+    event: ceg.Event,
+    prev: ceg.Event | None = None,
+):
+    x, y, x2, y2, c = unpack_aliases_1d_xyc(
+        mark, aliases, graph, event, prev=prev
+    )
+
     if x is None and mark.x is not None and mark.x in aliases:
         ref, kwargs = aliases[mark.x]
-        x = continuous_1d_x(
+        x = unpack_aliases_1d_x(
             ref,  # type: ignore
-            graph, event, **kwargs)
+            graph, event, prev=prev, **kwargs
+        )
 
-    if x is None and mark.x2 is not None and mark.x2 in aliases:
+    if x2 is None and mark.x2 is not None and mark.x2 in aliases:
         ref, kwargs = aliases[mark.x2]
-        x2 = continuous_1d_x(
+        x2 = unpack_aliases_1d_x(
             ref,  # type: ignore
-            graph, event, **kwargs)
+            graph, event, prev=prev, **kwargs)
 
     if c is None and mark.c is not None and mark.c in aliases:
         ref, kwargs = aliases[mark.c]
-        c = continuous_1d_c(
+        c = unpack_aliases_1d_c(
             ref, # type: ignore
             graph,
-            event,
+            event, prev=prev,
             # slice from kwargs?
         )
 
@@ -150,6 +185,110 @@ def continuous_1d_kwargs(
         c=c,
         # x_label, etc.
     )
+
+def unpack_aliases_2d_yc(
+    mark: Continuous_2D,
+    aliases: frozendict[
+        str, list[tuple[ceg.Ref.Any, frozendict]]
+    ],
+    graph: ceg.Graph,
+    event: ceg.Event,
+    prev: ceg.Event | None = None,
+):
+    y = []
+    y2 = []
+    c = []
+
+    # TODO: if any have t=True, assert all do?
+    # for now always return none for x, x2
+
+    if mark.y is not None and mark.y in aliases:
+        for ref, kwargs in aliases[mark.y]:
+            y_, _, _, c_ = unpack_aliases_1d_y(
+                mark,
+                ref, # type: ignore
+                graph, event, prev=prev, **kwargs
+            )
+            y.append(y_)
+            if c_ is not None:
+                c.append(c_)
+
+    if mark.y2 is not None and mark.y2 in aliases:
+        for ref, kwargs in aliases[mark.y2]:
+            y2_, _, _, c_ = unpack_aliases_1d_y(
+                mark,
+                ref, # type: ignore
+                graph, event, prev=prev, **kwargs
+            )
+            y2.append(y2_)
+            if c_ is not None:
+                c.append(c_)
+
+    if not len(y):
+        y = None
+    if not len(y2):
+        y2 = None
+    if not len(c):
+        c = None
+
+    return y, y2, c
+
+REF_KWARGS = tuple[ceg.Ref.Any, frozendict]
+
+def unpack_aliases_continuous_2d(
+    mark: Continuous_2D,
+    aliases: frozendict[
+        str, REF_KWARGS | list[REF_KWARGS]
+    ],
+    graph: ceg.Graph,
+    event: ceg.Event,
+    prev: ceg.Event | None = None,
+):
+    y, y2, c = unpack_aliases_2d_yc(
+        mark,
+        aliases, # type: ignore
+        graph, event, prev=prev, 
+    )
+
+    x = None
+    x2 = None
+
+    if x is None and mark.x is not None and mark.x in aliases:
+        ref, kwargs = aliases[mark.x]
+        x = unpack_aliases_1d_x(
+            ref,  # type: ignore
+            graph, event, prev=prev,
+            **kwargs # type: ignore
+        )
+
+    if x2 is None and mark.x2 is not None and mark.x2 in aliases:
+        ref, kwargs = aliases[mark.x2]
+        x2 = unpack_aliases_1d_x(
+            ref,  # type: ignore
+            graph, event, prev=prev,
+            **kwargs # type: ignore
+        )
+
+    if c is None and mark.c is not None and mark.c in aliases:
+        ref, kwargs = aliases[mark.c]
+        c = unpack_aliases_1d_c(
+            ref, # type: ignore
+            graph,
+            event, prev=prev,
+            # slice from kwargs?
+        )
+
+    return dict(
+        x=x,
+        y=y,
+        x2=x2,
+        y2=y2,
+        c=c,
+        # x_label, etc.
+    )
+
+#  ------------------
+
 
 class Continuous_1D_Kw(NamedTuple):
     scope: ceg.Aliases | None
@@ -203,6 +342,7 @@ class Continuous_1D(Continuous_1D_Kw, ceg.Plugin.Aliased):
         event: ceg.Event,
         state: ceg.State,
         scope: ceg.Aliases | None,
+        prev: ceg.Event | None = None,
     ):
         assert isinstance(scope, ceg.Aliases), (
             self,
@@ -214,10 +354,13 @@ class Continuous_1D(Continuous_1D_Kw, ceg.Plugin.Aliased):
             for (ref, key), kwargs 
             in scope.aliases.items()
         })
-        kwargs = continuous_1d_kwargs(
+
+        kwargs = unpack_aliases_continuous_1d(
             self,
             aliases, # type: ignore
-            graph, event
+            graph, 
+            event,
+            prev=prev,
         )
 
         grid: core.Grid = self.grid.get(graph)
@@ -290,12 +433,167 @@ class Scatter(Continuous_1D):
         
 #  ------------------
 
-# TODO: Lines (many refs)
 
-# exactly like the above, but we assume the unpack y
-# is over lists that have been bound to the same key
+class Continuous_2D_Kw(NamedTuple):
+    scope: ceg.Aliases | None
+    grid: Grid_Key
+    figure: Optional[str]
+    axis: str
+    x: str | None = None
+    y: str | None = None
+    x2: str | None = None
+    y2: str | None = None
+    c: str | None = None
+    slice: int | None = None # or slice
+    colors: Optional[core.Color | core.Colors] = None
+    window: Optional[float] = None
 
-# x and c are the same
+class Continuous_2D(Continuous_2D_Kw, ceg.Plugin.Aliased):
+
+    @classmethod
+    def new(
+        cls,
+        grid: Grid_Key, # needs all plots already added
+        axis: str,
+        scope: ceg.Aliases | None = None,
+        figure: Optional[str] = None,
+        # x / y etc. refer to aliases
+        x: Optional[str] = None,
+        y: Optional[str] = None, # label for series
+        x2: Optional[str] = None,
+        y2: Optional[str] = None,
+        c: Optional[str] = None,
+        colors: Optional[core.Color | core.Colors] = None,
+    ):
+        return cls(
+            scope=scope,
+            grid=grid,
+            axis=axis,
+            figure=figure,
+            x=x,
+            y=y,
+            x2=x2,
+            y2=y2,
+            c=c,
+            colors=colors,
+        )
+
+    def plot(self) -> Type[core.Continuous_2D]:
+        raise ValueError()
+
+    def flush(
+        self,
+        graph: ceg.Graph,
+        event: ceg.Event,
+        state: ceg.State,
+        scope: ceg.Aliases | None,
+        prev: ceg.Event | None = None,
+    ):
+        assert isinstance(scope, ceg.Aliases), (
+            self,
+            scope,
+        )
+
+        keys = list(set(key for (_, key) in scope.aliases.keys()))
+        keys_2d = [
+            k for k in keys if k in {self.y, self.y2, self.c}
+        ]
+
+        aliases: dict[str, REF_KWARGS | list[REF_KWARGS]] = {
+            k: [] for k in keys_2d
+        }
+
+        labels = []
+
+        for (ref, key), kwargs in scope.aliases.items():
+            label = kwargs.get("label")
+            if key in keys_2d:
+                ref_kwargs = aliases[key]
+                assert isinstance(ref_kwargs, list), aliases
+                ref_kwargs.append((ref, kwargs))
+                labels.append(label)
+            else:
+                assert key not in aliases, key
+                aliases[key] = (ref, kwargs)
+
+        kwargs = unpack_aliases_continuous_2d(
+            self,
+            frozendict(aliases), # type: ignore
+            graph,
+            event,
+            prev=prev,
+        )
+
+        grid: core.Grid = self.grid.get(graph)
+
+        grid = grid.with_chart(
+            # TODO: figure etc.
+            getattr(core.fig.axis, self.axis),
+            self.plot().new(
+                **kwargs,
+                colors=self.colors,
+                kwargs = [
+                    dict(label=label)
+                    for label in labels
+                ],
+            ),
+        )
+        
+        return state.set(self.grid, grid)
+
+
+#  ------------------
+
+class Lines(Continuous_2D):
+    """
+    >>> from ... import fs
+    >>> fs.rand.rng(seed=0, reset=True)
+    >>> g = ceg.Graph.new()
+    >>> g, ref = g.bind(None, ref=ceg.Ref.Col)
+    >>> g, ref = g.bind(
+    ...     fs.rand.gaussian.new(ref).sync(
+    ...         v=ceg.loop.Fixed(1)
+    ...     ),
+    ...     ref=ref,
+    ...     using=Lines.new(title="rand").alias(
+    ...         "y"
+    ...     ),
+    ... )
+    >>> g, es = g.steps(ceg.Event(0, ref), n=10)
+    >>> g, res = g.flush(es[-1])
+    >>> res = render(res)
+    >>> {k: type(v) for k, v in res.items()}
+    {'rand': <class 'matplotlib.figure.Figure'>}
+    """
+
+    def plot(self):
+        return core.Lines
+
+class Scatters(Continuous_2D):
+    """
+    >>> from ... import fs
+    >>> fs.rand.rng(seed=0, reset=True)
+    >>> g = ceg.Graph.new()
+    >>> g, ref = g.bind(None, ref=ceg.Ref.Col)
+    >>> g, ref = g.bind(
+    ...     fs.rand.gaussian.new(ref).sync(
+    ...         v=ceg.loop.Fixed(1)
+    ...     ),
+    ...     ref=ref,
+    ...     using=Scatters.new(title="rand").alias(
+    ...         "y"
+    ...     ),
+    ... )
+    >>> g, es = g.steps(ceg.Event(0, ref), n=10)
+    >>> g, res = g.flush(es[-1])
+    >>> res = render(res)
+    >>> {k: type(v) for k, v in res.items()}
+    {'rand': <class 'matplotlib.figure.Figure'>}
+    """
+
+    def plot(self):
+        return core.Scatters
+        
 
 #  ------------------
 
@@ -355,6 +653,7 @@ class Discrete_1D(Discrete_1D_Kw, ceg.Plugin.Aliased):
         event: ceg.Event,
         state: ceg.State,
         scope: ceg.Aliases | None,
+        prev: ceg.Event | None = None,
     ):
         assert isinstance(scope, ceg.Aliases), (
             self,
@@ -380,6 +679,7 @@ class Discrete_1D(Discrete_1D_Kw, ceg.Plugin.Aliased):
                 x.append(ref_x)
                 y.append(v)
             else:
+                assert isinstance(ref, ceg.Ref.Col1D), ref
                 x.extend(ref_x)
                 y.extend(
                     graph.select(ref, event, t=False)[-1].tolist()
@@ -465,6 +765,7 @@ class Discrete_Pairwise(Discrete_Pairwise_Kw, ceg.Plugin.Aliased):
         event: ceg.Event,
         state: ceg.State,
         scope: ceg.Aliases | None,
+        prev: ceg.Event | None = None,
     ):
         assert isinstance(scope, ceg.Aliases), (
             self,

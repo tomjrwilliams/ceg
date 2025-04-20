@@ -5,13 +5,17 @@ from frozendict import frozendict
 
 from functools import lru_cache
 
+import datetime as dt
+
 import numpy as np
 import pandas as pd
+import polars as pl
 
 import matplotlib
 import matplotlib.figure
 import matplotlib.axis
 import matplotlib.axes
+import matplotlib.dates
 
 from matplotlib import pyplot as plt
 
@@ -242,7 +246,7 @@ class Grid(Grid_Kw, ceg.Value):
         ]
     ]
     charts: tuple[Mark, ...]
-    dfs: frozendict[str, pd.DataFrame]
+    dfs: frozendict[str, pd.DataFrame | pl.DataFrame]
 
     @property
     def fig(self) -> FigureRef:
@@ -349,7 +353,7 @@ class Grid(Grid_Kw, ceg.Value):
         )
         for label, axis in axes.items():
             axis: matplotlib.axes.Axes
-            axis.set_title(label)
+            axis.set_title(label, loc="left")
         if figure is None:
             return self._replace(axes=axes, twins=twins)
         return self._replace(
@@ -383,7 +387,7 @@ class Grid(Grid_Kw, ceg.Value):
         for k, df in dfs.items():
             curr = curr.set(k, df)
         return self._replace(dfs=curr)
-    
+
     def unpack_col(
         self: Grid,
         col: ArrayOrCol,
@@ -396,8 +400,11 @@ class Grid(Grid_Kw, ceg.Value):
         if isinstance(col, str):
             assert data is not None, (col, data)
             df = self.dfs[data]
-            assert isinstance(df, pd.DataFrame), df
-            return df[col].to_numpy()
+            if isinstance(df, pd.DataFrame):
+                return df[col].to_numpy()
+            assert isinstance(df, pl.DataFrame), df
+            return df.get_column(col).to_numpy()
+            
         assert isinstance(col, (list, np.ndarray)), col
         return col
     
@@ -424,6 +431,19 @@ class Grid(Grid_Kw, ceg.Value):
             plt.show()
         finally:
             plt.clf()
+
+    def write(self, f, figsize = None):
+        try:
+            plt.figure(
+                self.figure,
+                figsize=figsize
+            )
+            # or fp?
+            plt.savefig(f, bbox_inches='tight')
+            plt.close()
+        finally:
+            plt.clf()
+
 
 # -----------------
 
@@ -1059,6 +1079,16 @@ class Continuous_1D(Continuous_1D_Kw, Mark):
         color = None
         if isinstance(self.colors, Color):
             color = self.colors.color()
+        plt.setp(
+            ax.get_xticklabels(),
+            rotation=45, 
+            horizontalalignment='center'
+        )
+        for xx in x:
+            if xx != np.NAN:
+                if isinstance(xx, dt.date):
+                    date_format_x(ax, x, xx)
+                break
         if self.c is None:
             assert not isinstance(
                 self.colors, Colors
@@ -1101,6 +1131,20 @@ class Continuous_1D(Continuous_1D_Kw, Mark):
                 color=c,
                 **self.kwargs,
             )
+        return
+
+def date_format_x(ax, x, d):
+    fmt = (
+        "%Y-%m" if len(x) >= 90
+        else "%m-%d"
+    )
+    if len(x) < 90:
+        ax.set_title(
+            str(ax.title) + " " + str(d.year)
+        )
+    ax.xaxis.set_major_formatter(
+        matplotlib.dates.DateFormatter(fmt)
+    )
 
 # -----------------
 
@@ -1194,6 +1238,7 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
             y = grid.unpack_cols(
                 self.y2, data=self.data
             )
+            self_y = self.y2
         elif self.x is None:
             assert self.x2 is not None, self
             assert self.y is not None, self
@@ -1207,6 +1252,7 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
             y = grid.unpack_cols(
                 self.y, data=self.data
             )
+            self_y = self.y
         elif self.y is None:
             assert self.x is not None, self
             assert self.y2 is not None, self
@@ -1220,6 +1266,7 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
             y = grid.unpack_cols(
                 self.y2, data=self.data
             )
+            self_y = self.y2
         else:
             assert isinstance(axis.obj, matplotlib.axes.Axes)
             x = grid.unpack_col(
@@ -1229,7 +1276,35 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
                 self.y, data=self.data
             )
             ax = axis.obj
+            self_y = self.y
         
+        try:
+            all_nan = np.all([
+                np.isnan(yy) for yy in y
+            ], axis = 0)
+        except:
+            raise ValueError([yy.shape for yy in y])
+
+        assert len(all_nan) == len(x), dict(
+            all_nan=len(all_nan),
+            x=len(x),
+            x_tail3= x[-3:],
+            y = [yy.shape for yy in y]
+        )
+        not_nan = np.logical_not(all_nan)
+
+        if isinstance(x, list):
+            x = np.array(x)
+
+        # x = x[not_nan]
+        # y = [yy[not_nan] for yy in y]
+
+        for xx in x:
+            if xx != np.NAN:
+                if isinstance(xx, dt.date):
+                    date_format_x(ax, x, xx)
+                break
+
         kwargs = self.kwargs
         if kwargs is None:
             kwargs = [{} for _ in y]
@@ -1238,22 +1313,35 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
             kwargs=kwargs,
             y=len(y)
         )
-        
         color = None
+
         if isinstance(self.colors, Color):
             color = self.colors.color()
         if self.c is None:
             assert not isinstance(
                 self.colors, Colors
             ), self.colors
-            for yy, kw in zip(y, kwargs):
+            for i_label, (yy, kw) in enumerate(zip(y, kwargs)):
+                label = (
+                    kw.pop("label", i_label)
+                    if not isinstance(
+                        self_y[i_label], str
+                    )
+                    else self_y[i_label]
+                )
                 self.plot(ax)(
                     x,
                     yy,
                     color=color,
+                    label=label,
                     **self.shared,
                     **kw
                 )
+            ax.legend(
+                loc='center left',
+                bbox_to_anchor=(1, 0.5),
+                prop=dict(size=6)
+            )
             return
         assert isinstance(self.colors, Colors), self
         c = grid.unpack_cols(
@@ -1262,33 +1350,75 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
         # TODO: fill boundaries with value range
         # if not given
         boundaries = self.colors.boundaries()
-        # maybe multi index work? maybe have to loop
-        boundaried = boundaries[
-            np.digitize(
-                c, boundaries
-            ) - 1 
-            # apparently start=1 indexed?
-        ]
-        inds = np.linspace(0, 1, len(c))
-        segs = np.split(
-            inds,
-            np.where(
-                boundaried[1:] 
-                != boundaried[:-1]
-            )
-            # + 1 ?
+        bins = np.digitize(
+            c,
+            boundaries
         )
-        # TODO: warn if more than a certain ratio of segments to length
+        boundaries = np.concatenate((
+            np.zeros(1), boundaries
+        ))
+        boundaried = boundaries[bins]
+        # each c is a time series (for instance)
+        inds = np.linspace(0, len(c[0]) - 1, len(c[0]))
+        diffs = boundaried[:, 1:] != boundaried[:,:-1]
+        inds = np.stack([
+            inds
+            for _ in c
+        ])
+        cuts = np.where(
+            diffs,
+            inds[:,1:],
+            inds[:,1:] * np.nan
+        )
+        segs = []
+        for r, cu in zip(inds, cuts):
+            cu = cu[~np.isnan(cu)]
+            if not len(c):
+                segs.append([r])
+            try:
+                segs.append(np.split(
+                    r,
+                    cu,
+                    axis=0
+                    # + 1 ?
+                ))
+            except:
+                raise ValueError(r, c)
         plot = self.plot(ax)
-        for yy, ii, cc, kw in zip(
+        for label, (yy, ii, cc, kw) in enumerate(zip(
             y, segs, c, kwargs
-        ):
-            plot(
-                x[ii],
-                y[ii],
-                color=cc[ii][0],
-                **kw,
+        )):
+            label = (
+                kw.pop("label", label)
+                if not isinstance(
+                    self_y[label], str
+                )
+                else self_y[label]
             )
+            for iii in ii:
+                iii = np.asarray(iii, dtype=int)
+                col = self.colors.sample(
+                    cc[iii][0]
+                ).rgba
+                plot(
+                    x[iii],
+                    yy[iii],
+                    color=col,
+                    label=label,
+                    **kw,
+                )
+        # box = ax.get_position()
+        # ax.set_position([
+        #     box.x0,
+        #     box.y0,
+        #     box.width * 0.8,
+        #     box.height
+        # ])
+        ax.legend(
+            loc='center left',
+            bbox_to_anchor=(1, 0.5),
+            prop=dict(size=6)
+        )
 
 # -----------------
 

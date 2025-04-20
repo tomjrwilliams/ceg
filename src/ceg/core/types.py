@@ -18,6 +18,8 @@ from typing import (
 )
 from typing_extensions import Self
 
+import numpy as np
+
 P = ParamSpec("P")
 
 from frozendict import frozendict
@@ -112,13 +114,17 @@ def next_event(
     graph: GraphLike,
 ):
     params = graph.ustream[ref.i]
-    for k in params.get(ref.i, ()):
+
+    for k in params.get(event.ref.i, ()):
         sync = schedule.sync.get(k)
         if sync is None:
             continue
         res = sync.next(node, ref, event, params, graph)
         # if res is not None:
         return res
+    
+    if len(schedule.sync):
+        return None
 
     t = event.t
     # assert ref.i not in params, (node, ref, params)
@@ -146,7 +152,16 @@ Data = tuple[Series.Any, ...]
 
 #  ------------------
 
-# TODO: kwargs on if return t or v or even just mask?
+# TODO: need to pass in the slice / index we want
+# as that's always the next step
+
+# can go all the way through to the array
+
+# also need overloads / diff methods
+# for one, many (many nested, ...), many concat (optional reshape), etc.
+
+# with also flags for include nan, fill forward, backward, etc.
+
 
 @overload
 def select(
@@ -154,6 +169,9 @@ def select(
     ref: Ref.Object,
     at: float | Event,
     t: Literal[False] = False,
+    i: int | slice | None = None,
+    where: dict[str, Callable] | None = None,
+    null: bool | str = True,
 ) -> list: ...
 
 
@@ -163,6 +181,9 @@ def select(
     ref: Ref.Object,
     at: float | Event,
     t: Literal[True] = True,
+    i: int | slice | None = None,
+    where: dict[str, Callable] | None = None,
+    null: bool | str = True,
 ) -> tuple[list[float], list]: ...
 
 
@@ -172,6 +193,9 @@ def select(
     ref: Ref.Col,
     at: float | Event,
     t: Literal[False] = False,
+    i: int | slice | None = None,
+    where: dict[str, Callable] | None = None,
+    null: bool | str = True,
 ) -> Array.np_1D: ...
 
 
@@ -181,6 +205,9 @@ def select(
     ref: Ref.Col,
     at: float | Event,
     t: Literal[True] = True,
+    i: int | slice | None = None,
+    where: dict[str, Callable] | None = None,
+    null: bool | str = True,
 ) -> tuple[Array.np_1D, Array.np_1D]: ...
 
 
@@ -190,6 +217,9 @@ def select(
     ref: Ref.Col1D,
     at: float | Event,
     t: Literal[False] = False,
+    i: int | slice | None = None,
+    where: dict[str, Callable] | None = None,
+    null: bool | str = True,
 ) -> Array.np_2D: ...
 
 
@@ -199,25 +229,63 @@ def select(
     ref: Ref.Col1D,
     at: float | Event,
     t: Literal[True] = True,
+    i: int | slice | None = None,
+    where: dict[str, Callable] | None = None,
+    null: bool | str = True,
 ) -> tuple[Array.np_1D, Array.np_2D]: ...
 
 
 def select(
     graph: GraphLike,
-    ref: Ref.Any,
+    ref: Ref.Any | tuple[Ref.Any, ...],
     at: float | Event,
     t: bool = False,
+    i: int | slice | None = None,
+    where: dict[str, Callable] | None = None,
+    null: bool | str = True,
 ):
-    return series(graph, ref).select(
-        at if isinstance(at, float) else at.t, t=t
-    )
-
+    if isinstance(ref, Ref.Any):
+        res = series(graph, ref).select(
+            at if isinstance(at, float) else at.t, t=t, i=i, where=where, null=null
+        )
+        if t:
+            t, v = res
+            assert len(t) == len(v), dict(t=len(t), v = len(v), node=graph.nodes[ref.i])
+        return res
+    # TODO: need align if on diff t?
+    res = tuple((
+        series(graph, r).select(
+            at if isinstance(at, float) else at.t,
+            t=t, 
+            i=None if not null else i, 
+            where=where,
+            null = True if not null else null
+        )
+        for r in ref
+    ))
+    if not null and t:
+        not_null = np.logical_not(
+            np.all([np.isnan(v) for t, v in res], axis=0)
+        )
+        return tuple((
+            (t[not_null], v[not_null]) for t, v in res
+        ))
+    elif not null:
+        not_null = np.logical_not(
+            np.all([np.isnan(v) for v in res], axis=0)
+        )
+        return tuple((v[not_null] for v in res))
+    return res
 
 def mask(
-    graph: GraphLike, ref: Ref.Any, at: float | Event
+    graph: GraphLike,
+    ref: Ref.Any,
+    at: float | Event,
+    where: dict[str, Callable] | None = None,
+    null: bool | str = True,
 ) -> Array.np_1D:
     return series(graph, ref).mask(
-        at if isinstance(at, float) else at.t
+        at if isinstance(at, float) else at.t, where=where, null=null
     )
 
 
@@ -258,6 +326,9 @@ def all_series(
 
 
 class GraphLike(Protocol):
+
+    @property
+    def nodes(self) -> Nodes: ...
 
     @property
     def data(self) -> Data: ...

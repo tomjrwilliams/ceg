@@ -58,7 +58,7 @@ class Aliases(Aliases_Kw, Scope):
         return self._replace(
             alias=None,
             kwargs=None,
-            aliases=(self.aliases | scope.aliases)
+            aliases=(scope.aliases | self.aliases)
         )
 
     def contains(

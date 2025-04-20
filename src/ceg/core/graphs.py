@@ -171,6 +171,7 @@ class Plugin(NamedTuple):
         event: Event,
         state: State,
         scope: Scope | None,
+        prev: Event | None = None,
     ) -> State:
         return state
 
@@ -310,7 +311,7 @@ class Graph(GraphKW, GraphLike):
         node = self.nodes[ref.i]
         return use_plugins(self, node, ref, using=using)
 
-    def flush(self, event: Event):
+    def flush(self, event: Event, prev: Event | None = None):
 
         # TODO: take predicates over plugins / parent types
         # so we can run this repeatedly with different filters
@@ -318,7 +319,7 @@ class Graph(GraphKW, GraphLike):
 
         state = self.state
         for p, sc in self.plugins.items():
-            state = p.flush(self, event, state, scope=sc)
+            state = p.flush(self, event, state, scope=sc, prev=prev)
         return self._replace(state=state)
 
     @contextlib.contextmanager
@@ -641,7 +642,7 @@ def step(
     for i in dstream.get(ref.i, ()):
         nd = nodes[i]
         assert nd is not None, ref
-
+        
         e = nd.schedule.next(
             nd,
             nd.ref(i),
@@ -676,6 +677,42 @@ def steps(
         es[i] = e
     return graph, tuple(cast(list[Event], es))
 
+def step_until(
+    graph: Graph,
+    f: Callable[[Graph, Event], bool],
+    *events: Event,
+    refs: list[Ref.Any] = [],
+):
+    # TODO: concat with the given events
+    es = []
+    graph, e = step(graph, *events)
+    if e is None:
+        return graph, None, (e,)
+    while e is not None and not f(graph, e):
+        es.append(e)
+        graph, e = step(graph)
+    if e is None:
+        return graph, None, tuple(es)
+    # if len(refs):
+    # TODO until each of those not just all events
+    trigger = e
+    while e is not None and e.t <= trigger.t:
+        es.append(e)
+        graph, e = step(graph)
+    if e is not None:
+        es.append(e)
+    return graph, trigger, tuple(es)
+
+def step_until_done(
+    graph: Graph, 
+    *events: Event,
+):
+    es = []
+    graph, e = graph.step(*events)
+    while e is not None:
+        es.append(e)
+        graph, e = graph.step()
+    return graph, tuple(es)
 
 #  ------------------
 

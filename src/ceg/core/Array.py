@@ -38,6 +38,10 @@ class ArrayAny(NamedTuple):
     raw: numpy.ndarray | list
 
     @property
+    def data(self) -> numpy.ndarray | list:
+        raise ValueError(self)
+
+    @property
     def last(self):
         raise ValueError(self)
 
@@ -51,6 +55,10 @@ class ArrayList(ArrayAny):
     incr: int
     method: str
     raw: list
+
+    @property
+    def data(self):
+        return self.raw
 
 class ArrayND(ArrayAny):
 

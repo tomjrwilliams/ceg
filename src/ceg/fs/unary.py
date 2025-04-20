@@ -53,15 +53,17 @@ class pct_change(pct_change_kw, core.Node.Col):
         if not len(v):
             return numpy.NAN
         vlast = v[-1]
-        if vlast == numpy.NAN:
+        if np.isnan(vlast):
             return vlast
-        for vv in v[:-1][::-1]:
-            if vv == numpy.NAN:
+        r = 0
+        vv = None
+        for vv in v[::-1][1:]:
+            if np.isnan(vv):
                 continue
             r = (vlast / vv)-1
-            return r
-        return 0
-        
+            break
+        return r
+
 class sqrt_kw(NamedTuple):
     type: str
     schedule: core.Schedule
@@ -103,7 +105,7 @@ class sqrt(sqrt_kw, core.Node.Col):
         if not len(v):
             return numpy.NAN
         vlast = v[-1]
-        if vlast == numpy.NAN:
+        if np.isnan(vlast):
             return vlast
         if vlast < 0:
             return -1 * (np.sqrt(-1 * vlast))
@@ -150,7 +152,7 @@ class sq(sq_kw, core.Node.Col):
         if not len(v):
             return numpy.NAN
         vlast = v[-1]
-        if vlast == numpy.NAN:
+        if np.isnan(vlast):
             return vlast
         if vlast < 0:
             return -1 * (np.square(-1 * vlast))
@@ -196,6 +198,8 @@ class cum_sum(cum_sum_kw, core.Node.Col):
         v = graph.select(self.v, event, t=False)
         if not len(v):
             return numpy.NAN
+        if np.isnan(v[-1]):
+            return np.NAN
         return np.nansum(v)
         
 class compound_kw(NamedTuple):

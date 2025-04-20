@@ -6,11 +6,13 @@ from .. import core
 
 #  ------------------
 
-def window_mask(v, t, at):
-    return v[t >= at]
+def window_mask(v, t, at, offset: float | None = None):
+    if offset is not None:
+        return v[(t >= at - offset)&(t < at )]
+    return v[t > at]
 
 def window_null_mask(v, t, at):
-    return v[(t >= at) & ~np.isnan(v)]
+    return v[(t > at) & ~np.isnan(v)]
 
 #  ------------------
 
@@ -63,6 +65,8 @@ class mean(mean_kw, core.Node.Col):
     ):
         window = event.t + 1 if self.window is None else self.window
         t, v = graph.select(self.v, event, t=True)
+        if np.isnan(v[-1]):
+            return np.NAN
         v = window_null_mask(v, t, event.t - window)
         return np.NAN if not len(v) else numpy.nanmean(v)
 
@@ -182,6 +186,8 @@ class std(std_kw, core.Node.Col):
     ):
         window = event.t + 1 if self.window is None else self.window
         t, v = graph.select(self.v, event, t=True)
+        if np.isnan(v[-1]):
+            return np.NAN
         v = window_null_mask(v, t, event.t - window)
         return np.NAN if not len(v) else numpy.nanstd(v)
 
@@ -303,11 +309,13 @@ class rms(rms_kw, core.Node.Col):
     ):
         window = event.t + 1 if self.window is None else self.window
         t, v = graph.select(self.v, event, t=True)
+        if np.isnan(v[-1]):
+            return np.NAN
         v = window_null_mask(v, t, event.t - window)
         ms = np.NAN if not len(v) else (
             numpy.nanmean(numpy.square(v))
         )
-        return np.NAN if ms == np.NAN else np.sqrt(ms)
+        return np.NAN if np.isnan(ms) else np.sqrt(ms)
 
 
 
@@ -437,6 +445,10 @@ class cov_kw(NamedTuple):
     window: float | None
     mu_1: core.Ref.Col | None
     mu_2: core.Ref.Col | None
+    offset_1: float | None
+    offset_2: float | None
+    shuffle: bool
+    bootstrap: int | None
 
 
 class cov(cov_kw, core.Node.Col):
@@ -476,6 +488,10 @@ class cov(cov_kw, core.Node.Col):
         window: float | None = None,
         mu_1: core.Ref.Col | None = None,
         mu_2: core.Ref.Col | None = None,
+        offset_1: float | None=None,
+        offset_2: float | None=None,
+        shuffle: bool = False,
+        bootstrap: int | None = None,
     ):
         return cls(
             *cls.args(),
@@ -484,6 +500,10 @@ class cov(cov_kw, core.Node.Col):
             window=window,
             mu_1=mu_1,
             mu_2=mu_2,
+            offset_1=offset_1,
+            offset_2=offset_2,
+            shuffle=shuffle,
+            bootstrap=bootstrap,
         )
 
     def __call__(
@@ -493,22 +513,53 @@ class cov(cov_kw, core.Node.Col):
         # TODO: assert aligned?
         t1, v1 = graph.select(self.v1, event, t=True)
         t2, v2 = graph.select(self.v2, event, t=True)
-        v1 = window_mask(v1, t1, event.t - window)
-        v2 = window_mask(v2, t2, event.t - window)
-        if self.mu_1 is None:
-            mu1 = np.NAN if not len(v1) else numpy.nanmean(v1)
-        else:
-            mu1 = graph.select(self.mu_1, event)[-1]
-        if self.mu_2 is None:
-            mu2 = np.NAN if not len(v2) else numpy.nanmean(v2)
-        else:
-            mu2 = graph.select(self.mu_2, event)[-1]
-        if mu1 == np.NAN and mu2 == np.NAN:
+        
+        if np.isnan(v1[-1]):
             return np.NAN
-        return numpy.nanmean(
-            (v1 - mu1) * (v2 - mu2)
-            # assume elementwise?
-        )
+            
+        if np.isnan(v2[-1]):
+            return np.NAN
+
+        v1 = window_mask(v1, t1, event.t - window, offset=self.offset_1)
+        v2 = window_mask(v2, t2, event.t - window, offset=self.offset_2)
+
+        if not len(v1) or not len(v2):
+            return np.NAN
+
+        # if len(v1) != len(v2):
+        #     return np.NAN
+
+        if self.shuffle:
+            np.random.shuffle(v1)
+
+        if not self.bootstrap:
+            n_runs = 1
+            n_vs = len(v1)
+        else:
+            n_runs = self.bootstrap
+            n_vs = int(len(v1) / n_runs)
+        
+        res = 0
+        for i in range(n_runs):
+            
+            vv1 = v1[i*n_vs:(i+1) * n_vs]
+            vv2 = v2[i*n_vs:(i+1) * n_vs]
+
+            if self.mu_1 is None:
+                mu1 = np.NAN if not len(vv1) else numpy.nanmean(vv1)
+            else:
+                mu1 = graph.select(self.mu_1, event)[-1]
+            if self.mu_2 is None:
+                mu2 = np.NAN if not len(vv2) else numpy.nanmean(vv2)
+            else:
+                mu2 = graph.select(self.mu_2, event)[-1]
+            if np.isnan(mu1) and np.isnan(mu2):
+                return np.NAN
+            res += (numpy.nanmean(
+                (vv1 - mu1) * (vv2 - mu2)
+                # assume elementwise?
+            )/ n_runs)
+        return res
 
 #  ------------------
 
@@ -524,6 +575,14 @@ class pca_kw(NamedTuple):
     signs: tuple[int | None] | None
     centre: bool
 
+    # TODO: window is constant, but take offsets
+    # so for forward vs backward
+    # can take [window][offset] vs [window]
+
+    # eg. via the covar cell, and do pca on the covar matrix
+    # then to realign for the graph
+    # you need a forward shift on the date index
+    # but that in theory is just date + n days (optionally over a given calendar)
 
 class pca(pca_kw, core.Node.Col1D):
     """
@@ -572,25 +631,28 @@ class pca(pca_kw, core.Node.Col1D):
         self, event: core.Event, graph: core.Graph
     ):
         window = event.t + 1 if self.window is None else self.window
-        ts, vs = zip(*map(
-            lambda v: graph.select(v, event, t=True),
+
+        vs = graph.select(
             self.vs,
-        ))
-        vs = list(map(
-            lambda v_t: window_mask(*v_t, event.t - window),
-            zip(vs, ts)
-        ))
+            event,
+            t=False,
+            where=dict(t = lambda t: t >= event.t - window),
+            null=False
+        )
+
         # TODO: assert aligned?
+
         mus = [None for _ in vs] if self.mus is None else self.mus
         assert len(mus) == len(vs), dict(mus=mus, vs=vs)
         mus = list(map(
             lambda v_mu: (lambda v, mu: (
-                graph.select(mu, event)[-1] if mu is not None
+                graph.select(mu, event, i = -1) if mu is not None
                 else np.NAN if not len(v)
                 else numpy.nanmean(v)
             ))(*v_mu),
             zip(vs, mus)
         ))
+
         if self.centre:
             vs = [v - mu for v, mu in zip(vs, mus)]
 
@@ -705,8 +767,7 @@ class pca_scale(pca_scale_kw, core.Node.Col):
         # first row is the eignenvalues
         n = graph.nodes[self.v.i]
         keep = n.keep
-        vs = graph.select(self.v, event, False)
-        vs = vs[-1]
+        vs = graph.select(self.v, event, t=False, i = -1, null = False)
         vs = vs.reshape(
             int(vs.shape[0] / keep), keep, 
         )
@@ -741,8 +802,7 @@ class pca_weights(pca_weights_kw, core.Node.Col1D):
         # first row is eigenvalues. then weights are cols of remainder
         n = graph.nodes[self.v.i]
         keep = n.keep
-        vs = graph.select(self.v, event, False)
-        vs = vs[-1]
+        vs = graph.select(self.v, event, t=False, i=-1, null=False)
         vs = vs.reshape(
             int(vs.shape[0] / keep), keep, 
         )
