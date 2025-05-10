@@ -42,6 +42,33 @@ def last_before_naive(
     return np.NAN
 
 @nb.jit(fastmath=True)
+def last_ix_before(
+    v: np.ndarray, 
+    t: np.ndarray, 
+    at: float, 
+    occupied: int,
+    size: int
+):
+    if t[0] > at:
+        return -1
+    l = v.shape[0]
+    pow = 1
+    ix = step = l // 2
+    while pow < size:
+        tt = t[ix-1]
+        pow += 1
+        step = step // 2
+        if tt > at or ix >= occupied:
+            ix -= step
+        else:
+            ix += step
+    while t[ix] > at or ix >= occupied:
+        ix -= 1
+        if ix == -1:
+            return -1
+    return ix
+
+@nb.jit(fastmath=True)
 def last_before(
     v: np.ndarray, 
     t: np.ndarray, 
@@ -65,23 +92,9 @@ def last_before(
     >>> round(last_before(vs, vs, 8, occupied=8, size=POWER))
     8.0
     """
-    if t[0] > at:
+    ix = last_ix_before(v, t, at, occupied, size)
+    if ix == -1:
         return np.NAN
-    l = v.shape[0]
-    pow = 1
-    ix = step = l // 2
-    while pow < size:
-        tt = t[ix-1]
-        pow += 1
-        step = step // 2
-        if tt > at or ix >= occupied:
-            ix -= step
-        else:
-            ix += step
-    while t[ix] > at or ix >= occupied:
-        ix -= 1
-        if ix == -1:
-            return np.NAN
     return v[ix]
 
 def last_before_equiv():
@@ -104,3 +117,69 @@ def last_before_equiv():
     ...         for offset in [int(n / 10), int(n/3), int(n * .8)]
     ...     ))
     """
+
+    
+@nb.jit(fastmath=True)
+def last_n_before_naive(
+    v: np.ndarray, 
+    t: np.ndarray, 
+    n: int,
+    at: float, 
+    occupied: int,
+    size: int,
+):
+    res = np.empty(n, dtype=v.dtype)
+    if t[0] > at:
+        for i in range(n):
+            res[i] = np.NAN
+        return res
+    for i in range(occupied):
+        ix = occupied-(1 + i)
+        if t[ix] <= at:
+            res[-(i+1)] = v[ix]
+        if i == n - 1:
+            return res
+    for i in range(occupied, n):
+        res[i] = np.NAN
+    return res
+
+@nb.jit(fastmath=True)
+def last_n_before(
+    v: np.ndarray, 
+    t: np.ndarray, 
+    n: int,
+    at: float, 
+    occupied: int,
+    size: int,
+):
+    res = np.empty(n, dtype=v.dtype)
+    ix = last_ix_before(v, t, at, occupied, size)
+    if ix == -1:
+        for i in range(n):
+            res[i] = np.NAN
+        return res
+    if ix >= n:
+        res[:] = v[ix-n:ix]
+    else:
+        res[-ix:] = v[:ix]
+    # for i in range(ix):
+    #     res[-(1+i)] = v[ix - i]
+    #     if i == n - 1:
+    #         return res
+        for i in range(ix, n):
+            res[i] = np.NAN
+    return res
+
+def last_n_before_np(
+    v: np.ndarray, 
+    t: np.ndarray, 
+    n: int,
+    at: float, 
+    occupied: int,
+    size: int,
+):
+    res = v[:occupied][t[:occupied]>=at][-n:]
+    l = len(res)
+    if l:
+        return res
+    return np.concatenate((np.empty(n - l), res))
