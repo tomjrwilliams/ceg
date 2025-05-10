@@ -35,7 +35,9 @@ for p, v in vs.items():
             for i in range(n):
                 v0 = algos.last_n_before_np(v, v, take, i, offset, p)
                 v1 = algos.last_n_before(v, v, take, i, offset, p)
-                assert np.all(v0 == v1), dict(v0=v0, v1=v1, i=i, offset=offset, n=n, p=p)
+                v0_nan = np.isnan(v0)
+                v1_nan = np.isnan(v1)
+                assert np.all(v0_nan==v1_nan) and np.all(v0[~v0_nan] == v1[~v1_nan]), dict(v0=v0, v1=v1, i=i, offset=offset, n=n, p=p, take=take)
             res = {}
             for variant, f in variants.items():
                 acc = 0

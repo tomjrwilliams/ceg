@@ -43,7 +43,6 @@ def last_before_naive(
 
 @nb.jit(fastmath=True)
 def last_ix_before(
-    v: np.ndarray, 
     t: np.ndarray, 
     at: float, 
     occupied: int,
@@ -51,9 +50,8 @@ def last_ix_before(
 ):
     if t[0] > at:
         return -1
-    l = v.shape[0]
     pow = 1
-    ix = step = l // 2
+    ix = step = 2 ** (size - 1)
     while pow < size:
         tt = t[ix-1]
         pow += 1
@@ -92,7 +90,9 @@ def last_before(
     >>> round(last_before(vs, vs, 8, occupied=8, size=POWER))
     8.0
     """
-    ix = last_ix_before(v, t, at, occupied, size)
+    if t[0] > at:
+        return np.NAN
+    ix = last_ix_before(t, at, occupied, size)
     if ix == -1:
         return np.NAN
     return v[ix]
@@ -128,17 +128,19 @@ def last_n_before_naive(
     occupied: int,
     size: int,
 ):
-    res = np.zeros(n, dtype=v.dtype) * np.NAN
+    res = np.empty(n, dtype=v.dtype)
+    res[:] = np.NAN
     if t[0] > at:
         return res
     for i in range(occupied):
         ix = occupied-(1 + i)
         if t[ix] <= at:
-            ix_r = ix + 1
-            if ix_r >= n:
-                res[:] = v[ix_r-n:ix_r]
+            ix += 1
+            if ix >= n:
+                res[:] = v[ix-n:ix]
             else:
-                res[-ix_r:] = v[:ix_r]
+                res[-ix:] = v[:ix]
+            break
     return res
 
 @nb.jit(fastmath=True)
@@ -150,17 +152,18 @@ def last_n_before(
     occupied: int,
     size: int,
 ):
-    res = np.zeros(n, dtype=v.dtype) * np.NAN
+    res = np.empty(n, dtype=v.dtype)
+    res[:] = np.NAN
     if t[0] > at:
         return res
-    ix = last_ix_before(v, t, at, occupied, size)
+    ix = last_ix_before(t, at, occupied, size)
     if ix == -1:
-        return np.zeros(n, dtype=v.dtype) * np.NAN
-    ix_r = ix + 1
-    if ix_r >= n:
-        res[:] = v[ix_r-n:ix_r]
+        return res
+    ix += 1
+    if ix >= n:
+        res[:] = v[ix-n:ix]
     else:
-        res[-ix_r:] = v[:ix_r]
+        res[-ix:] = v[:ix]
     return res
 
 def last_n_before_np(
@@ -171,8 +174,10 @@ def last_n_before_np(
     occupied: int,
     size: int,
 ):
-    res = v[:occupied][t[:occupied]>=at][-n:]
+    res = v[:occupied][t[:occupied]<=at][-n:]
     l = len(res)
-    if l:
+    if l == n:
         return res
-    return np.concatenate((np.empty(n - l), res))
+    nulls = np.empty(n - l)
+    nulls[:] = np.NAN
+    return np.concatenate((nulls, res))
