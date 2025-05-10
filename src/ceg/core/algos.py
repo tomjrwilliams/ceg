@@ -14,7 +14,7 @@ def last_before_naive(
     t: np.ndarray, 
     at: float, 
     occupied: int,
-    pow_size: int,
+    size: int,
 ):
     """
     >>> POWER = 3
@@ -24,13 +24,13 @@ def last_before_naive(
     >>> assert vs.shape == (8,)
     >>> list(round(vs))
     [0.0, 1.1429, 2.2857, 3.4286, 4.5714, 5.7143, 6.8571, 8.0]
-    >>> round(last_before(vs, vs, 2, 1, POWER))
+    >>> round(last_before(vs, vs, 2, occupied=1, size=POWER))
     0.0
-    >>> round(last_before(vs, vs, 2, 2, POWER))
+    >>> round(last_before(vs, vs, 2, occupied=2, size=POWER))
     1.1429
-    >>> round(last_before(vs, vs, 3, 2, POWER))
+    >>> round(last_before(vs, vs, 3, occupied=2, size=POWER))
     1.1429
-    >>> round(last_before(vs, vs, 8, 8, POWER))
+    >>> round(last_before(vs, vs, 8, occupied=8, size=POWER))
     8.0
     """
     if t[0] > at:
@@ -47,7 +47,7 @@ def last_before(
     t: np.ndarray, 
     at: float, 
     occupied: int,
-    pow_size: int
+    size: int
 ):
     """
     >>> POWER = 3
@@ -56,13 +56,13 @@ def last_before(
     >>> assert vs.shape == (8,)
     >>> list(round(vs))
     [0.0, 1.1429, 2.2857, 3.4286, 4.5714, 5.7143, 6.8571, 8.0]
-    >>> round(last_before(vs, vs, 2, 1, POWER))
+    >>> round(last_before(vs, vs, 2, occupied=1, size=POWER))
     0.0
-    >>> round(last_before(vs, vs, 2, 2, POWER))
+    >>> round(last_before(vs, vs, 2, occupied=2, size=POWER))
     1.1429
-    >>> round(last_before(vs, vs, 3, 2, POWER))
+    >>> round(last_before(vs, vs, 3, occupied=2, size=POWER))
     1.1429
-    >>> round(last_before(vs, vs, 8, 8, POWER))
+    >>> round(last_before(vs, vs, 8, occupied=8, size=POWER))
     8.0
     """
     if t[0] > at:
@@ -70,7 +70,7 @@ def last_before(
     l = v.shape[0]
     pow = 1
     ix = step = l // 2
-    while pow < pow_size:
+    while pow < size:
         tt = t[ix-1]
         pow += 1
         step = step // 2
