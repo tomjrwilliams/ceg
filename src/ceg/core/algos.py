@@ -128,19 +128,17 @@ def last_n_before_naive(
     occupied: int,
     size: int,
 ):
-    res = np.empty(n, dtype=v.dtype)
+    res = np.zeros(n, dtype=v.dtype) * np.NAN
     if t[0] > at:
-        for i in range(n):
-            res[i] = np.NAN
         return res
     for i in range(occupied):
         ix = occupied-(1 + i)
         if t[ix] <= at:
-            res[-(i+1)] = v[ix]
-        if i == n - 1:
-            return res
-    for i in range(occupied, n):
-        res[i] = np.NAN
+            ix_r = ix + 1
+            if ix_r >= n:
+                res[:] = v[ix_r-n:ix_r]
+            else:
+                res[-ix_r:] = v[:ix_r]
     return res
 
 @nb.jit(fastmath=True)
@@ -152,22 +150,17 @@ def last_n_before(
     occupied: int,
     size: int,
 ):
-    res = np.empty(n, dtype=v.dtype)
+    res = np.zeros(n, dtype=v.dtype) * np.NAN
+    if t[0] > at:
+        return res
     ix = last_ix_before(v, t, at, occupied, size)
     if ix == -1:
-        for i in range(n):
-            res[i] = np.NAN
-        return res
-    if ix >= n:
-        res[:] = v[ix-n:ix]
+        return np.zeros(n, dtype=v.dtype) * np.NAN
+    ix_r = ix + 1
+    if ix_r >= n:
+        res[:] = v[ix_r-n:ix_r]
     else:
-        res[-ix:] = v[:ix]
-    # for i in range(ix):
-    #     res[-(1+i)] = v[ix - i]
-    #     if i == n - 1:
-    #         return res
-        for i in range(ix, n):
-            res[i] = np.NAN
+        res[-ix_r:] = v[:ix_r]
     return res
 
 def last_n_before_np(
