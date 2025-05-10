@@ -32,12 +32,10 @@ for p, v in vs.items():
         for take in offsets:
             if offset == 0 or take == 0:
                 continue
-            # for i in range(n):
-            #     v0 = algos.last_before_naive(v, v, take, i, offset, p)
-            #     v1 = algos.last_before(v, v, i, take, offset, p)
-            #     assert (
-            #         np.isnan(v0) and np.isnan(v1) 
-            #     ) or v0 == v1, dict(v0=v0, v1=v1, i=i, offset=offset, n=n, p=p)
+            for i in range(n):
+                v0 = algos.last_n_before_np(v, v, take, i, offset, p)
+                v1 = algos.last_n_before(v, v, take, i, offset, p)
+                assert np.all(v0 == v1), dict(v0=v0, v1=v1, i=i, offset=offset, n=n, p=p)
             res = {}
             for variant, f in variants.items():
                 acc = 0
