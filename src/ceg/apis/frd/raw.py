@@ -77,7 +77,8 @@ def open_file(
         )
         suffix_file = getattr(
             getattr(suffixes, "FILE"),
-            suffix
+            suffix,
+            None
         )
 
     if folder == FOLDERS.ETF:

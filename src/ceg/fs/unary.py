@@ -64,6 +64,52 @@ class pct_change(pct_change_kw, core.Node.Col):
             break
         return r
 
+class lag_kw(NamedTuple):
+    type: str
+    schedule: core.Schedule
+    #
+    v: core.Ref.Col
+    w: int
+
+
+class lag(lag_kw, core.Node.Col):
+    """
+    >>> g = core.Graph.new()
+    >>> from . import rand
+    >>> _ = rand.rng(seed=0, reset=True)
+    >>> g, r = gaussian.bind(g)
+    >>> with g.implicit() as (bind, done):
+    ...     ch = bind(sqrt.new(r))
+    ...     g = done()
+    ...
+    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> list(numpy.round(g.select(r, es[-1]), 2))
+    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
+    >>> list(numpy.round(g.select(ch, es[-1]), 2))
+    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
+    """
+
+    DEF: ClassVar[core.Defn] = core.define(
+        core.Node.Col, lag_kw
+    )
+
+    @classmethod
+    def new(
+        cls, v: core.Ref.Col, w: int
+    ):
+        return cls(*cls.args(), v=v, w=w)
+
+    def __call__(
+        self, event: core.Event, graph: core.Graph
+    ):
+        v = graph.select(self.v, event, t=False)
+        if not len(v):
+            return numpy.NAN
+        for vv in v[:-self.w][::-1]:
+            if not np.isnan(vv):
+                return vv
+        return np.NAN
+        
 class sqrt_kw(NamedTuple):
     type: str
     schedule: core.Schedule

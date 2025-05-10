@@ -50,18 +50,19 @@ class SeriesND(NamedTuple):
         at: float, 
         where: dict[str, Callable] | None=None,
         null: bool | str = True,
+        limit: int = 300,
     ) -> Array.np:
-        ts = self.t.data
+        ts = self.t.data[-limit:]
         ts_at = ts <= at
         if where is None:
             return ts_at
         where_t: Callable | None = where.get("t")
         where_v: Callable | None=where.get("v")
         if where_t is not None and where_v is not None:
-            vs = self.v.data
+            vs = self.v.data[-limit:]
             return ts_at & where_t(ts) & where_v(vs)
         elif where_v is not None:
-            vs = self.v.data
+            vs = self.v.data[-limit:]
             return ts_at & where_v(vs)
         elif where_t is not None:
             return ts_at & where_t(ts)
@@ -136,9 +137,10 @@ class SeriesObject(SeriesND):
         i: int | slice | None = None,
         where: dict[str, Callable] | None = None,
         null: bool | str = True,
+        limit: int = 300,
     ):
-        mask = self.mask(at, where)
-        v = np.array(self.v.data)
+        mask = self.mask(at, where, limit=limit)
+        v = np.array(self.v.data)[-limit:]
         if not null:
             mask = mask & np.logical_not(np.isnan(v))
         if null == "forward":
@@ -146,9 +148,9 @@ class SeriesObject(SeriesND):
         else:
             v = v[mask]
         if i is None and t:
-            return self.t.data[mask], v
+            return self.t.data[-limit:][mask], v
         elif t:
-            return self.t.data[mask][i], v[i]
+            return self.t.data[-limit:][mask][i], v[i]
         elif i is None:
             return v
         return v[i]
@@ -179,6 +181,8 @@ class SeriesCol(SeriesND):
         t: bool = False,
         i: int | slice | None = None,
         where: dict[str, Callable] | None = None,
+        null: str | None = None,
+        limit: int = 300,
     ) -> Array.np_1D: ...
 
     @overload
@@ -188,6 +192,8 @@ class SeriesCol(SeriesND):
         t: bool = True,
         i: int | slice | None = None,
         where: dict[str, Callable] | None = None,
+        null: str | None = None,
+        limit: int = 300,
     ) -> tuple[Array.np_1D, Array.np_1D]: ...
 
     def select(
@@ -197,9 +203,10 @@ class SeriesCol(SeriesND):
         i: int | slice | None = None,
         where: dict[str, Callable] | None = None,
         null: str | None = None,
+        limit: int = 300,
     ):
-        mask = self.mask(at, where)
-        v = self.v.data
+        mask = self.mask(at, where, limit=limit)
+        v = self.v.data[-limit:]
         if not null:
             mask = mask & np.logical_not(np.isnan(v))
         if null == "forward":
@@ -207,9 +214,9 @@ class SeriesCol(SeriesND):
         else:
             v = v[mask]
         if i is None and t:
-            return self.t.data[mask], v
+            return self.t.data[-limit:][mask], v
         elif t:
-            return self.t.data[mask][i], v[i]
+            return self.t.data[-limit:][mask][i], v[i]
         elif i is None:
             return v
         return v[i]
@@ -239,9 +246,10 @@ class SeriesCol1D(SeriesND):
         i: int | slice | None = None,
         where: dict[str, Callable] | None = None,
         null: str | None = None,
+        limit: int = 300,
     ):
-        mask = self.mask(at, where)
-        v = self.v.data
+        mask = self.mask(at, where, limit=limit)
+        v = self.v.data[-limit:]
         if not null:
             mask = mask & np.logical_not(np.all(np.isnan(v), axis=1))
         if null == "forward":
@@ -249,9 +257,9 @@ class SeriesCol1D(SeriesND):
         else:
             v = v[mask]
         if i is None and t:
-            return self.t.data[mask], v
+            return self.t.data[-limit:][mask], v
         elif t:
-            return self.t.data[mask][i], v[i]
+            return self.t.data[-limit:][mask][i], v[i]
         elif i is None:
             return v
         return v[i]

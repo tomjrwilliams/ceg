@@ -17,12 +17,70 @@ def window_null_mask(v, t, at):
 #  ------------------
 
 
+class sum_kw(NamedTuple):
+    type: str
+    schedule: core.Schedule
+    #
+    v: core.Ref.Col
+    window: float | None
+
+
+
+class sum(sum_kw, core.Node.Col):
+    """
+    scalar mean (optional rolling window)
+    v: core.Ref.Col
+    window: float | None
+    >>> g = core.Graph.new()
+    >>> from . import rand
+    >>> _ = rand.rng(seed=0, reset=True)
+    >>> g, r = gaussian.bind(g)
+    >>> with g.implicit() as (bind, done):
+    ...     mu = bind(mean.new(r))
+    ...     mu_3 = bind(mean.new(r, window=3))
+    ...     g = done()
+    ...
+    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> list(numpy.round(g.select(r, es[-1]), 2))
+    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
+    >>> list(numpy.round(g.select(mu, es[-1]), 2))
+    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
+    >>> list(
+    ...     numpy.round(g.select(mu_3, es[-1]), 2)
+    ... )
+    [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
+    """
+
+    DEF: ClassVar[core.Defn] = core.define(
+        core.Node.Col, sum_kw
+    )
+
+    @classmethod
+    def new(
+        cls, v: core.Ref.Col, window: float | None = None
+    ):
+        return cls(*cls.args(), v=v, window=window)
+
+    def __call__(
+        self, event: core.Event, graph: core.Graph
+    ):
+        window = event.t + 1 if self.window is None else self.window
+        v = graph.select(self.v, event, where=dict(
+            t=lambda t: t >= event.t - window
+        ))
+        return np.NAN if not len(v) or np.isnan(v[-1]) else numpy.nansum(v)
+
+#  ------------------
+
+
 class mean_kw(NamedTuple):
     type: str
     schedule: core.Schedule
     #
     v: core.Ref.Col
     window: float | None
+    offset: float | None
+    transform: str | None
 
 
 class mean(mean_kw, core.Node.Col):
@@ -56,19 +114,21 @@ class mean(mean_kw, core.Node.Col):
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col, window: float | None = None
+        cls, v: core.Ref.Col,
+        window: float | None = None,
+        offset: float | None = None,
+        transform: str | None = None,
     ):
-        return cls(*cls.args(), v=v, window=window)
+        return cls(*cls.args(), v=v, window=window, offset=offset, transform=transform)
 
     def __call__(
         self, event: core.Event, graph: core.Graph
     ):
         window = event.t + 1 if self.window is None else self.window
-        t, v = graph.select(self.v, event, t=True)
-        if np.isnan(v[-1]):
-            return np.NAN
-        v = window_null_mask(v, t, event.t - window)
-        return np.NAN if not len(v) else numpy.nanmean(v)
+        v = graph.select(self.v, event, where=dict(
+            t=lambda t: t >= event.t - window
+        ))
+        return np.NAN if not len(v) or np.isnan(v[-1]) else numpy.nanmean(v)
 
 
 #  ------------------
@@ -185,11 +245,10 @@ class std(std_kw, core.Node.Col):
         self, event: core.Event, graph: core.Graph
     ):
         window = event.t + 1 if self.window is None else self.window
-        t, v = graph.select(self.v, event, t=True)
-        if np.isnan(v[-1]):
-            return np.NAN
-        v = window_null_mask(v, t, event.t - window)
-        return np.NAN if not len(v) else numpy.nanstd(v)
+        v = graph.select(self.v, event, where=dict(
+            t=lambda t: t >= event.t - window
+        ))
+        return np.NAN if not len(v) or np.isnan(v[-1]) else numpy.nanstd(v)
 
 
 
@@ -308,16 +367,14 @@ class rms(rms_kw, core.Node.Col):
         self, event: core.Event, graph: core.Graph
     ):
         window = event.t + 1 if self.window is None else self.window
-        t, v = graph.select(self.v, event, t=True)
-        if np.isnan(v[-1]):
-            return np.NAN
-        v = window_null_mask(v, t, event.t - window)
-        ms = np.NAN if not len(v) else (
-            numpy.nanmean(numpy.square(v))
+        v = graph.select(self.v, event, where=dict(
+            t=lambda t: t >= event.t - window
+        ))
+        return (
+            np.NAN 
+            if not len(v) or np.isnan(v[-1]) 
+            else np.sqrt(np.nanmean(np.square(v)))
         )
-        return np.NAN if np.isnan(ms) else np.sqrt(ms)
-
-
 
 #  ------------------
 
@@ -547,10 +604,14 @@ class cov(cov_kw, core.Node.Col):
 
             if self.mu_1 is None:
                 mu1 = np.NAN if not len(vv1) else numpy.nanmean(vv1)
+            elif isinstance(self.mu_1, (int, float)):
+                mu1 = self.mu_1
             else:
                 mu1 = graph.select(self.mu_1, event)[-1]
             if self.mu_2 is None:
                 mu2 = np.NAN if not len(vv2) else numpy.nanmean(vv2)
+            elif isinstance(self.mu_2, (int, float)):
+                mu2 = self.mu_2
             else:
                 mu2 = graph.select(self.mu_2, event)[-1]
             if np.isnan(mu1) and np.isnan(mu2):

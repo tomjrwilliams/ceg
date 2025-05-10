@@ -31,12 +31,25 @@ def unpack_aliases_1d_y(
     t: str | None = None,
     c: str | None = None,
     label: str | None = None,
+    shift: float | None = None,
     prev: ceg.Event | None = None,
     transform: str | None = None,
 ):
     x = x2 = c = None
-    where = None if prev is None else dict(t=lambda t: t >= prev.t)
+    # where = None if prev is None else dict(t=lambda t: t >= prev.t)
+    where = None
     tt, y = graph.select(ref, at=event, t=True, where=where)
+    y_nan = np.isnan(y)
+    if shift is not None:
+        i_shift = int(abs(shift))
+        y_not_nan = y[np.logical_not(y_nan)]
+        if shift > 0:
+            y[np.logical_not(y_nan)] = np.concatenate((np.ones(i_shift) * np.NAN, y_not_nan[:-i_shift]))
+        else:
+            y[np.logical_not(y_nan)] = np.concatenate((y_not_nan[i_shift:], np.ones(i_shift) * np.NAN))
+    if prev is not None:
+        y = y[tt >= prev.t]
+        tt = tt[tt >= prev.t]
     y_nan = np.isnan(y)
     if transform == "cum":
         y = np.nan_to_num(y, nan=0)
@@ -77,6 +90,7 @@ def unpack_aliases_1d_x(
     graph: ceg.Graph,
     event: ceg.Event,
     slice: int | slice | None=None,
+    shift: float | None = None,
     prev: ceg.Event | None = None,
 ):
     where = None if prev is None else dict(t=lambda t: t>=prev.t)
@@ -94,6 +108,7 @@ def unpack_aliases_1d_c(
     graph: ceg.Graph,
     event: ceg.Event,
     slice: int | slice | None=None,
+    shift: float | None = None,
     prev: ceg.Event | None = None,
 ):
     t, x = graph.select(ref, at=event, t=True)
@@ -447,6 +462,7 @@ class Continuous_2D_Kw(NamedTuple):
     slice: int | None = None # or slice
     colors: Optional[core.Color | core.Colors] = None
     window: Optional[float] = None
+    consts: frozendict[str, float] | None = None
 
 class Continuous_2D(Continuous_2D_Kw, ceg.Plugin.Aliased):
 
@@ -464,6 +480,7 @@ class Continuous_2D(Continuous_2D_Kw, ceg.Plugin.Aliased):
         y2: Optional[str] = None,
         c: Optional[str] = None,
         colors: Optional[core.Color | core.Colors] = None,
+        consts: frozendict[str, float] | None = None,
     ):
         return cls(
             scope=scope,
@@ -476,6 +493,7 @@ class Continuous_2D(Continuous_2D_Kw, ceg.Plugin.Aliased):
             y2=y2,
             c=c,
             colors=colors,
+            consts=consts,
         )
 
     def plot(self) -> Type[core.Continuous_2D]:
@@ -503,7 +521,8 @@ class Continuous_2D(Continuous_2D_Kw, ceg.Plugin.Aliased):
             k: [] for k in keys_2d
         }
 
-        labels = []
+        labels_y = []
+        labels_y2 = []
 
         for (ref, key), kwargs in scope.aliases.items():
             label = kwargs.get("label")
@@ -511,7 +530,10 @@ class Continuous_2D(Continuous_2D_Kw, ceg.Plugin.Aliased):
                 ref_kwargs = aliases[key]
                 assert isinstance(ref_kwargs, list), aliases
                 ref_kwargs.append((ref, kwargs))
-                labels.append(label)
+                if key == self.y:
+                    labels_y.append(label)
+                if key == self.y2:
+                    labels_y2.append(label)
             else:
                 assert key not in aliases, key
                 aliases[key] = (ref, kwargs)
@@ -525,19 +547,59 @@ class Continuous_2D(Continuous_2D_Kw, ceg.Plugin.Aliased):
         )
 
         grid: core.Grid = self.grid.get(graph)
+    
+        kw_y = [dict(label=l) for l in labels_y]
+        kw_y2 = [dict(label=l) for l in labels_y2]
+        hidden=[
+            kw["label"] for kw in kw_y
+        ] # TODO: is being popped in the call below?
 
-        grid = grid.with_chart(
-            # TODO: figure etc.
-            getattr(core.fig.axis, self.axis),
-            self.plot().new(
-                **kwargs,
-                colors=self.colors,
-                kwargs = [
-                    dict(label=label)
-                    for label in labels
-                ],
-            ),
-        )
+        kws = {"y": kw_y, "y2": kw_y2}
+
+        for ykey in ["y", "y2"]:
+            if self.consts is not None and kwargs[ykey] is not None:
+                y_ex = kwargs[ykey][0]
+                for k, v in self.consts.items():
+                    kwargs[ykey].append([
+                        v for _ in y_ex
+                    ])
+                    kws[ykey].append(
+                        dict(label=k, color="black", linestyle=(0, (1, 5)))
+                    )
+        
+        y = kwargs.pop("y")
+        y2 = kwargs.pop("y2")
+
+        # we split y then y2 in core
+        # this would all be easier if we use the kwargs not the key?
+        # more like the discrete logic
+        try:
+            if y is not None:
+                grid = grid.with_chart(
+                    # TODO: figure etc.
+                    getattr(core.fig.axis, self.axis),
+                    self.plot().new(
+                        **kwargs,
+                        y=y,
+                        colors=self.colors,
+                        kwargs = kws["y"]
+                    ),
+                )
+            if y2 is not None:
+                ax = getattr(core.fig.axis, self.axis).twin
+                grid = grid.with_chart(
+                    # TODO: figure etc.
+                    ax,
+                    self.plot().new(
+                        **kwargs,
+                        y2=y2,
+                        colors=self.colors,
+                        kwargs = kws["y2"],
+                        hidden=hidden,
+                    ),
+                )
+        except:
+            raise ValueError(self)
         
         return state.set(self.grid, grid)
 
@@ -785,7 +847,7 @@ class Discrete_Pairwise(Discrete_Pairwise_Kw, ceg.Plugin.Aliased):
             assert self.y is not None, self
             y.append(kwargs[self.y])
 
-            v = graph.select(ref, event, t = False)[-1] # type: ignore
+            v = graph.select(ref, event, t = False, i=-1, null=False) # type: ignore
             c.append(v)
 
         grid: core.Grid = self.grid.get(graph)

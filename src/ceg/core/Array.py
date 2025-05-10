@@ -147,6 +147,36 @@ def resize_exp(
 def array_v_size(*shape: int):
     return reduce(operator.mul, shape, 1)
 
+#  ------------------
+
+def select(
+    self,
+    when: float,
+    t: bool = False,
+    i: int | slice | None = None,
+    # where: dict[str, Callable] | None = None,
+    null: str | None = None,
+):
+    return
+
+# implement in numba
+
+# for each n dims below
+
+# where t <= when
+
+# opt:
+# include null or not
+
+# select:
+# - last
+# - slice
+
+# possibly other conditions, eg. select until sum = x, until first <= y, etc.
+
+# may as well also include the write funcs?
+
+# we always have a t array, so should be here as well - ie collapse series into this?
 
 #  ------------------
 

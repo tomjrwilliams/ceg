@@ -77,7 +77,7 @@ class AxisRef(NamedTuple):
         assert self.axis is not None, self
         if self.twinned and self.axis:
             res = grid.twins[self.axis]
-            assert isinstance(res, matplotlib.axes.Axes)
+            # assert isinstance(res, matplotlib.axes.Axes)
         else:
             res = grid.axes[self.axis]
         assert isinstance(
@@ -168,13 +168,13 @@ def twin_axes(
             )
             if label in twin_y and label in twin_x
             else TwinnedAxes(
-                ax.twiny(),
+                ax.twinx(),
                 False,
                 True,
             )
             if label in twin_y
             else TwinnedAxes(
-                ax.twinx(),
+                ax.twiny(),
                 True,
                 False,
             )
@@ -814,6 +814,8 @@ class Discrete_Pairwise(Discrete_Pairwise_Kw, Mark):
                     v, (int, float)
                 ):
                     v = f"{round(v, 3)}%"
+                elif isinstance(v, (int, float)):
+                    v = f"{round(v, 3)}"
 
                 plot(
                     ix,
@@ -1173,6 +1175,8 @@ class Continuous_2D_Kw(NamedTuple):
     kwargs: Optional[list[dict]]
     shared: dict
 
+    hidden: Optional[list[str]]
+
 
 class Continuous_2D(Continuous_2D_Kw, Mark):
 
@@ -1192,6 +1196,7 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
         colors: Optional[Union[Color, Colors]]=None,
         data: Optional[str] = None,
         kwargs: Optional[list[dict]] = None,
+        hidden: Optional[list[str]]=None,
         **shared
     ):
         shape = cols_shape(y=y, y2=y2)
@@ -1205,7 +1210,7 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
         elif c is not None:
             assert colors is not None, colors
         assert x is None or x2 is None, (x, x2)
-        assert y is None or y2 is None, (y, y2)
+        # assert y is None or y2 is None, (y, y2)
         return cls(
             figure=None,
             axis=None,
@@ -1218,6 +1223,7 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
             data=data,
             kwargs=kwargs,
             shared=shared,
+            hidden=hidden,
         )
 
     def apply(
@@ -1225,58 +1231,50 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
         axis: AxisRef,
         grid: Grid,
     ):
-        if self.x is None and self.y is None:
+        if self.x is None:
             assert self.x2 is not None, self
-            assert self.y2 is not None, self
-            assert axis.twinned, self
-            assert isinstance(axis.obj, TwinnedAxes), axis
-            ax, x_twin, y_twin = axis.obj
-            assert x_twin and y_twin, axis
+            # assert axis.twinned, self
+            # assert isinstance(axis.obj, TwinnedAxes), axis
+            # ax, x_twin, y_twin = axis.obj
+            # assert x_twin, axis
             x = grid.unpack_col(
                 self.x2, data=self.data
             )
-            y = grid.unpack_cols(
-                self.y2, data=self.data
-            )
-            self_y = self.y2
-        elif self.x is None:
-            assert self.x2 is not None, self
-            assert self.y is not None, self
-            assert axis.twinned, self
-            assert isinstance(axis.obj, TwinnedAxes), axis
-            ax, x_twin, y_twin = axis.obj
-            assert x_twin and not y_twin, axis
-            x = grid.unpack_col(
-                self.x2, data=self.data
-            )
-            y = grid.unpack_cols(
-                self.y, data=self.data
-            )
-            self_y = self.y
-        elif self.y is None:
-            assert self.x is not None, self
-            assert self.y2 is not None, self
-            assert axis.twinned, self
-            assert isinstance(axis.obj, TwinnedAxes), axis
-            ax, x_twin, y_twin = axis.obj
-            assert y_twin and not x_twin, axis
-            x = grid.unpack_col(
-                self.x, data=self.data
-            )
-            y = grid.unpack_cols(
-                self.y2, data=self.data
-            )
-            self_y = self.y2
         else:
-            assert isinstance(axis.obj, matplotlib.axes.Axes)
+            assert self.x is not None, self
             x = grid.unpack_col(
                 self.x, data=self.data
             )
+        if self.y is not None:
+            assert isinstance(axis.obj, matplotlib.axes.Axes), axis
             y = grid.unpack_cols(
                 self.y, data=self.data
             )
             ax = axis.obj
             self_y = self.y
+            kwargs = None if self.kwargs is None else self.kwargs[:len(self.y)]
+            self.plot_y(grid, x, y, self_y, ax, kwargs, False, y_null = (
+                [] if self.hidden is None else self.hidden
+            ))
+        if self.y2 is not None:
+            assert self.y2 is not None, self
+            # assert axis.twinned, self
+            # assert isinstance(axis.obj, TwinnedAxes), axis
+            ax, x_twin, y_twin = axis.obj
+            # assert y_twin, axis
+            # ax = axis.obj
+            y = grid.unpack_cols(
+                self.y2, data=self.data
+            )
+            self_y = self.y2
+            kwargs = None if self.kwargs is None else self.kwargs[-len(self.y2):]
+            self.plot_y(grid, x, y, self_y, ax, kwargs, True, y_null = (
+                [] if self.hidden is None else self.hidden
+            ))
+    
+    def plot_y(
+        self, grid, x, y, self_y, ax, kwargs, is_y2, y_null = []
+    ):
         
         try:
             all_nan = np.all([
@@ -1305,7 +1303,7 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
                     date_format_x(ax, x, xx)
                 break
 
-        kwargs = self.kwargs
+        # kwargs = self.kwargs
         if kwargs is None:
             kwargs = [{} for _ in y]
 
@@ -1314,6 +1312,9 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
             y=len(y)
         )
         color = None
+
+        for label in y_null:
+            self.plot(ax)([x[0]], [np.NAN], label = label)
 
         if isinstance(self.colors, Color):
             color = self.colors.color()
@@ -1329,6 +1330,7 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
                     )
                     else self_y[i_label]
                 )
+                color = kw.pop("color", color)
                 self.plot(ax)(
                     x,
                     yy,
@@ -1338,10 +1340,14 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
                     **kw
                 )
             ax.legend(
-                loc='center left',
-                bbox_to_anchor=(1, 0.5),
+                loc='center left' if is_y2 else "center right",
+                bbox_to_anchor=(1 if is_y2 else 0, 0.5),
                 prop=dict(size=6)
             )
+            # TODO: if symmetric (per axis?)
+            low, high = ax.get_ylim()
+            bound = max(abs(low), abs(high))
+            ax.set_ylim(-bound, bound)
             return
         assert isinstance(self.colors, Colors), self
         c = grid.unpack_cols(
@@ -1419,6 +1425,10 @@ class Continuous_2D(Continuous_2D_Kw, Mark):
             bbox_to_anchor=(1, 0.5),
             prop=dict(size=6)
         )
+        # TODO: if symmetric (per axis?)
+        low, high = ax.get_ylim()
+        bound = max(abs(low), abs(high))
+        ax.set_ylim(-bound, bound)
 
 # -----------------
 
