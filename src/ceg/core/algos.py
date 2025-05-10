@@ -8,6 +8,17 @@ sig_last_before = nb.float64(
 )
 # NOTE: somehow slower with njit and sig?
 
+def last_before_np(
+    v: np.ndarray, 
+    t: np.ndarray, 
+    at: float, 
+    occupied: int,
+    size: int,
+):
+    if v[0] > t:
+        return np.NAN
+    return v[:occupied][t[:occupied]<=at][-1]
+
 @nb.jit(fastmath=True)
 def last_before_naive(
     v: np.ndarray, 
