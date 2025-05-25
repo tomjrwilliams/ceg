@@ -1,5 +1,6 @@
 from typing import NamedTuple, ClassVar, overload, Literal, cast
-from .. import core
+
+from ..core import Graph, Node, Ref, Event, Loop, Defn, define, steps
 
 import numpy
 
@@ -33,70 +34,69 @@ def rng(seed: int, reset: bool = False):
 
 class gaussian_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.D0_F64
     mean: float
     std: float
     seed: int
 
 
-class gaussian(gaussian_kw, core.Node.Col):
+class gaussian(gaussian_kw, Node.D0_F64):
     """
     gaussian noise (pass v=self to get random walk)
     mean: float
     std: float
     >>> rng(seed=0, reset=True)
-    >>> loop = core.loop.Fixed(1)
-    >>> g = core.Graph.new()
+    >>> loop = loop.Fixed(1)
+    >>> g = Graph.new()
     >>> g, r = gaussian.bind(g)
-    >>> g, es = g.steps(core.Event(0, r), n=6)
+    >>> g, es = g.steps(Event(0, r), n=6)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, gaussian_kw
+    DEF: ClassVar[Defn] = define(
+        Node.D0_F64, gaussian_kw
     )
 
     @classmethod
     def new(
         cls,
-        v: core.Ref.Col,
+        v: Ref.D0_F64,
         mean: float = 0.0,
         std: float = 1.0,
         seed: int = 0,
     ):
         return cls(
-            *cls.args(), v, mean=mean, std=std, seed=seed
+            cls.DEF.name, v, mean=mean, std=std, seed=seed
         )
 
     @classmethod
     def bind(
         cls,
-        g: core.Graph,
+        g: Graph,
         mean: float = 0.0,
         std: float = 1.0,
         seed: int = 0,
         step=1.,
-        using: core.TPlugin | tuple[core.TPlugin, ...] | None = None,
+        using: TPlugin | tuple[TPlugin, ...] | None = None,
         # TODO: using
     ):
-        loop = core.loop.Fixed(step)
+        loop = loop.Fixed(step)
         with g.implicit() as (bind, done):
-            r = bind(None, core.Ref.Object, using)
-            r = cast(core.Ref.Col, r)
+            r = bind(None, Ref.Object, using)
+            r = cast(Ref.D0_F64, r)
             r = bind(
                 cls.new(r, mean, std, seed).sync(v=loop),
                 r,
                 None,
             )
             g = done()
-        r = cast(core.Ref.Col, r)
+        r = cast(Ref.D0_F64, r)
         return g, r
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         vs = graph.select(self.v, event)
         step = rng(self.seed).normal(

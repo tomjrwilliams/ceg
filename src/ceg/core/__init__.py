@@ -1,32 +1,9 @@
 # ceg = cyclic event graph
 
-from . import Array
-from . import Ref
-from . import Series
-from . import Node
-from . import Sync
-
-from .Sync import loop
-from .Sync import wait
-
-from . import Scope
-from . import Plugin
-
-from .Scope import aliases
-from .Scope import Aliases
-
-from .types import *
-from .graphs import (
-    define,
-    Graph,
-    Key,
-    Value,
-    State,
-    bind,
-    step,
-    steps,
-    step_until,
-    step_until_done,
-    Plugin as TPlugin
-    # TODO: rename the plugin above to plugins (else name conflicts...)
-)
+from .algos import set_tuple, frozendict_append_tuple, fold_star
+from .histories import History
+from .refs import Ref, Scope
+from .nodes import Node, Defn, Event
+from .guards import Guard, Loop, ByDate, ByValue
+from .graphs import Graph, define, Key, Value
+from .steps import step, steps, step_until, step_until_done

@@ -51,5 +51,5 @@ for p, v in vs.items():
             **res,
         )
         print(r)
-        results.extend(r)
+        results.append(r)
 

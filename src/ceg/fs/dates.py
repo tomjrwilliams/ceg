@@ -1,7 +1,6 @@
 from typing import NamedTuple, ClassVar, overload, Literal, cast
-from .. import core
 
-import numpy
+from ..core import Graph, Node, Ref, Event, Loop, Defn, define, steps
 
 #  ------------------
 
@@ -9,72 +8,68 @@ import datetime as dt
 
 class daily_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    prev: Ref.Scalar_Date
     start: dt.date
     end: dt.date
 
-class daily(daily_kw, core.Node.Object):
+class daily(daily_kw, Node.Scalar_Date):
     """
-    todo: loop shoudl terminate at end
-    >>> loop = core.loop.Fixed(1)
-    >>> g = core.Graph.new()
-    >>> with g.implicit() as (bind, done):
-    ...     r = bind(None, ref=core.Ref.Col)
-    ...     r = bind(
-    ...         gaussian.new(r).sync(v=loop),
-    ...         ref=r,
-    ...     )
-    ...     g = done()
-    ...
-    >>> g, es = g.steps(core.Event(0, r), n=6)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
+    >>> start = dt.date(2025, 1, 1)
+    >>> end = dt.date(2025, 1, 6)
+    >>> g, r = Graph.new().pipe(daily.loop, start, end)
+    >>> g, e = g.pipe(steps, Event(0, r), n=6).last()
+    >>> e.ref.history(g).last_before(e.t)
+    datetime.date(2025, 1, 6)
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Object, daily_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_Date, daily_kw
     )
 
     @classmethod
     def new(
-        cls, self, start: dt.date, end: dt.date
+        cls, self: Ref.Scalar_Date, start: dt.date, end: dt.date
     ):
-        return cls(
-            *cls.args(), v=self, start=start, end=end
-        )
+        return cls(cls.DEF.name, prev=self, start=start, end=end)
 
     @classmethod
-    def bind(
+    def loop(
         cls,
-        g: core.Graph,
+        g: Graph,
         start: dt.date,
         end: dt.date,
         step=1.,
-        using: core.TPlugin | tuple[core.TPlugin, ...] | None = None,
-        # TODO: using
+        keep: int = 1,
     ):
-        loop = core.loop.FixedUntilDate(step, end)
-        with g.implicit() as (bind, done):
-            r = bind(None, core.Ref.Object, using)
-            r = bind(
-                cls.new(r, start, end).sync(v=loop),
-                r,
-                None,
-            )
-            g = done()
-        r = cast(core.Ref.Object, r)
-        return g, r
-
+        g, r = g.bind(None, Ref.Scalar_Date)
+        g, r = (
+            cls.new(r.select(last=keep), start, end)
+            .pipe(g.bind, r, Loop.UntilDate.new(step, end, r))
+        )
+        return g, cast(Ref.Scalar_Date, r)
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
-        vs = graph.select(self.v, event)
-        if not len(vs):
-            return self.start
-        v = vs[-1] + dt.timedelta(days=1)
-        if v > self.end:
-            raise ValueError(self, v)
-        return v
+        h = self.prev.history(graph, strict=False)
+        if h is None:
+            if event.ref.eq(self.prev):
+                return self.start
+            raise ValueError(dict(self=self, h=h))
+        d = h.last_before(event.t)
+        assert d is not None, self
+        d = d + dt.timedelta(days=1)
+        if d > self.end:
+            raise ValueError(self, d)
+        return d
+
+    # NOTE: alt loop implementation that also type hints nicely : )
+    # with g.implicit() as (bind, done):
+    #     r = bind(None, core.Ref.Scalar_Date)
+    #     r = bind(
+    #         cls.new(r.select(last=keep), start, end),
+    #         r,
+    #         when=core.Loop.UntilDate.new(step, end, r)
+    #     )
+    #     g = done()

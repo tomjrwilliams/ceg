@@ -10,7 +10,6 @@ from functools import partial, lru_cache
 import polars
 import numpy
 
-from ..utils import datetime_to_str
 from ..db import DB, Contract, Query, Bar
 from ..api import Requests, connect
 from ..contracts import contract
@@ -218,7 +217,7 @@ def req_daily_bars(
                 timeout=timeout,
                 contract=contract(**contr._asdict()),
                 endDateTime=(
-                    datetime_to_str(end)
+                    end.strftime("%Y%m%d-%H:%M:%S")
                     if contr.type != "CONTFUT"
                     else ""
                 ),

@@ -1,16 +1,5 @@
 from ibapi.contract import Contract
 
-# inntra day might be a better way to estimate beta to econ
-# take the post release move
-# can go further and model the post release, and the reversiona fter
-# separately, possibly per relationship
-
-
-# energy beta is an interesting one - so idiocyncratic in price
-# so the reaction elsewhere is never going to be clean? 
-# eg. oil acts as a geopolitical, gas to specific storage and supply options
-# and all are contextual over time to slowly changing supply and demand balances
-
 #  ------------------
 
 # int 	ConId [get, set]

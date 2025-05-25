@@ -2,7 +2,7 @@ from typing import NamedTuple, ClassVar
 import numpy
 import numpy as np
 
-from .. import core
+from ..core import Graph, Node, Ref, Event, Loop, Defn, define, steps
 
 #  ------------------
 
@@ -19,19 +19,18 @@ def window_null_mask(v, t, at):
 
 class sum_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
     window: float | None
 
 
 
-class sum(sum_kw, core.Node.Col):
+class sum(sum_kw, Node.Scalar_F64):
     """
     scalar mean (optional rolling window)
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
     window: float | None
-    >>> g = core.Graph.new()
+    >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r = gaussian.bind(g)
@@ -40,7 +39,7 @@ class sum(sum_kw, core.Node.Col):
     ...     mu_3 = bind(mean.new(r, window=3))
     ...     g = done()
     ...
-    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> g, es = g.steps(Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     >>> list(numpy.round(g.select(mu, es[-1]), 2))
@@ -51,18 +50,18 @@ class sum(sum_kw, core.Node.Col):
     [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, sum_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, sum_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col, window: float | None = None
+        cls, v: Ref.Scalar_F64, window: float | None = None
     ):
-        return cls(*cls.args(), v=v, window=window)
+        return cls(cls.DEF.name, v=v, window=window)
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         window = event.t + 1 if self.window is None else self.window
         v = graph.select(self.v, event, where=dict(
@@ -75,20 +74,19 @@ class sum(sum_kw, core.Node.Col):
 
 class mean_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
     window: float | None
     offset: float | None
     transform: str | None
 
 
-class mean(mean_kw, core.Node.Col):
+class mean(mean_kw, Node.Scalar_F64):
     """
     scalar mean (optional rolling window)
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
     window: float | None
-    >>> g = core.Graph.new()
+    >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r = gaussian.bind(g)
@@ -97,7 +95,7 @@ class mean(mean_kw, core.Node.Col):
     ...     mu_3 = bind(mean.new(r, window=3))
     ...     g = done()
     ...
-    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> g, es = g.steps(Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     >>> list(numpy.round(g.select(mu, es[-1]), 2))
@@ -108,21 +106,21 @@ class mean(mean_kw, core.Node.Col):
     [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, mean_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, mean_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col,
+        cls, v: Ref.Scalar_F64,
         window: float | None = None,
         offset: float | None = None,
         transform: str | None = None,
     ):
-        return cls(*cls.args(), v=v, window=window, offset=offset, transform=transform)
+        return cls(cls.DEF.name, v=v, window=window, offset=offset, transform=transform)
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         window = event.t + 1 if self.window is None else self.window
         v = graph.select(self.v, event, where=dict(
@@ -136,29 +134,28 @@ class mean(mean_kw, core.Node.Col):
 
 class mean_w_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
 
 
-class mean_w(mean_w_kw, core.Node.Col):
+class mean_w(mean_w_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, mean_w_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, mean_w_kw
     )
 
     @classmethod
     def new(
         cls,
-        v: core.Ref.Col,
+        v: Ref.Scalar_F64,
     ):
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             v=v,
         )
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         pass
 
@@ -168,29 +165,28 @@ class mean_w(mean_w_kw, core.Node.Col):
 
 class mean_ew_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
 
 
-class mean_ew(mean_ew_kw, core.Node.Col):
+class mean_ew(mean_ew_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, mean_ew_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, mean_ew_kw
     )
 
     @classmethod
     def new(
         cls,
-        v: core.Ref.Col,
+        v: Ref.Scalar_F64,
     ):
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             v=v,
         )
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         pass
 
@@ -200,18 +196,17 @@ class mean_ew(mean_ew_kw, core.Node.Col):
 
 class std_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
     window: float | None
 
 
-class std(std_kw, core.Node.Col):
+class std(std_kw, Node.Scalar_F64):
     """
     scalar mean (optional rolling window)
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
     window: float | None
-    >>> g = core.Graph.new()
+    >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r = gaussian.bind(g)
@@ -220,7 +215,7 @@ class std(std_kw, core.Node.Col):
     ...     mu_3 = bind(std.new(r, window=3))
     ...     g = done()
     ...
-    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> g, es = g.steps(Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     >>> list(numpy.round(g.select(mu, es[-1]), 2))
@@ -231,18 +226,18 @@ class std(std_kw, core.Node.Col):
     [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, std_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, std_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col, window: float | None = None
+        cls, v: Ref.Scalar_F64, window: float | None = None
     ):
-        return cls(*cls.args(), v=v, window=window)
+        return cls(cls.DEF.name, v=v, window=window)
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         window = event.t + 1 if self.window is None else self.window
         v = graph.select(self.v, event, where=dict(
@@ -257,29 +252,28 @@ class std(std_kw, core.Node.Col):
 
 class std_w_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
 
 
-class std_w(std_w_kw, core.Node.Col):
+class std_w(std_w_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, std_w_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, std_w_kw
     )
 
     @classmethod
     def new(
         cls,
-        v: core.Ref.Col,
+        v: Ref.Scalar_F64,
     ):
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             v=v,
         )
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         pass
 
@@ -289,29 +283,28 @@ class std_w(std_w_kw, core.Node.Col):
 
 class std_ew_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
 
 
-class std_ew(std_ew_kw, core.Node.Col):
+class std_ew(std_ew_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, std_ew_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, std_ew_kw
     )
 
     @classmethod
     def new(
         cls,
-        v: core.Ref.Col,
+        v: Ref.Scalar_F64,
     ):
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             v=v,
         )
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         pass
 
@@ -322,18 +315,17 @@ class std_ew(std_ew_kw, core.Node.Col):
 
 class rms_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
     window: float | None
 
 
-class rms(rms_kw, core.Node.Col):
+class rms(rms_kw, Node.Scalar_F64):
     """
     scalar mean (optional rolling window)
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
     window: float | None
-    >>> g = core.Graph.new()
+    >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r = gaussian.bind(g)
@@ -342,7 +334,7 @@ class rms(rms_kw, core.Node.Col):
     ...     mu_3 = bind(rms.new(r, window=3))
     ...     g = done()
     ...
-    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> g, es = g.steps(Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     >>> list(numpy.round(g.select(mu, es[-1]), 2))
@@ -353,18 +345,18 @@ class rms(rms_kw, core.Node.Col):
     [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, rms_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, rms_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col, window: float | None = None
+        cls, v: Ref.Scalar_F64, window: float | None = None
     ):
-        return cls(*cls.args(), v=v, window=window)
+        return cls(cls.DEF.name, v=v, window=window)
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         window = event.t + 1 if self.window is None else self.window
         v = graph.select(self.v, event, where=dict(
@@ -381,29 +373,28 @@ class rms(rms_kw, core.Node.Col):
 
 class rms_w_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
 
 
-class rms_w(rms_w_kw, core.Node.Col):
+class rms_w(rms_w_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, rms_w_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, rms_w_kw
     )
 
     @classmethod
     def new(
         cls,
-        v: core.Ref.Col,
+        v: Ref.Scalar_F64,
     ):
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             v=v,
         )
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         pass
 
@@ -413,29 +404,28 @@ class rms_w(rms_w_kw, core.Node.Col):
 
 class rms_ew_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
 
 
-class rms_ew(rms_ew_kw, core.Node.Col):
+class rms_ew(rms_ew_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, rms_ew_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, rms_ew_kw
     )
 
     @classmethod
     def new(
         cls,
-        v: core.Ref.Col,
+        v: Ref.Scalar_F64,
     ):
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             v=v,
         )
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         pass
 
@@ -459,29 +449,28 @@ class rms_ew(rms_ew_kw, core.Node.Col):
 
 class ex_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
 
 
-class ex(ex_kw, core.Node.Col):
+class ex(ex_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, ex_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, ex_kw
     )
 
     @classmethod
     def new(
         cls,
-        v: core.Ref.Col,
+        v: Ref.Scalar_F64,
     ):
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             v=v,
         )
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         pass
 
@@ -495,25 +484,24 @@ class ex(ex_kw, core.Node.Col):
 
 class cov_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v1: core.Ref.Col
-    v2: core.Ref.Col
+    v1: Ref.Scalar_F64
+    v2: Ref.Scalar_F64
     window: float | None
-    mu_1: core.Ref.Col | None
-    mu_2: core.Ref.Col | None
+    mu_1: Ref.Scalar_F64 | None
+    mu_2: Ref.Scalar_F64 | None
     offset_1: float | None
     offset_2: float | None
     shuffle: bool
     bootstrap: int | None
 
 
-class cov(cov_kw, core.Node.Col):
+class cov(cov_kw, Node.Scalar_F64):
     """
     scalar mean (optional rolling window)
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
     window: float | None
-    >>> g = core.Graph.new()
+    >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r = gaussian.bind(g)
@@ -522,7 +510,7 @@ class cov(cov_kw, core.Node.Col):
     ...     mu_3 = bind(mean.new(r, window=3))
     ...     g = done()
     ...
-    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> g, es = g.steps(Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     >>> list(numpy.round(g.select(mu, es[-1]), 2))
@@ -533,25 +521,25 @@ class cov(cov_kw, core.Node.Col):
     [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, cov_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, cov_kw
     )
 
     @classmethod
     def new(
         cls,
-        v1: core.Ref.Col,
-        v2: core.Ref.Col,
+        v1: Ref.Scalar_F64,
+        v2: Ref.Scalar_F64,
         window: float | None = None,
-        mu_1: core.Ref.Col | None = None,
-        mu_2: core.Ref.Col | None = None,
+        mu_1: Ref.Scalar_F64 | None = None,
+        mu_2: Ref.Scalar_F64 | None = None,
         offset_1: float | None=None,
         offset_2: float | None=None,
         shuffle: bool = False,
         bootstrap: int | None = None,
     ):
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             v1=v1,
             v2=v2,
             window=window,
@@ -564,12 +552,12 @@ class cov(cov_kw, core.Node.Col):
         )
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         window = event.t + 1 if self.window is None else self.window
         # TODO: assert aligned?
-        t1, v1 = graph.select(self.v1, event, t=True)
-        t2, v2 = graph.select(self.v2, event, t=True)
+        t1, v1 = self.v1.history(graph).last_before(event.t)
+        t2, v2 = self.v2.history(graph).last_before(event.t)
         
         if np.isnan(v1[-1]):
             return np.NAN
@@ -627,12 +615,11 @@ class cov(cov_kw, core.Node.Col):
 
 class pca_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    vs: tuple[core.Ref.Col, ...]
+    vs: tuple[Ref.Scalar_F64, ...]
     window: float | None
     keep: int | None
-    mus: tuple[core.Ref.Col, ...] | None
+    mus: tuple[Ref.Scalar_F64, ...] | None
     signs: tuple[int | None] | None
     centre: bool
 
@@ -645,12 +632,12 @@ class pca_kw(NamedTuple):
     # you need a forward shift on the date index
     # but that in theory is just date + n days (optionally over a given calendar)
 
-class pca(pca_kw, core.Node.Col1D):
+class pca(pca_kw, Node.Scalar_F641D):
     """
     scalar mean (optional rolling window)
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
     window: float | None
-    >>> g = core.Graph.new()
+    >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r = gaussian.bind(g)
@@ -659,7 +646,7 @@ class pca(pca_kw, core.Node.Col1D):
     ...     mu_3 = bind(mean.new(r, window=3))
     ...     g = done()
     ...
-    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> g, es = g.steps(Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     >>> list(numpy.round(g.select(mu, es[-1]), 2))
@@ -670,26 +657,26 @@ class pca(pca_kw, core.Node.Col1D):
     [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col1D, pca_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F641D, pca_kw
     )
 
     @classmethod
     def new(
         cls,
-        vs: tuple[core.Ref.Col, ...],
+        vs: tuple[Ref.Scalar_F64, ...],
         window: float | None=None,
         keep: int | None=None,
-        mus: tuple[core.Ref.Col, ...] | None=None,
+        mus: tuple[Ref.Scalar_F64, ...] | None=None,
         signs: tuple[int | None] | None = None,
         centre: bool = False,
     ):
         return cls(
-            *cls.args(), vs=vs, window=window, keep=keep, mus=mus,signs=signs, centre=centre
+            cls.DEF.name, vs=vs, window=window, keep=keep, mus=mus,signs=signs, centre=centre
         )
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         window = event.t + 1 if self.window is None else self.window
 
@@ -801,29 +788,28 @@ class pca(pca_kw, core.Node.Col1D):
 
 class pca_scale_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
     factor: int
 
-class pca_scale(pca_scale_kw, core.Node.Col):
+class pca_scale(pca_scale_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, pca_scale_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, pca_scale_kw
     )
 
     @classmethod
     def new(
         cls,
-        v: core.Ref.Col,
+        v: Ref.Scalar_F64,
         factor: int,
     ):
         return cls(
-            *cls.args(), v=v, factor=factor
+            cls.DEF.name, v=v, factor=factor
         )
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         # first row is the eignenvalues
         n = graph.nodes[self.v.i]
@@ -836,29 +822,28 @@ class pca_scale(pca_scale_kw, core.Node.Col):
 
 class pca_weights_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
     factor: int
 
-class pca_weights(pca_weights_kw, core.Node.Col1D):
+class pca_weights(pca_weights_kw, Node.Scalar_F641D):
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col1D, pca_weights_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F641D, pca_weights_kw
     )
 
     @classmethod
     def new(
         cls,
-        v: core.Ref.Col,
+        v: Ref.Scalar_F64,
         factor: int,
     ):
         return cls(
-            *cls.args(), v=v, factor=factor
+            cls.DEF.name, v=v, factor=factor
         )
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         # first row is eigenvalues. then weights are cols of remainder
         n = graph.nodes[self.v.i]

@@ -11,7 +11,6 @@ from functools import partial
 import polars
 import numpy
 
-from .ib.utils import datetime_to_str
 from .ib.db import DB, Contract, Query, T, E, C
 from .ib.api import Requests, connect
 from .ib.contracts import contract
@@ -437,7 +436,6 @@ def get_daily_bars_ib(
 
 class daily_bar_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
     d: core.Ref.Object
     bar: Bar
@@ -475,7 +473,7 @@ class daily_bar(daily_bar_kw, core.Node.Col1D):
         bar: Bar
     ):
         return cls(
-            *cls.args(), d=d, bar = bar
+            cls.DEF.name, d=d, bar = bar
         )
 
     def __call__(
@@ -485,7 +483,6 @@ class daily_bar(daily_bar_kw, core.Node.Col1D):
 
 class daily_bars_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
     d: core.Ref.Object
     bar: Bar
@@ -562,7 +559,7 @@ class daily_bars(daily_bars_kw, core.Node.Col2D):
         window: int | datetime.timedelta | None,
     ):
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             window=window,
@@ -577,7 +574,6 @@ class daily_bars(daily_bars_kw, core.Node.Col2D):
 
 class daily_level_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
     d: core.Ref.Object
     bar: Bar
@@ -598,7 +594,7 @@ class daily_level(
         field: str | int,
     ):
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -618,7 +614,6 @@ class daily_level(
 
 class daily_levels_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
     d: core.Ref.Object
     bar: Bar
@@ -641,7 +636,7 @@ class daily_levels(daily_levels_kw, core.Node.Col1D):
         db: str | None = None,
     ):
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -674,7 +669,7 @@ class daily_open(daily_level):
     ):
         assert field == "open", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -692,7 +687,7 @@ class daily_opens(daily_levels):
     ):
         assert field == "open", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -711,7 +706,7 @@ class daily_high(daily_level):
     ):
         assert field == "high", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -729,7 +724,7 @@ class daily_highs(daily_levels):
     ):
         assert field == "high", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -747,7 +742,7 @@ class daily_low(daily_level):
     ):
         assert field == "low", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -765,7 +760,7 @@ class daily_lows(daily_levels):
     ):
         assert field == "low", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -783,7 +778,7 @@ class daily_close(daily_level):
     ):
         assert field == "close", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -801,7 +796,7 @@ class daily_closes(daily_levels):
     ):
         assert field == "close", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -819,7 +814,7 @@ class daily_volume(daily_level):
     ):
         assert field == "volume", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -837,7 +832,7 @@ class daily_volumes(daily_levels):
     ):
         assert field == "volume", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -855,7 +850,7 @@ class daily_wap(daily_level):
     ):
         assert field == "wap", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -873,7 +868,7 @@ class daily_waps(daily_levels):
     ):
         assert field == "wap", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -891,7 +886,7 @@ class daily_open_interest(daily_level):
     ):
         assert field == "open_interest", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,
@@ -909,7 +904,7 @@ class daily_open_interests(daily_levels):
     ):
         assert field == "open_interest", (cls, field)
         return cls(
-            *cls.args(),
+            cls.DEF.name,
             d=d,
             bar=bar,
             field=field,

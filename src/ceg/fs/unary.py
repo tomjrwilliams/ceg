@@ -2,7 +2,7 @@ from typing import NamedTuple, ClassVar
 import numpy
 import numpy as np
 
-from .. import core
+from ..core import Graph, Node, Ref, Event, Loop, Defn, define, steps
 
 #  ------------------
 
@@ -14,14 +14,13 @@ from .. import core
 
 class pct_change_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
 
 
-class pct_change(pct_change_kw, core.Node.Col):
+class pct_change(pct_change_kw, Node.Scalar_F64):
     """
-    >>> g = core.Graph.new()
+    >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r = gaussian.bind(g)
@@ -29,32 +28,41 @@ class pct_change(pct_change_kw, core.Node.Col):
     ...     ch = bind(pct_change.new(r))
     ...     g = done()
     ...
-    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> g, es = g.steps(Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     >>> list(numpy.round(g.select(ch, es[-1]), 2))
     [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, pct_change_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, pct_change_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col
+        cls, v: Ref.Scalar_F64
     ):
-        return cls(*cls.args(), v=v)
+        return cls(cls.DEF.name, v=v)
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
-        v = graph.select(self.v, event, t=False)
-        if not len(v):
-            return numpy.NAN
-        vlast = v[-1]
-        if np.isnan(vlast):
-            return vlast
+        v = self.v.history(graph).last_before(event.t)
+
+        # TODO: hmmm. still have to select(window) and iter back?
+        # unless can do a last_n (not none) quickly and efficiently?
+        
+        # unless we never actually bind the nan values? we skip them
+        # and then plots are *always* resampled, effectively discretised?
+        
+        # so need eg. an index series of booleans on times
+        # that we agg into, rolling
+
+        # and then the plot can just be over that agg'd series?
+
+        if np.isnan(v):
+            return v
         r = 0
         vv = None
         for vv in v[::-1][1:]:
@@ -66,15 +74,14 @@ class pct_change(pct_change_kw, core.Node.Col):
 
 class lag_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
     w: int
 
 
-class lag(lag_kw, core.Node.Col):
+class lag(lag_kw, Node.Scalar_F64):
     """
-    >>> g = core.Graph.new()
+    >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r = gaussian.bind(g)
@@ -82,25 +89,25 @@ class lag(lag_kw, core.Node.Col):
     ...     ch = bind(sqrt.new(r))
     ...     g = done()
     ...
-    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> g, es = g.steps(Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     >>> list(numpy.round(g.select(ch, es[-1]), 2))
     [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, lag_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, lag_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col, w: int
+        cls, v: Ref.Scalar_F64, w: int
     ):
-        return cls(*cls.args(), v=v, w=w)
+        return cls(cls.DEF.name, v=v, w=w)
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         v = graph.select(self.v, event, t=False)
         if not len(v):
@@ -112,14 +119,13 @@ class lag(lag_kw, core.Node.Col):
         
 class sqrt_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
 
 
-class sqrt(sqrt_kw, core.Node.Col):
+class sqrt(sqrt_kw, Node.Scalar_F64):
     """
-    >>> g = core.Graph.new()
+    >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r = gaussian.bind(g)
@@ -127,46 +133,42 @@ class sqrt(sqrt_kw, core.Node.Col):
     ...     ch = bind(sqrt.new(r))
     ...     g = done()
     ...
-    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> g, es = g.steps(Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     >>> list(numpy.round(g.select(ch, es[-1]), 2))
     [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, sqrt_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, sqrt_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col
+        cls, v: Ref.Scalar_F64
     ):
-        return cls(*cls.args(), v=v)
+        return cls(cls.DEF.name, v=v)
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
-        v = graph.select(self.v, event, t=False)
-        if not len(v):
-            return numpy.NAN
-        vlast = v[-1]
-        if np.isnan(vlast):
-            return vlast
-        if vlast < 0:
-            return -1 * (np.sqrt(-1 * vlast))
-        return np.sqrt(vlast)
+        v = self.v.history(graph).last_before(event.t)
+        if np.isnan(v):
+            return v
+        if v < 0:
+            return -1 * (np.sqrt(-1 * v))
+        return np.sqrt(v)
         
 class sq_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
 
 
-class sq(sq_kw, core.Node.Col):
+class sq(sq_kw, Node.Scalar_F64):
     """
-    >>> g = core.Graph.new()
+    >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r = gaussian.bind(g)
@@ -174,46 +176,42 @@ class sq(sq_kw, core.Node.Col):
     ...     ch = bind(sqrt.new(r))
     ...     g = done()
     ...
-    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> g, es = g.steps(Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     >>> list(numpy.round(g.select(ch, es[-1]), 2))
     [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, sq_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, sq_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col
+        cls, v: Ref.Scalar_F64
     ):
-        return cls(*cls.args(), v=v)
+        return cls(cls.DEF.name, v=v)
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
-        v = graph.select(self.v, event, t=False)
-        if not len(v):
-            return numpy.NAN
-        vlast = v[-1]
-        if np.isnan(vlast):
-            return vlast
+        v = self.v.history(graph).last_before(event.t)
+        if np.isnan(v):
+            return v
         if vlast < 0:
             return -1 * (np.square(-1 * vlast))
         return np.square(vlast)
         
 class cum_sum_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
 
 
-class cum_sum(cum_sum_kw, core.Node.Col):
+class cum_sum(cum_sum_kw, Node.Scalar_F64):
     """
-    >>> g = core.Graph.new()
+    >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r = gaussian.bind(g)
@@ -221,25 +219,25 @@ class cum_sum(cum_sum_kw, core.Node.Col):
     ...     ch = bind(sqrt.new(r))
     ...     g = done()
     ...
-    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> g, es = g.steps(Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     >>> list(numpy.round(g.select(ch, es[-1]), 2))
     [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, cum_sum_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, cum_sum_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col
+        cls, v: Ref.Scalar_F64
     ):
-        return cls(*cls.args(), v=v)
+        return cls(cls.DEF.name, v=v)
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         v = graph.select(self.v, event, t=False)
         if not len(v):
@@ -250,14 +248,13 @@ class cum_sum(cum_sum_kw, core.Node.Col):
         
 class compound_kw(NamedTuple):
     type: str
-    schedule: core.Schedule
     #
-    v: core.Ref.Col
+    v: Ref.Scalar_F64
 
 
-class compound(compound_kw, core.Node.Col):
+class compound(compound_kw, Node.Scalar_F64):
     """
-    >>> g = core.Graph.new()
+    >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r = gaussian.bind(g)
@@ -265,25 +262,25 @@ class compound(compound_kw, core.Node.Col):
     ...     ch = bind(sqrt.new(r))
     ...     g = done()
     ...
-    >>> g, es = g.steps(core.Event(0, r), n=18)
+    >>> g, es = g.steps(Event(0, r), n=18)
     >>> list(numpy.round(g.select(r, es[-1]), 2))
     [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
     >>> list(numpy.round(g.select(ch, es[-1]), 2))
     [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
     """
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, compound_kw
+    DEF: ClassVar[Defn] = define(
+        Node.Scalar_F64, compound_kw
     )
 
     @classmethod
     def new(
-        cls, v: core.Ref.Col
+        cls, v: Ref.Scalar_F64
     ):
-        return cls(*cls.args(), v=v)
+        return cls(cls.DEF.name, v=v)
 
     def __call__(
-        self, event: core.Event, graph: core.Graph
+        self, event: Event, graph: Graph
     ):
         v = graph.select(self.v, event, t=False)
         if not len(v):

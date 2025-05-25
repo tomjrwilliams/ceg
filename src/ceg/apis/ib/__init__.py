@@ -1,5 +1,3 @@
-from .utils import *
-
 from .api import connect, Requests, Request
 
 from . import db
