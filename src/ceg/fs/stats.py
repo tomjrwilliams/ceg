@@ -518,16 +518,7 @@ class pca_kw(NamedTuple):
     signs: tuple[int | None] | None
     centre: bool
 
-    # TODO: window is constant, but take offsets
-    # so for forward vs backward
-    # can take [window][offset] vs [window]
-
-    # eg. via the covar cell, and do pca on the covar matrix
-    # then to realign for the graph
-    # you need a forward shift on the date index
-    # but that in theory is just date + n days (optionally over a given calendar)
-
-class pca(pca_kw, Node.Scalar_F641D):
+class pca(pca_kw, Node.Vector_F64):
     """
     scalar mean (optional rolling window)
     v: Ref.Scalar_F64

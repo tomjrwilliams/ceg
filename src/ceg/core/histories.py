@@ -830,7 +830,9 @@ class Last:
 
     D1_F64 = Last_D1_F64
     Vector_F64 = Last_D1_F64
-
+    
+    D2_F64 = Last_D2_F64
+    Matrix_F64=Last_D2_F64
 
 class History:
     Any = HistoryInterface

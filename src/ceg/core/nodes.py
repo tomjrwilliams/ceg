@@ -204,6 +204,64 @@ class Node_D0_F64(NodeInterface):
 
 #  ------------------
 
+class Node_D1_Date(NodeInterface):
+
+    def pipe(
+        self,
+        f: Callable[Concatenate[Node_D1_Date, F], FRes],
+        *args: F.args,
+        **kwargs: F.kwargs
+    ) -> FRes:
+        return f(self, *args, **kwargs)
+
+    def ref(self, i: int, slot: int | None=None) -> Ref.D1_Date:
+        return Ref.D1_Date.new(i, slot)
+
+    @abc.abstractmethod
+    def __call__(
+        self, event: Event, graph: GraphInterface
+    ) -> np.ndarray: ...
+
+class Node_D1_F64(NodeInterface):
+    
+    def pipe(
+        self,
+        f: Callable[Concatenate[Node_D1_F64, F], FRes],
+        *args: F.args,
+        **kwargs: F.kwargs
+    ) -> FRes:
+        return f(self, *args, **kwargs)
+
+    def ref(self, i: int, slot: int | None=None) -> Ref.D1_F64:
+        return Ref.D1_F64.new(i, slot)
+
+    @abc.abstractmethod
+    def __call__(
+        self, event: Event, graph: GraphInterface
+    ) -> np.ndarray: ...
+
+#  ------------------
+
+class Node_D2_F64(NodeInterface):
+    
+    def pipe(
+        self,
+        f: Callable[Concatenate[Node_D2_F64, F], FRes],
+        *args: F.args,
+        **kwargs: F.kwargs
+    ) -> FRes:
+        return f(self, *args, **kwargs)
+
+    def ref(self, i: int, slot: int | None=None) -> Ref.D2_F64:
+        return Ref.D2_F64.new(i, slot)
+
+    @abc.abstractmethod
+    def __call__(
+        self, event: Event, graph: GraphInterface
+    ) -> np.ndarray: ...
+
+#  ------------------
+
 class Node:
     Any = NodeInterface
 

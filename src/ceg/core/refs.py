@@ -178,6 +178,70 @@ class Ref_D0_F64(RefKwargs, RefInterface):
 
 #  ------------------
 
+class Ref_D1_Date(RefKwargs, RefInterface):
+
+    def select(self, last: bool | int) -> Ref_D1_Date:
+        return self._select(last)
+    
+    @overload
+    def history(
+        self, g: GraphInterface, strict: Literal[True] = True
+    ) -> History.D1_Date: ...
+
+    @overload
+    def history(
+        self, g: GraphInterface, strict: Literal[False]
+    ) -> History.D1_Date | None: ...
+
+    def history(
+        self, g: GraphInterface, strict: bool = True
+    ) -> History.D1_Date | None:
+        return history(g, self.i, History.D1_Date, strict, self.slot)
+
+class Ref_D1_F64(RefKwargs, RefInterface):
+
+    def select(self, last: bool | int) -> Ref_D1_F64:
+        return self._select(last)
+    
+    @overload
+    def history(
+        self, g: GraphInterface, strict: Literal[True] = True
+    ) -> History.D1_F64: ...
+
+    @overload
+    def history(
+        self, g: GraphInterface, strict: Literal[False]
+    ) -> History.D1_F64 | None: ...
+
+    def history(
+        self, g: GraphInterface, strict: bool = True
+    ) -> History.D1_F64 | None:
+        return history(g, self.i, History.D1_F64, strict, self.slot)
+
+#  ------------------
+
+class Ref_D2_F64(RefKwargs, RefInterface):
+
+    def select(self, last: bool | int) -> Ref_D2_F64:
+        return self._select(last)
+    
+    @overload
+    def history(
+        self, g: GraphInterface, strict: Literal[True] = True
+    ) -> History.D2_F64: ...
+
+    @overload
+    def history(
+        self, g: GraphInterface, strict: Literal[False]
+    ) -> History.D2_F64 | None: ...
+
+    def history(
+        self, g: GraphInterface, strict: bool = True
+    ) -> History.D2_F64 | None:
+        return history(g, self.i, History.D2_F64, strict, self.slot)
+
+#  ------------------
+
 class Ref:
     Any = RefInterface
 
@@ -186,6 +250,15 @@ class Ref:
 
     D0_F64 = Ref_D0_F64
     Scalar_F64 = Ref_D0_F64
+
+    D1_Date = Ref_D1_Date
+    Vector_Date = Ref_D1_Date
+
+    D1_F64 = Ref_D1_F64
+    Vector_F64 = Ref_D1_F64
+    
+    D2_F64 = Ref_D2_F64
+    Matrix_F64 = Ref_D2_F64
 
     @staticmethod
     def history(
@@ -196,6 +269,7 @@ class Ref:
     ) -> History.Any | tuple[History.Any, ...]:
         if not required:
             return History.null
+        #
         if isinstance(ref, Ref_D0_F64) and required > 1:
             return History.D0_F64.new(v, required, limit)
         elif isinstance(ref, Ref_D0_F64) and required == 1:
@@ -204,6 +278,21 @@ class Ref:
             return History.D0_Date.new(v, required, limit)
         elif isinstance(ref, Ref_D0_Date) and required == 1:
             return Last.D0_Date.new(v, required, 1)
+        #
+        if isinstance(ref, Ref_D1_F64) and required > 1:
+            return History.D1_F64.new(v, required, limit)
+        elif isinstance(ref, Ref_D1_F64) and required == 1:
+            return Last.D1_F64.new(v, required, 1)
+        elif isinstance(ref, Ref_D1_Date) and required > 1:
+            return History.D1_Date.new(v, required, limit)
+        elif isinstance(ref, Ref_D1_Date) and required == 1:
+            return Last.D1_Date.new(v, required, 1)
+        #
+        if isinstance(ref, Ref_D2_F64) and required > 1:
+            return History.D2_F64.new(v, required, limit)
+        elif isinstance(ref, Ref_D2_F64) and required == 1:
+            return Last.D2_F64.new(v, required, 1)
+        #
         raise ValueError(ref)
 
 #  ------------------
