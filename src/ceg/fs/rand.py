@@ -72,36 +72,29 @@ class gaussian(gaussian_kw, Node.D0_F64):
         )
 
     @classmethod
-    def bind(
+    def walk(
         cls,
         g: Graph,
         mean: float = 0.0,
         std: float = 1.0,
         seed: int = 0,
         step=1.,
-        using: TPlugin | tuple[TPlugin, ...] | None = None,
-        # TODO: using
+        keep: int = 1,
     ):
-        loop = loop.Fixed(step)
-        with g.implicit() as (bind, done):
-            r = bind(None, Ref.Object, using)
-            r = cast(Ref.D0_F64, r)
-            r = bind(
-                cls.new(r, mean, std, seed).sync(v=loop),
-                r,
-                None,
-            )
-            g = done()
-        r = cast(Ref.D0_F64, r)
-        return g, r
+        g, r = g.bind(None, Ref.Scalar_F64)
+        g, r = (
+            cls.new(r.select(last=keep), mean, std, seed)
+            .pipe(g.bind, r, Loop.Const.new(step))
+        )
+        return g, cast(Ref.Scalar_F64, r)
 
     def __call__(
         self, event: Event, graph: Graph
     ):
-        vs = graph.select(self.v, event)
         step = rng(self.seed).normal(
             self.mean, self.std, size=None
         )
-        if not len(vs):
+        if event.prev is None:
             return step
-        return vs[-1] + step
+        v = self.v.history(graph).last_before(event.t)
+        return v + step

@@ -57,7 +57,7 @@ def step(
         return graph, None
 
     try:
-        t, ref = event
+        t, ref, prev = event
     except:
         raise ValueError(event)
 

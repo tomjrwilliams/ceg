@@ -135,7 +135,16 @@ class HistoryInterface(abc.ABC):
     def last_n_before(self, n: int, t: float) -> np.ndarray: ...
 
     @abc.abstractmethod
+    def last_n_between(self, n: int, l: float, r: float) -> np.ndarray: ...
+
+    @abc.abstractmethod
     def last_before(self, t: float) -> V: ...
+
+    @abc.abstractmethod
+    def last_between(self, l: float, r: float) -> V: ...
+
+    @abc.abstractmethod
+    def last_t(self) -> float: ...
 
 #  ------------------
 
@@ -179,8 +188,17 @@ class History_Null(HistoryKW, HistoryInterface):
     def last_n_before(self, n: int, t: float):
         raise ValueError(self)
 
+    def last_n_between(self, n: int, l: float, r: float):
+        raise ValueError(self)
+
     def last_before(self, t: float):
         raise ValueError(self)
+
+    def last_between(self, l: float, r: float):
+        raise ValueError(self)
+
+    def last_t(self):
+        return ValueError(self)
 
 #  ------------------
 
@@ -211,6 +229,17 @@ class History_D0_F64(History_0D):
             self.exponent,
         )
 
+    def last_n_between(self, n: int, l: float, r: float):
+        return algos.last_n_between(
+            self.values,
+            self.times,
+            n,
+            l,
+            r,
+            self.mut.occupied,
+            self.exponent,
+        )
+
     def last_before(self, t: float):
         return algos.last_before(
             self.values,
@@ -219,6 +248,22 @@ class History_D0_F64(History_0D):
             self.mut.occupied,
             self.exponent
         )
+
+    def last_between(self, l: float, r: float):
+        return algos.last_between(
+            self.values,
+            self.times,
+            l,
+            r,
+            self.mut.occupied,
+            self.exponent,
+        )
+
+    def last_t(self) -> float:
+        occupied = self.mut.occupied
+        if occupied == 0:
+            return -1
+        return self.times[occupied-1]
 
 @dataclass
 class Last_D0_F64_Mut(HistoryMutable):
@@ -243,11 +288,24 @@ class Last_D0_F64(History_D0_F64):
     def last_n_before(self, n: int, t: float):
         raise ValueError(self)
 
+    def last_n_between(self, n: int, l: float, r: float):
+        return ValueError(self)
+
     def last_before(self, t: float):
         assert self.mut.t <= t, (self, t)
         if self.mut.t == -1:
             raise ValueError(self, t)
         return self.mut.v
+    
+    def last_between(self, l: float, r: float):
+        assert self.mut.t <= r, (self, r)
+        last_t = self.mut.t
+        if last_t < l:
+            return np.NAN
+        return self.mut.v
+
+    def last_t(self) -> float:
+        return self.mut.t
 
 #  ------------------
 
@@ -276,7 +334,18 @@ class History_D0_Date(History_0D):
             t,
             self.mut.occupied,
             self.exponent,
-        )
+        ) # TODO: cast to M8[D]?
+
+    def last_n_between(self, n: int, l: float, r: float):
+        return algos.last_n_between(
+            self.values,
+            self.times,
+            n,
+            l,
+            r,
+            self.mut.occupied,
+            self.exponent,
+        ) # TODO: cast to M8[D]?
 
     def last_before(self, t: float) -> dt.date | None:
         res = algos.last_before(
@@ -291,6 +360,27 @@ class History_D0_Date(History_0D):
         return cast(dt.date, (
             cast(np.datetime64, res)
         ).astype('M8[D]').astype('O'))
+
+    def last_between(self, l: float, r: float):
+        res = algos.last_between(
+            self.values,
+            self.times,
+            l,
+            r,
+            self.mut.occupied,
+            self.exponent,
+        )
+        if np.isnan(res):
+            return None
+        return cast(dt.date, (
+            cast(np.datetime64, res)
+        ).astype('M8[D]').astype('O'))
+
+    def last_t(self) -> float:
+        occupied = self.mut.occupied
+        if occupied == 0:
+            return -1
+        return self.times[occupied-1]
 
 @dataclass
 class Last_D0_Date_Mut(HistoryMutable):
@@ -315,11 +405,25 @@ class Last_D0_Date(History_D0_Date):
     def last_n_before(self, n: int, t: float):
         raise ValueError(self)
 
+    def last_n_between(self, n: int, l: float, r: float):
+        return ValueError(self)
+
     def last_before(self, t: float):
         assert self.mut.t <= t, (self, t)
         if self.mut.t == -1:
             raise ValueError(self, t)
         return self.mut.v
+
+    def last_between(self, l: float, r: float):
+        assert self.mut.t <= r, (self, r)
+        last_t = self.mut.t
+        if last_t < l:
+            return np.NAN
+        return self.mut.v
+
+
+    def last_t(self) -> float:
+        return self.mut.t
 
 # TODO: bool, int, datetime, string (<U5, |S5 etc. for fixed, StringDType for arbitrary, astype("U5") for casting between)
 

@@ -3,6 +3,15 @@ from __future__ import annotations
 
 import abc
 from typing import Generic, ClassVar, Type, NamedTuple, TypeVar, ParamSpec, Callable, Concatenate
+from typing import (
+    Any,
+    Iterable,
+    Iterator,
+    get_type_hints,
+    get_origin,
+    get_args,
+    cast,
+)
 
 from dataclasses import dataclass
 from heapq import heapify, heappush, heappop
@@ -12,22 +21,100 @@ import datetime as dt
 from frozendict import frozendict
 import numpy as np
 
-from .refs import Ref, R, GraphInterface
+from .refs import Ref, R, GraphInterface, Scope
 
 
 #  ------------------
 
 class Event(NamedTuple):
     """
-    t: int
+    t: float
     ref: Ref.Any
+    prev: Event | None
     """
-    t: int
+    t: float
     ref: Ref.Any
+    prev: Event | None
+
+#  ------------------
+
+
+def rec_yield_param(k, v: Ref.Any | Iterable | Any):
+    if isinstance(v, Ref.Any):
+        yield (k, v.i, v.scope)
+    elif isinstance(v, (tuple, Iterable)):
+        yield from rec_yield_params(k, v)
+
+
+def rec_yield_params(k: str, v: Iterable):
+    if isinstance(v, dict):
+        yield from rec_yield_params(k, v.keys())
+        yield from rec_yield_params(k, v.values())
+    elif isinstance(v, (tuple, Iterable)):
+        for vv in v:
+            yield from rec_yield_param(k, vv)
+
+
+def yield_params(
+    node: Node.Any,
+) -> Iterator[tuple[str, int, Scope | None]]:
+    for k in node.DEF.params:
+        v = getattr(node, k)
+        yield from rec_yield_param(k, v)
+
+
+def rec_yield_hint_types(hint):
+    try:
+        o = get_origin(hint)
+        yield o
+    except:
+        pass
+    try:
+        args = get_args(hint)
+        for a in args:
+            if a == Ellipsis:
+                continue
+            yield from rec_yield_hint_types(a)
+    except:
+        pass
+    yield hint
+
+
+def yield_param_keys(t_kw: Type[NamedTuple]):
+    seen: set[str] = set()
+    for k, h in get_type_hints(
+        t_kw
+    ).items():
+        for h in rec_yield_hint_types(h):
+            if k in seen:
+                continue
+            if not isinstance(h, type):
+                continue
+            if issubclass(h, Ref.Any):
+                seen.add(k)
+                yield k
+
+#  ------------------
 
 class Defn(NamedTuple):
     name: str
     params: tuple[str, ...]
+
+def define(
+    t: Type[NodeInterface],
+    t_kw: Type[NamedTuple],
+):
+
+    params = tuple(yield_param_keys(t_kw))
+
+    assert t_kw.__name__[-3:].lower() == "_kw", t_kw
+    name = t_kw.__name__[:-3]
+
+    return Defn(
+        name=name,
+        params=params,  # the keys
+        # dims, oritentation, etc. (from t)
+    )
 
 #  ------------------
 
@@ -130,3 +217,4 @@ class Node:
     null = Node_Null()    
 
 #  ------------------
+

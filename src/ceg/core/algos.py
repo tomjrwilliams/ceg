@@ -338,17 +338,148 @@ def last_n_between(
 
 #  ------------------
 
-# TODO:
+@nb.jit(fastmath=True)
+def last_before_nd(
+    v: np.ndarray, 
+    t: np.ndarray, 
+    size: int,
+    before: float, 
+    occupied: int,
+    exponent: int,
+):
+    """
+    >>> EXPON = 3
+    >>> round = lambda v: list(np.round(v, 4))
+    >>> vs = np.linspace(0, 2 ** EXPON, 2 ** EXPON)
+    >>> assert vs.shape == (8,)
+    >>> round(vs)
+    [0.0, 1.1429, 2.2857, 3.4286, 4.5714, 5.7143, 6.8571, 8.0]
+    >>> round(last_before_nd(vs, vs, 2, 2, occupied=1, exponent=EXPON))
+    [0.0, 1.1429]
+    >>> round(last_before_nd(vs, vs, 2, 2, occupied=2, exponent=EXPON))
+    [2.2857, 3.4286]
+    >>> round(last_before_nd(vs, vs, 2, 3, occupied=3, exponent=EXPON))
+    [4.5714, 5.7143]
+    """
+    res = np.empty(size, dtype=v.dtype)
+    res[:] = np.NAN
+    if t[0] > before:
+        return res
+    ix = last_ix_before(t, before, occupied, exponent)
+    if ix == -1:
+        return res
+    return v[ix*size:(ix+1)*size]
 
-# def last_before_nd():
-#     return
+@nb.jit(fastmath=True)
+def last_between_nd(
+    v: np.ndarray, 
+    t: np.ndarray, 
+    size: int,
+    after: float,
+    before: float, 
+    occupied: int,
+    exponent: int,
+):
+    """
+    >>> EXPON = 3
+    >>> round = lambda v: list(np.round(v, 4))
+    >>> vs = np.linspace(0, 2 ** EXPON, 2 ** EXPON)
+    >>> assert vs.shape == (8,)
+    >>> round(vs)
+    [0.0, 1.1429, 2.2857, 3.4286, 4.5714, 5.7143, 6.8571, 8.0]
+    >>> round(last_between_nd(vs, vs, 2, 1., 2, occupied=2, exponent=EXPON))
+    [2.2857, 3.4286]
+    >>> round(last_between_nd(vs, vs, 2, 1.5, 2, occupied=2, exponent=EXPON))
+    [nan, nan]
+    """
+    res = np.empty(size, dtype=v.dtype)
+    res[:] = np.NAN
+    if t[0] > before:
+        return res
+    ix = last_ix_before(t, before, occupied, exponent)
+    if ix == -1:
+        return res
+    if t[ix] < after:
+        return res
+    return v[ix*size:(ix+1)*size]
+    
+@nb.jit(fastmath=True)
+def last_n_before_nd(
+    v: np.ndarray, 
+    t: np.ndarray, 
+    n: int,
+    size: int,
+    before: float, 
+    occupied: int,
+    exponent: int,
+): # TODO: write the test with n, size variables (clearer)
+    """
+    >>> EXPON = 3
+    >>> round = lambda v: list(np.round(v, 4))
+    >>> vs = np.linspace(0, 2 ** EXPON, 2 ** EXPON)
+    >>> assert vs.shape == (8,)
+    >>> round(vs)
+    [0.0, 1.1429, 2.2857, 3.4286, 4.5714, 5.7143, 6.8571, 8.0]
+    >>> round(last_n_before_nd(vs, vs, 2, 2, 2, occupied=1, exponent=EXPON))
+    [nan, nan, 0.0, 1.1429]
+    >>> round(last_n_before_nd(vs, vs, 2, 2, 2, occupied=2, exponent=EXPON))
+    [0.0, 1.1429, 2.2857, 3.4286]
+    >>> round(last_n_before_nd(vs, vs, 2, 2, 3, occupied=3, exponent=EXPON))
+    [2.2857, 3.4286, 4.5714, 5.7143]
+    """
+    res = np.empty(size * n, dtype=v.dtype)
+    res[:] = np.NAN
+    ix = last_ix_before(t, before, occupied, exponent)
+    if ix == -1:
+        return res
+    ix += 1
+    if ix >= n:
+        res[:] = v[(ix-n)*size:ix*size]
+    else:
+        res[-ix*size:] = v[:ix*size]
+    return res
 
-# def last_n_before_nd():
-#     return
-
-# TODO:
-
-# include null or not
-    # forward fill
+@nb.jit(fastmath=True)
+def last_n_between_nd(
+    v: np.ndarray, 
+    t: np.ndarray, 
+    n: int,
+    size: int,
+    after: float,
+    before: float, 
+    occupied: int,
+    exponent: int,
+):
+    """
+    >>> EXPON = 3
+    >>> round = lambda v: list(np.round(v, 4))
+    >>> vs = np.linspace(0, 2 ** EXPON, 2 ** EXPON)
+    >>> assert vs.shape == (8,)
+    >>> round(vs)
+    [0.0, 1.1429, 2.2857, 3.4286, 4.5714, 5.7143, 6.8571, 8.0]
+    >>> round(last_n_between_nd(vs, vs, 2, 2, 0, 2, occupied=2, exponent=EXPON))
+    [0.0, 1.1429, 2.2857, 3.4286]
+    >>> round(last_n_between_nd(vs, vs, 2, 2, 1., 2, occupied=2, exponent=EXPON))
+    [nan, nan, 2.2857, 3.4286]
+    >>> round(last_n_between_nd(vs, vs, 2, 2, 1.5, 2, occupied=2, exponent=EXPON))
+    [nan, nan, nan, nan]
+    """
+    res = np.empty(size * n, dtype=v.dtype)
+    res[:] = np.NAN
+    ix = last_ix_before(t, before, occupied, exponent)
+    if ix == -1:
+        return res
+    if t[ix] < after:
+        return res
+    ix += 1
+    while t[ix-n] < after:
+        n -= 1
+        if n == 0:
+            return res
+    if ix >= n:
+        res[-n*size:] = v[(ix-n)*size:ix*size]
+    else:
+        res[-ix*size:] = v[:ix*size]
+    return res
 
 #  ------------------

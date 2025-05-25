@@ -17,7 +17,18 @@ from .nodes import Event, Node, N
 
 #  ------------------
 
+@dataclass
+class GuardMutable:
+    prev: Event | None = None
+
 class GuardInterface(abc.ABC, Generic[N]):
+
+    @abc.abstractproperty
+    def mut(self) -> GuardMutable: ...
+
+    @property
+    def prev(self):
+        return self.mut.prev
 
     @classmethod
     @abc.abstractclassmethod
@@ -33,7 +44,11 @@ class GuardInterface(abc.ABC, Generic[N]):
     @abc.abstractmethod
     def next(
         self, event: Event, ref: Ref.Any, node: N, graph: GraphInterface
-    ) -> bool: ...
+    ) -> Event | None: ...
+
+    def set_prev(self, event: Event):
+        self.mut.prev = event
+        return event
 
 G = TypeVar("G", bound=GuardInterface)
 
@@ -43,6 +58,7 @@ class AnyN(NamedTuple):
     pass
 
 class AllReadyKW(NamedTuple):
+    mut: GuardMutable
     params: tuple[int, ...]
     ts: list[float]
     queue: list[tuple[float, int]]
@@ -51,7 +67,7 @@ class AllReady(AllReadyKW, GuardInterface[N]):
 
     @classmethod
     def new(cls) -> AllReady:
-        return AllReady((), [], []) # type: ignore
+        return AllReady(GuardMutable(), (), [], []) # type: ignore
 
     def init(
         self,
@@ -76,6 +92,8 @@ class AllReady(AllReadyKW, GuardInterface[N]):
         graph: GraphInterface
     ) -> Event | None:
         # NOTE: ref is of the node, event is of param
+        # TODO: now we have prev
+        # assume we always push a final event, can simply wait for prev != event.t, fire event(t=prev)?
         t = event.t
         i = event.ref.i
         if not len(self.ts) or t > self.ts[-1]:
@@ -89,12 +107,13 @@ class AllReady(AllReadyKW, GuardInterface[N]):
             heappop(self.queue)
         if not len(self.queue) or self.queue[0][0] > t_next:
             heappop(self.ts)
-            return Event(t, ref)
+            return self.set_prev(Event(t, ref, self.prev))
         return None
     
 #  ------------------
 
 class LoopConstKw(NamedTuple):
+    mut: GuardMutable
     step: float
 
 
@@ -102,7 +121,7 @@ class LoopConst(LoopConstKw, GuardInterface[N]):
 
     @classmethod
     def new(cls, step: float) -> LoopConst:
-        return LoopConst(step)
+        return LoopConst(GuardMutable(), step)
 
     def init(
         self,
@@ -119,9 +138,14 @@ class LoopConst(LoopConstKw, GuardInterface[N]):
         graph: GraphInterface
     ) -> Event | None:
         assert event.ref.eq(ref), (self, node, ref, event)
-        return event._replace(t=event.t + self.step)
+        return self.set_prev(
+            event._replace(
+                t=event.t + self.step, prev=self.prev
+            )
+        )
 
 class LoopUntilDateKw(NamedTuple):
+    mut: GuardMutable
     step: float
     until: dt.date
     date: Ref.Scalar_Date
@@ -136,7 +160,7 @@ class LoopUntilDate(LoopUntilDateKw, GuardInterface[N]):
         until: dt.date,
         date: Ref.Scalar_Date
     ) -> LoopUntilDate:
-        return LoopUntilDate(step, until, date)
+        return LoopUntilDate(GuardMutable(), step, until, date)
 
     def init(
         self,
@@ -160,10 +184,13 @@ class LoopUntilDate(LoopUntilDateKw, GuardInterface[N]):
         d = h.last_before(event.t)
         if d == self.until:
             return None
-        return event._replace(t=event.t + self.step)
+        return self.set_prev(
+            event._replace(t=event.t + self.step, prev=self.prev)
+        )
 
 
 class LoopRandKw(NamedTuple):
+    mut: GuardMutable
     dist: str
     params: tuple[float, ...]
 
@@ -173,7 +200,7 @@ class LoopRand(LoopRandKw, GuardInterface[N]):
 
     @classmethod
     def new(cls, dist: str, params: tuple[float, ...]) -> LoopRand:
-        return LoopRand(dist, params)
+        return LoopRand(GuardMutable(), dist, params)
 
     def init(
         self,
@@ -194,11 +221,14 @@ class LoopRand(LoopRandKw, GuardInterface[N]):
             step = rng.normal(*self.params, size=None)
         else:
             raise ValueError(self)
-        return event._replace(t=event.t + step)
+        return self.set_prev(
+            event._replace(t=event.t + step, prev=self.prev)
+        )
 
 #  ------------------
 
 class ByDateKW(NamedTuple):
+    mut: GuardMutable
     date: Ref.Scalar_Date
     last: int | None
     
@@ -207,7 +237,7 @@ class ByDateKW(NamedTuple):
         cls,
         date: Ref.Scalar_Date
     ):
-        return cls(date, None)
+        return cls(GuardMutable(), date, None)
 
     def init(
         self,
@@ -245,7 +275,9 @@ class MonthEnd(ByDateKW, GuardInterface[N]):
             # if all_series(
             #     graph, params.keys(), lambda e: e.t.last == event.t
             # ):
-            return event._replace(ref=ref)
+            return self.set_prev(
+                event._replace(ref=ref, prev=self.prev)
+            )
         return None
 
 class QuarterStart(ByDateKW, GuardInterface[N]):
@@ -279,6 +311,7 @@ class YearEnd(ByDateKW, GuardInterface[N]):
 #  ------------------
 
 class ByValueKW(NamedTuple):
+    mut: GuardMutable
     value: Ref.Any
     last: int | None
     # optional within a given window rather than just prev?
@@ -286,7 +319,7 @@ class ByValueKW(NamedTuple):
 
     @classmethod
     def new(cls, value: Ref.Any):
-        return cls(value, None)
+        return cls(GuardMutable(), value, None)
 
     def init(
         self,
@@ -311,17 +344,18 @@ class SignChange(ByValueKW, GuardInterface[N]):
             return None
         vs = self.value.history(graph).last_n_before(2, event.t)
         v0 = vs[-1]
-        vs = vs[:-1][::-1]
-        if v0 == np.NAN:
+        v1 = vs[0]
+        # assume we dont emit nan
+        if np.isnan(v0) or np.isnan(v1):
             return None
-        # TODO: add null skip in last_n_before
-        # so can just take last=2
-        for vv in vs[::-1]:
-            if vv == np.NAN:
-                continue
-            if v0 > 0 and vv > 0:
-                continue
-            return event._replace(ref=ref)
+        elif v0 > 0 and v1 < 0:
+            return self.set_prev(
+                event._replace(ref=ref, prev=self.prev)
+            )
+        elif v1 > 0 and v0 < 0:
+            return self.set_prev(
+                event._replace(ref=ref, prev=self.prev)
+            )
         return None
 
 # NOTE: for eg. cooling off, probably best to do that with a node (ie. a sign_change node, and then a second sign_change_w_cool_off) and then just use the sign change 

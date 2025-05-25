@@ -8,19 +8,10 @@ from typing import (
     ParamSpec,
     Concatenate,
     TypeVar,
-    ClassVar,
-    Any,
     Callable,
-    Iterable,
-    Iterator,
     Literal,
-    Generic,
     Protocol,
     overload,
-    get_type_hints,
-    get_origin,
-    get_args,
-    cast,
 )
 from heapq import heapify, heappush, heappop
 
@@ -35,7 +26,7 @@ from frozendict import frozendict
 from .algos import set_tuple, frozendict_append_tuple, fold_star
 from .histories import History
 from .refs import Ref, Scope, Data, R
-from .nodes import N, Node, Defn, Event
+from .nodes import N, Node, define, Defn, Event, yield_params
 from .guards import Guard, Loop
 
 logger = logging.Logger(__file__)
@@ -43,82 +34,6 @@ logger = logging.Logger(__file__)
 #  ------------------
 
 T = TypeVar("T")
-
-#  ------------------
-
-def define(
-    t: Type[Node.Any],
-    t_kw: Type[NamedTuple],
-):
-
-    params = tuple(yield_param_keys(t_kw))
-
-    assert t_kw.__name__[-3:].lower() == "_kw", t_kw
-    name = t_kw.__name__[:-3]
-
-    return Defn(
-        name=name,
-        params=params,  # the keys
-        # dims, oritentation, etc. (from t)
-    )
-
-#  ------------------
-
-
-def rec_yield_param(k, v: Ref.Any | Iterable | Any):
-    if isinstance(v, Ref.Any):
-        yield (k, v.i, v.scope)
-    elif isinstance(v, (tuple, Iterable)):
-        yield from rec_yield_params(k, v)
-
-
-def rec_yield_params(k: str, v: Iterable):
-    if isinstance(v, dict):
-        yield from rec_yield_params(k, v.keys())
-        yield from rec_yield_params(k, v.values())
-    elif isinstance(v, (tuple, Iterable)):
-        for vv in v:
-            yield from rec_yield_param(k, vv)
-
-
-def yield_params(
-    node: Node.Any,
-) -> Iterator[tuple[str, int, Scope | None]]:
-    for k in node.DEF.params:
-        v = getattr(node, k)
-        yield from rec_yield_param(k, v)
-
-
-def rec_yield_hint_types(hint):
-    try:
-        o = get_origin(hint)
-        yield o
-    except:
-        pass
-    try:
-        args = get_args(hint)
-        for a in args:
-            if a == Ellipsis:
-                continue
-            yield from rec_yield_hint_types(a)
-    except:
-        pass
-    yield hint
-
-
-def yield_param_keys(t_kw: Type[NamedTuple]):
-    seen: set[str] = set()
-    for k, h in get_type_hints(
-        t_kw
-    ).items():
-        for h in rec_yield_hint_types(h):
-            if k in seen:
-                continue
-            if not isinstance(h, type):
-                continue
-            if issubclass(h, Ref.Any):
-                seen.add(k)
-                yield k
 
 #  ------------------
 

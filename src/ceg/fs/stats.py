@@ -6,22 +6,12 @@ from ..core import Graph, Node, Ref, Event, Loop, Defn, define, steps
 
 #  ------------------
 
-def window_mask(v, t, at, offset: float | None = None):
-    if offset is not None:
-        return v[(t >= at - offset)&(t < at )]
-    return v[t > at]
-
-def window_null_mask(v, t, at):
-    return v[(t > at) & ~np.isnan(v)]
-
-#  ------------------
-
 
 class sum_kw(NamedTuple):
     type: str
     #
     v: Ref.Scalar_F64
-    window: float | None
+    window: int
 
 
 
@@ -29,7 +19,7 @@ class sum(sum_kw, Node.Scalar_F64):
     """
     scalar mean (optional rolling window)
     v: Ref.Scalar_F64
-    window: float | None
+    window: int
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
@@ -56,18 +46,16 @@ class sum(sum_kw, Node.Scalar_F64):
 
     @classmethod
     def new(
-        cls, v: Ref.Scalar_F64, window: float | None = None
+        cls, v: Ref.Scalar_F64, window: int
     ):
         return cls(cls.DEF.name, v=v, window=window)
 
     def __call__(
         self, event: Event, graph: Graph
     ):
-        window = event.t + 1 if self.window is None else self.window
-        v = graph.select(self.v, event, where=dict(
-            t=lambda t: t >= event.t - window
-        ))
-        return np.NAN if not len(v) or np.isnan(v[-1]) else numpy.nansum(v)
+        return np.nansum(
+            self.v.history(graph).last_n_before(self.window, event.t)
+        )
 
 #  ------------------
 
@@ -76,16 +64,14 @@ class mean_kw(NamedTuple):
     type: str
     #
     v: Ref.Scalar_F64
-    window: float | None
-    offset: float | None
-    transform: str | None
+    window: int
 
 
 class mean(mean_kw, Node.Scalar_F64):
     """
     scalar mean (optional rolling window)
     v: Ref.Scalar_F64
-    window: float | None
+    window: int
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
@@ -113,20 +99,16 @@ class mean(mean_kw, Node.Scalar_F64):
     @classmethod
     def new(
         cls, v: Ref.Scalar_F64,
-        window: float | None = None,
-        offset: float | None = None,
-        transform: str | None = None,
+        window: int,
     ):
-        return cls(cls.DEF.name, v=v, window=window, offset=offset, transform=transform)
+        return cls(cls.DEF.name, v=v, window=window)
 
     def __call__(
         self, event: Event, graph: Graph
     ):
-        window = event.t + 1 if self.window is None else self.window
-        v = graph.select(self.v, event, where=dict(
-            t=lambda t: t >= event.t - window
-        ))
-        return np.NAN if not len(v) or np.isnan(v[-1]) else numpy.nanmean(v)
+        return np.nanmean(
+            self.v.history(graph).last_n_before(self.window, event.t)
+        )
 
 
 #  ------------------
@@ -157,7 +139,7 @@ class mean_w(mean_w_kw, Node.Scalar_F64):
     def __call__(
         self, event: Event, graph: Graph
     ):
-        pass
+        raise ValueError(self)
 
 
 #  ------------------
@@ -188,7 +170,7 @@ class mean_ew(mean_ew_kw, Node.Scalar_F64):
     def __call__(
         self, event: Event, graph: Graph
     ):
-        pass
+        raise ValueError(self)
 
 
 #  ------------------
@@ -198,14 +180,14 @@ class std_kw(NamedTuple):
     type: str
     #
     v: Ref.Scalar_F64
-    window: float | None
+    window: int
 
 
 class std(std_kw, Node.Scalar_F64):
     """
     scalar mean (optional rolling window)
     v: Ref.Scalar_F64
-    window: float | None
+    window: int
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
@@ -232,18 +214,16 @@ class std(std_kw, Node.Scalar_F64):
 
     @classmethod
     def new(
-        cls, v: Ref.Scalar_F64, window: float | None = None
+        cls, v: Ref.Scalar_F64, window: int
     ):
         return cls(cls.DEF.name, v=v, window=window)
 
     def __call__(
         self, event: Event, graph: Graph
     ):
-        window = event.t + 1 if self.window is None else self.window
-        v = graph.select(self.v, event, where=dict(
-            t=lambda t: t >= event.t - window
-        ))
-        return np.NAN if not len(v) or np.isnan(v[-1]) else numpy.nanstd(v)
+        return np.nanstd(
+            self.v.history(graph).last_n_before(self.window, event.t)
+        )
 
 
 
@@ -275,7 +255,7 @@ class std_w(std_w_kw, Node.Scalar_F64):
     def __call__(
         self, event: Event, graph: Graph
     ):
-        pass
+        raise ValueError(self)
 
 
 #  ------------------
@@ -306,7 +286,7 @@ class std_ew(std_ew_kw, Node.Scalar_F64):
     def __call__(
         self, event: Event, graph: Graph
     ):
-        pass
+        raise ValueError(self)
 
 
 #  ------------------
@@ -317,14 +297,14 @@ class rms_kw(NamedTuple):
     type: str
     #
     v: Ref.Scalar_F64
-    window: float | None
+    window: int
 
 
 class rms(rms_kw, Node.Scalar_F64):
     """
     scalar mean (optional rolling window)
     v: Ref.Scalar_F64
-    window: float | None
+    window: int
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
@@ -351,22 +331,17 @@ class rms(rms_kw, Node.Scalar_F64):
 
     @classmethod
     def new(
-        cls, v: Ref.Scalar_F64, window: float | None = None
+        cls, v: Ref.Scalar_F64, window: int
     ):
         return cls(cls.DEF.name, v=v, window=window)
 
     def __call__(
         self, event: Event, graph: Graph
     ):
-        window = event.t + 1 if self.window is None else self.window
-        v = graph.select(self.v, event, where=dict(
-            t=lambda t: t >= event.t - window
-        ))
-        return (
-            np.NAN 
-            if not len(v) or np.isnan(v[-1]) 
-            else np.sqrt(np.nanmean(np.square(v)))
-        )
+        
+        return np.sqrt(np.nanmean(np.square(
+            self.v.history(graph).last_n_before(self.window, event.t)
+        )))
 
 #  ------------------
 
@@ -396,7 +371,7 @@ class rms_w(rms_w_kw, Node.Scalar_F64):
     def __call__(
         self, event: Event, graph: Graph
     ):
-        pass
+        raise ValueError(self)
 
 
 #  ------------------
@@ -427,7 +402,7 @@ class rms_ew(rms_ew_kw, Node.Scalar_F64):
     def __call__(
         self, event: Event, graph: Graph
     ):
-        pass
+        raise ValueError(self)
 
 
 #  ------------------
@@ -446,37 +421,6 @@ class rms_ew(rms_ew_kw, Node.Scalar_F64):
 
 #  ------------------
 
-
-class ex_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-
-
-class ex(ex_kw, Node.Scalar_F64):
-
-    DEF: ClassVar[Defn] = define(
-        Node.Scalar_F64, ex_kw
-    )
-
-    @classmethod
-    def new(
-        cls,
-        v: Ref.Scalar_F64,
-    ):
-        return cls(
-            cls.DEF.name,
-            v=v,
-        )
-
-    def __call__(
-        self, event: Event, graph: Graph
-    ):
-        pass
-
-
-#  ------------------
-
 # corr, cov, levy, beta (1D)
 
 #  ------------------
@@ -487,20 +431,16 @@ class cov_kw(NamedTuple):
     #
     v1: Ref.Scalar_F64
     v2: Ref.Scalar_F64
-    window: float | None
+    window: int
     mu_1: Ref.Scalar_F64 | None
     mu_2: Ref.Scalar_F64 | None
-    offset_1: float | None
-    offset_2: float | None
-    shuffle: bool
-    bootstrap: int | None
 
 
 class cov(cov_kw, Node.Scalar_F64):
     """
     scalar mean (optional rolling window)
     v: Ref.Scalar_F64
-    window: float | None
+    window: int
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
@@ -530,13 +470,9 @@ class cov(cov_kw, Node.Scalar_F64):
         cls,
         v1: Ref.Scalar_F64,
         v2: Ref.Scalar_F64,
-        window: float | None = None,
+        window: int,
         mu_1: Ref.Scalar_F64 | None = None,
         mu_2: Ref.Scalar_F64 | None = None,
-        offset_1: float | None=None,
-        offset_2: float | None=None,
-        shuffle: bool = False,
-        bootstrap: int | None = None,
     ):
         return cls(
             cls.DEF.name,
@@ -545,69 +481,28 @@ class cov(cov_kw, Node.Scalar_F64):
             window=window,
             mu_1=mu_1,
             mu_2=mu_2,
-            offset_1=offset_1,
-            offset_2=offset_2,
-            shuffle=shuffle,
-            bootstrap=bootstrap,
         )
 
     def __call__(
         self, event: Event, graph: Graph
     ):
-        window = event.t + 1 if self.window is None else self.window
-        # TODO: assert aligned?
-        t1, v1 = self.v1.history(graph).last_before(event.t)
-        t2, v2 = self.v2.history(graph).last_before(event.t)
-        
-        if np.isnan(v1[-1]):
-            return np.NAN
-            
-        if np.isnan(v2[-1]):
-            return np.NAN
+        v1 = self.v1.history(graph).last_n_before(self.window, event.t)
+        v2 = self.v2.history(graph).last_n_before(self.window, event.t)
 
-        v1 = window_mask(v1, t1, event.t - window, offset=self.offset_1)
-        v2 = window_mask(v2, t2, event.t - window, offset=self.offset_2)
-
-        if not len(v1) or not len(v2):
-            return np.NAN
-
-        # if len(v1) != len(v2):
-        #     return np.NAN
-
-        if self.shuffle:
-            np.random.shuffle(v1)
-
-        if not self.bootstrap:
-            n_runs = 1
-            n_vs = len(v1)
+        if self.mu_1 is not None:
+            mu_1 = self.mu_1.history(graph).last_before(event.t)
         else:
-            n_runs = self.bootstrap
-            n_vs = int(len(v1) / n_runs)
+            mu_1 = np.nanmean(v1)
         
-        res = 0
-        for i in range(n_runs):
-            
-            vv1 = v1[i*n_vs:(i+1) * n_vs]
-            vv2 = v2[i*n_vs:(i+1) * n_vs]
+        if self.mu_2 is not None:
+            mu_2 = self.mu_2.history(graph).last_before(event.t)
+        else:
+            mu_2 = np.nanmean(v2)
+    
+        res = numpy.nanmean(
+            (v1 - mu_1) * (v2 - mu_2)
+        )
 
-            if self.mu_1 is None:
-                mu1 = np.NAN if not len(vv1) else numpy.nanmean(vv1)
-            elif isinstance(self.mu_1, (int, float)):
-                mu1 = self.mu_1
-            else:
-                mu1 = graph.select(self.mu_1, event)[-1]
-            if self.mu_2 is None:
-                mu2 = np.NAN if not len(vv2) else numpy.nanmean(vv2)
-            elif isinstance(self.mu_2, (int, float)):
-                mu2 = self.mu_2
-            else:
-                mu2 = graph.select(self.mu_2, event)[-1]
-            if np.isnan(mu1) and np.isnan(mu2):
-                return np.NAN
-            res += (numpy.nanmean(
-                (vv1 - mu1) * (vv2 - mu2)
-                # assume elementwise?
-            )/ n_runs)
         return res
 
 #  ------------------
@@ -617,7 +512,7 @@ class pca_kw(NamedTuple):
     type: str
     #
     vs: tuple[Ref.Scalar_F64, ...]
-    window: float | None
+    window: int
     keep: int | None
     mus: tuple[Ref.Scalar_F64, ...] | None
     signs: tuple[int | None] | None
@@ -636,7 +531,7 @@ class pca(pca_kw, Node.Scalar_F641D):
     """
     scalar mean (optional rolling window)
     v: Ref.Scalar_F64
-    window: float | None
+    window: int
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
@@ -665,7 +560,7 @@ class pca(pca_kw, Node.Scalar_F641D):
     def new(
         cls,
         vs: tuple[Ref.Scalar_F64, ...],
-        window: float | None=None,
+        window: int=None,
         keep: int | None=None,
         mus: tuple[Ref.Scalar_F64, ...] | None=None,
         signs: tuple[int | None] | None = None,
