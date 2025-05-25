@@ -271,6 +271,15 @@ class Node:
     D0_F64 = Node_D0_F64
     Scalar_F64 = Node_D0_F64
 
+    D1_Date = Node_D1_Date
+    Vector_Date = Node_D1_Date
+
+    D1_F64 = Node_D1_F64
+    Vector_F64 = Node_D1_F64
+
+    D2_F64 = Node_D2_F64
+    Matrox_F64 = Node_D2_F64
+
     Null = Node_Null
     null = Node_Null()    
 

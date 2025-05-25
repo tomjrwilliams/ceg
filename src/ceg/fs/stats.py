@@ -513,7 +513,7 @@ class pca_kw(NamedTuple):
     #
     vs: tuple[Ref.Scalar_F64, ...]
     window: int
-    keep: int | None
+    keep: int
     mus: tuple[Ref.Scalar_F64, ...] | None
     signs: tuple[int | None] | None
     centre: bool
@@ -544,15 +544,15 @@ class pca(pca_kw, Node.Vector_F64):
     """
 
     DEF: ClassVar[Defn] = define(
-        Node.Scalar_F641D, pca_kw
+        Node.Vector_F64, pca_kw
     )
 
     @classmethod
     def new(
         cls,
         vs: tuple[Ref.Scalar_F64, ...],
-        window: int=None,
-        keep: int | None=None,
+        window: int,
+        keep: int,
         mus: tuple[Ref.Scalar_F64, ...] | None=None,
         signs: tuple[int | None] | None = None,
         centre: bool = False,
@@ -564,15 +564,12 @@ class pca(pca_kw, Node.Vector_F64):
     def __call__(
         self, event: Event, graph: Graph
     ):
-        window = event.t + 1 if self.window is None else self.window
-
-        vs = graph.select(
-            self.vs,
-            event,
-            t=False,
-            where=dict(t = lambda t: t >= event.t - window),
-            null=False
-        )
+        vs = tuple(map(
+            lambda v: v.history(graph).last_n_before(
+                self.window, event.t
+            ),
+            self.vs
+        ))
 
         # TODO: assert aligned?
 
@@ -580,9 +577,10 @@ class pca(pca_kw, Node.Vector_F64):
         assert len(mus) == len(vs), dict(mus=mus, vs=vs)
         mus = list(map(
             lambda v_mu: (lambda v, mu: (
-                graph.select(mu, event, i = -1) if mu is not None
+                numpy.nanmean(v)
+                if mu is None
                 else np.NAN if not len(v)
-                else numpy.nanmean(v)
+                else mu.history(graph).last_before(event.t)
             ))(*v_mu),
             zip(vs, mus)
         ))
@@ -623,7 +621,7 @@ class pca(pca_kw, Node.Vector_F64):
                 elif s == 0:
                     raise ValueError(dict(
                         message="signs start from 1 for symmetry",
-                        self=self,
+                        self=self, # type: ignore (wants dicts to be the same type)
                     ))
                 elif s < 0:
                     s = -1 * (s + 1)
@@ -639,6 +637,11 @@ class pca(pca_kw, Node.Vector_F64):
             U = U[:, :self.keep]
             e = e[:self.keep]
             # Vt = Vt[:, :self.keep]
+
+        # TODO: now we have tuple returns, use them
+        # rather than flattening to a single vec
+
+        # even a matrix would be clearer
 
         try:
             return np.vstack([
@@ -675,10 +678,13 @@ class pca(pca_kw, Node.Vector_F64):
 class pca_scale_kw(NamedTuple):
     type: str
     #
-    v: Ref.Scalar_F64
+    v: Ref.Vector_F64
     factor: int
 
 class pca_scale(pca_scale_kw, Node.Scalar_F64):
+
+    # TODO: change pca to tuple, then this isn't even required?
+    # though perhaps worth keeping - this still is useful for unpacking a specific element of the eigenvector?
 
     DEF: ClassVar[Defn] = define(
         Node.Scalar_F64, pca_scale_kw
@@ -687,7 +693,7 @@ class pca_scale(pca_scale_kw, Node.Scalar_F64):
     @classmethod
     def new(
         cls,
-        v: Ref.Scalar_F64,
+        v: Ref.Vector_F64,
         factor: int,
     ):
         return cls(
@@ -699,8 +705,9 @@ class pca_scale(pca_scale_kw, Node.Scalar_F64):
     ):
         # first row is the eignenvalues
         n = graph.nodes[self.v.i]
+        assert isinstance(n, pca), n
         keep = n.keep
-        vs = graph.select(self.v, event, t=False, i = -1, null = False)
+        vs = self.v.history(graph).last_before(event.t)
         vs = vs.reshape(
             int(vs.shape[0] / keep), keep, 
         )
@@ -709,19 +716,19 @@ class pca_scale(pca_scale_kw, Node.Scalar_F64):
 class pca_weights_kw(NamedTuple):
     type: str
     #
-    v: Ref.Scalar_F64
+    v: Ref.Vector_F64
     factor: int
 
-class pca_weights(pca_weights_kw, Node.Scalar_F641D):
+class pca_weights(pca_weights_kw, Node.Vector_F64):
 
     DEF: ClassVar[Defn] = define(
-        Node.Scalar_F641D, pca_weights_kw
+        Node.Vector_F64, pca_weights_kw
     )
 
     @classmethod
     def new(
         cls,
-        v: Ref.Scalar_F64,
+        v: Ref.Vector_F64,
         factor: int,
     ):
         return cls(
@@ -733,8 +740,9 @@ class pca_weights(pca_weights_kw, Node.Scalar_F641D):
     ):
         # first row is eigenvalues. then weights are cols of remainder
         n = graph.nodes[self.v.i]
+        assert isinstance(n, pca), n
         keep = n.keep
-        vs = graph.select(self.v, event, t=False, i=-1, null=False)
+        vs = self.v.history(graph).last_before(event.t)
         vs = vs.reshape(
             int(vs.shape[0] / keep), keep, 
         )
