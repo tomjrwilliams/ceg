@@ -407,8 +407,8 @@ def last_between_nd(
 def last_n_before_nd(
     v: np.ndarray, 
     t: np.ndarray, 
-    n: int,
     size: int,
+    n: int,
     before: float, 
     occupied: int,
     exponent: int,
@@ -443,8 +443,8 @@ def last_n_before_nd(
 def last_n_between_nd(
     v: np.ndarray, 
     t: np.ndarray, 
-    n: int,
     size: int,
+    n: int,
     after: float,
     before: float, 
     occupied: int,
