@@ -75,13 +75,13 @@ class AllReady(AllReadyKW, GuardInterface[N]):
         params: frozendict[int, tuple[str, ...]]
     ) -> AllReady:
         ts = []
-        latest = []
+        queue = []
         heapify(ts)
-        heapify(latest)
+        heapify(queue)
         return self._replace(
             params =tuple(params.keys()), 
             ts=ts,
-            latest=latest,
+            queue=queue,
         )
 
     def next(
@@ -107,7 +107,7 @@ class AllReady(AllReadyKW, GuardInterface[N]):
             heappop(self.queue)
         if not len(self.queue) or self.queue[0][0] > t_next:
             heappop(self.ts)
-            return self.set_prev(Event(t, ref, self.prev))
+            return self.set_prev(Event(t, ref, event))
         return None
     
 #  ------------------
@@ -140,7 +140,7 @@ class LoopConst(LoopConstKw, GuardInterface[N]):
         assert event.ref.eq(ref), (self, node, ref, event)
         return self.set_prev(
             event._replace(
-                t=event.t + self.step, prev=self.prev
+                t=event.t + self.step, prev=event
             )
         )
 
@@ -185,7 +185,7 @@ class LoopUntilDate(LoopUntilDateKw, GuardInterface[N]):
         if d == self.until:
             return None
         return self.set_prev(
-            event._replace(t=event.t + self.step, prev=self.prev)
+            event._replace(t=event.t + self.step, prev=event)
         )
 
 
@@ -222,7 +222,7 @@ class LoopRand(LoopRandKw, GuardInterface[N]):
         else:
             raise ValueError(self)
         return self.set_prev(
-            event._replace(t=event.t + step, prev=self.prev)
+            event._replace(t=event.t + step, prev=event)
         )
 
 #  ------------------
@@ -276,7 +276,7 @@ class MonthEnd(ByDateKW, GuardInterface[N]):
             #     graph, params.keys(), lambda e: e.t.last == event.t
             # ):
             return self.set_prev(
-                event._replace(ref=ref, prev=self.prev)
+                event._replace(ref=ref, prev=event)
             )
         return None
 
@@ -350,11 +350,11 @@ class SignChange(ByValueKW, GuardInterface[N]):
             return None
         elif v0 > 0 and v1 < 0:
             return self.set_prev(
-                event._replace(ref=ref, prev=self.prev)
+                event._replace(ref=ref, prev=event)
             )
         elif v1 > 0 and v0 < 0:
             return self.set_prev(
-                event._replace(ref=ref, prev=self.prev)
+                event._replace(ref=ref, prev=event)
             )
         return None
 
@@ -371,6 +371,10 @@ class Loop:
     Const = LoopConst
     Rand = LoopRand
     UntilDate = LoopUntilDate
+
+    @classmethod
+    def every(cls, step: float):
+        return LoopConst.new(step)
 
 class ByDate:
     MonthEnd = MonthEnd

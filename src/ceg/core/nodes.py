@@ -36,6 +36,18 @@ class Event(NamedTuple):
     ref: Ref.Any
     prev: Event | None
 
+    @classmethod
+    def new(
+        cls, t: float, ref: Ref.Any, prev: Event | None=None
+    ):
+        return cls(t, ref, prev=prev)
+
+    @classmethod
+    def zero(
+        cls, ref: Ref.Any, prev: Event | None=None
+    ):
+        return cls(0, ref, prev=prev)
+
 #  ------------------
 
 

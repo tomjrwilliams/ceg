@@ -118,8 +118,9 @@ class Graph(GraphKW):
         node: Node.Any[R, N] | None = None,
         ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
+        keep: int | None = None,
     ) -> tuple[Graph, R]:
-        return bind(self, node=node, ref=ref, when=when)
+        return bind(self, node=node, ref=ref, when=when, keep=keep)
 
     @contextlib.contextmanager
     def mutable(
@@ -152,6 +153,7 @@ class MutableBind(Protocol):
         node: Node.Any[R, N] | None=None,
         ref: R | Type[R] | None=None,
         when: Guard.Any[N] | None = None,
+        keep: int | None = None,
     ) -> R: ...
 
 class ImplicitBind(Protocol):
@@ -161,6 +163,7 @@ class ImplicitBind(Protocol):
         node: Node.Any[R, N] | None=None,
         ref: R | Type[R] | None=None,
         when: Guard.Any[N] | None = None,
+        keep: int | None = None,
     ) -> R: ...
 
 class MutableContext(NamedTuple):
@@ -208,12 +211,13 @@ def graph_context(
         node: Node.Any[R, N] | None = None,
         ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
+        keep: int | None = None,
     ) -> R:
         nonlocal g
         nonlocal DONE
         assert not DONE, (node, ref)
         # TODO: partition
-        g, res = g.bind(node=node, ref=ref, when=when)
+        g, res = g.bind(node=node, ref=ref, when=when, keep=keep)
         return res
 
     def state() -> Graph:
@@ -314,6 +318,7 @@ def bind(
     node: Node.Any[R, N] | None = None,
     ref: R | Type[R] | None = None,
     when: Guard.Any[N] | None = None,
+    keep: int | None = None,
 ) -> tuple[Graph, R]:
     # TODO: node= int to prealloc many ref ?
     # TODO: option to only return graph (eg. if pre alloc ref and want to fold over)?
@@ -372,6 +377,9 @@ def bind(
             )  # type: ignore
     else:
         raise ValueError(type(node), type(ref), node, ref)
+
+    if keep is not None and req.get(i, 0) < keep:
+        req = req | {i: keep}
 
     required = required | {
         p: r for p, r in req.items()

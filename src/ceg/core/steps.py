@@ -1,5 +1,5 @@
 
-from typing import NamedTuple, Iterable, cast, Callable
+from typing import NamedTuple, Iterable, cast, Callable, overload, Literal, Generator, Iterator
 
 from functools import partial
 
@@ -84,7 +84,7 @@ def step(
     dstream = graph.dstream
     guards = graph.guards
 
-    for i in dstream.get(ref.i, ()):
+    for i in dstream.get(ref.i, (ref.i,)):
         nd = nodes[i]
         assert nd is not None, ref
         
@@ -106,9 +106,28 @@ def step(
 
     return GraphEvent(graph, event)
 
+def iter_steps(
+    graph: Graph, 
+    *events: Event, 
+    n: int = 1,
+):
+    for i in range(n):
+        if i == 0:
+            graph, e = step(graph, *events)
+        else:
+            graph, e = step(graph)
+        if e is None:
+            break
+        yield GraphEvent(graph, e)
+
 def steps(
-    graph: Graph, *events: Event, n: int = 1
-) -> tuple[Graph, tuple[Event, ...]]:
+    graph: Graph, 
+    *events: Event, 
+    n: int = 1,
+    iter: bool = False,
+):
+    if iter:
+        return lambda: iter_steps(graph, *events, n=n)
     es: list[Event | None] = [None for _ in range(n)]
     for i in range(n):
         if i == 0:

@@ -520,9 +520,6 @@ class pca_kw(NamedTuple):
 
 class pca(pca_kw, Node.Vector_F64):
     """
-    scalar mean (optional rolling window)
-    v: Ref.Scalar_F64
-    window: int
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
