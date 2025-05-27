@@ -118,7 +118,7 @@ class Graph(GraphKW):
         node: Node.Any[R, N] | None = None,
         ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
-        keep: int | None = None,
+        keep: int | None = 1,
     ) -> tuple[Graph, R]:
         return bind(self, node=node, ref=ref, when=when, keep=keep)
 
@@ -153,7 +153,7 @@ class MutableBind(Protocol):
         node: Node.Any[R, N] | None=None,
         ref: R | Type[R] | None=None,
         when: Guard.Any[N] | None = None,
-        keep: int | None = None,
+        keep: int | None = 1,
     ) -> R: ...
 
 class ImplicitBind(Protocol):
@@ -163,7 +163,7 @@ class ImplicitBind(Protocol):
         node: Node.Any[R, N] | None=None,
         ref: R | Type[R] | None=None,
         when: Guard.Any[N] | None = None,
-        keep: int | None = None,
+        keep: int | None = 1,
     ) -> R: ...
 
 class MutableContext(NamedTuple):
@@ -211,7 +211,7 @@ def graph_context(
         node: Node.Any[R, N] | None = None,
         ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
-        keep: int | None = None,
+        keep: int | None = 1,
     ) -> R:
         nonlocal g
         nonlocal DONE
@@ -318,7 +318,7 @@ def bind(
     node: Node.Any[R, N] | None = None,
     ref: R | Type[R] | None = None,
     when: Guard.Any[N] | None = None,
-    keep: int | None = None,
+    keep: int | None = 1,
 ) -> tuple[Graph, R]:
     # TODO: node= int to prealloc many ref ?
     # TODO: option to only return graph (eg. if pre alloc ref and want to fold over)?

@@ -48,7 +48,7 @@ class gaussian(gaussian_kw, Node.D0_F64):
     std: float
     >>> rng(seed=0, reset=True)
     >>> g = Graph.new()
-    >>> g, r = g.bind(gaussian.new(), keep=1, when=Loop.every(1))
+    >>> g, r = g.bind(gaussian.new(), when=Loop.every(1))
     >>> for g, e in steps(g, Event.zero(r), n=3, iter=True)():
     ...     print(np.round(r.history(g).last_before(e.t), 4))
     0.1257
@@ -125,7 +125,7 @@ class gaussian_1d(gaussian_1d_kw, Node.D1_F64):
     std: float
     >>> rng(seed=0, reset=True)
     >>> g = Graph.new()
-    >>> g, r = g.bind(gaussian_1d.new((2,)), keep=1, when=Loop.every(1))
+    >>> g, r = g.bind(gaussian_1d.new((2,)), when=Loop.every(1))
     >>> for g, e in steps(g, Event.zero(r), n=3, iter=True)():
     ...     print(np.round(r.history(g).last_before(e.t), 4))
     [ 0.1257 -0.1321]
@@ -204,7 +204,7 @@ class gaussian_2d(gaussian_2d_kw, Node.D2_F64):
     std: float
     >>> rng(seed=0, reset=True)
     >>> g = Graph.new()
-    >>> g, r = g.bind(gaussian_2d.new((2,2)), keep=1, when=Loop.every(1))
+    >>> g, r = g.bind(gaussian_2d.new((2,2)), when=Loop.every(1))
     >>> for g, e in steps(g, Event.zero(r), n=3, iter=True)():
     ...     print(np.round(r.history(g).last_before(e.t), 4))
     [[ 0.1257 -0.1321]
