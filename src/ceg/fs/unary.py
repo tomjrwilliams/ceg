@@ -2,7 +2,7 @@ from typing import NamedTuple, ClassVar
 import numpy
 import numpy as np
 
-from ..core import Graph, Node, Ref, Event, Loop, Defn, define, steps
+from ..core import Graph, Node, Ref, Event, Loop, Defn, define, steps, batches
 
 #  ------------------
 
@@ -23,7 +23,7 @@ class pct_change(pct_change_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> g, r = rand.gaussian.walk(g)
     >>> with g.implicit() as (bind, done):
     ...     ch = bind(pct_change.new(r))
     ...     g = done()
@@ -68,16 +68,19 @@ class sqrt(sqrt_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> g, r0 = rand.gaussian.walk(g)
     >>> with g.implicit() as (bind, done):
-    ...     ch = bind(sqrt.new(r))
+    ...     r1 = bind(sqrt.new(r0))
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(ch, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
+    >>> for g, es in batches(g, Event.zero(r0), n=5, g=2, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(es[-1].t), 2)
+    ...     v1 = round(r1.history(g).last_before(es[-1].t), 2)
+    ...     print(v0, v1)
+    0.13 0.35
+    -0.01 -0.08
+    0.63 0.8
+    0.74 0.86
+    0.2 0.45
     """
 
     DEF: ClassVar[Defn] = define(
@@ -111,7 +114,7 @@ class sq(sq_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> g, r = rand.gaussian.walk(g)
     >>> with g.implicit() as (bind, done):
     ...     ch = bind(sq.new(r))
     ...     g = done()
@@ -154,7 +157,7 @@ class cum_sum(cum_sum_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> g, r = rand.gaussian.walk(g)
     >>> with g.implicit() as (bind, done):
     ...     ch = bind(cum_sum.new(r))
     ...     g = done()
@@ -202,7 +205,7 @@ class cum_prod(cum_prod_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> g, r = rand.gaussian.walk(g)
     >>> with g.implicit() as (bind, done):
     ...     ch = bind(cum_prod.new(r, a = 1))
     ...     g = done()

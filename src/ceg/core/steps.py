@@ -1,4 +1,4 @@
-
+import logging
 from typing import NamedTuple, Iterable, cast, Callable, overload, Literal, Generator, Iterator
 
 from functools import partial
@@ -11,6 +11,8 @@ from .nodes import N, Node, Ref, Event
 from .graphs import Graph
 
 from .algos import set_tuple
+
+logger = logging.Logger(__file__)
 
 #  ------------------
 
@@ -32,6 +34,13 @@ class GraphEvents(NamedTuple):
 
     def last(self) -> GraphEvent:
         return GraphEvent(self.graph, self.events[-1])
+
+class GraphBatches(NamedTuple):
+    graph: Graph
+    events: tuple[tuple[Event, ...], ...]
+
+    def last(self) -> GraphEvent:
+        return GraphEvent(self.graph, self.events[-1][-1])
 
 class GraphUntilTrigger(NamedTuple):
     graph: Graph
@@ -65,7 +74,6 @@ def step(
     assert node is not None, ref
 
     res = node(event, graph)
-
     hist = data[ref.i]
 
     if isinstance(hist, History.Null):
@@ -84,7 +92,9 @@ def step(
     dstream = graph.dstream
     guards = graph.guards
 
-    for i in dstream.get(ref.i, (ref.i,)):
+    for i in dstream.get(ref.i, (
+        (ref.i,) if not len(graph.ustream[ref.i]) else ()
+    )):
         nd = nodes[i]
         assert nd is not None, ref
         
@@ -105,6 +115,57 @@ def step(
             raise ValueError(e)
 
     return GraphEvent(graph, event)
+
+def iter_batches(
+    graph: Graph, 
+    *events: Event, 
+    n: int = 1,
+    g: int = 1,
+):
+    for i in range(n):
+        acc: list[Event | None] = [None for _ in range(g)]
+        for ii in range(g):
+            if i == 0 and ii == 0:
+                graph, e = step(graph, *events)
+            else:
+                graph, e = step(graph)
+            if e is None:
+                acc = acc[:ii]
+                break
+            acc[ii] = e
+        yield GraphEvents(graph, cast(tuple[Event, ...], tuple(acc)))
+
+def batches(
+    graph: Graph, 
+    *events: Event, 
+    n: int = 1,
+    g: int = 1,
+    iter: bool = False,
+):
+    if iter:
+        return lambda: iter_batches(graph, *events, n=n, g=g)
+    e = None
+    es: list[list[Event|None]] = [[None for _ in range(g)] for _ in range(n)]
+    for i in range(n):
+        acc = es[i]
+        for ii in range(g):
+            if i == 0 and ii == 0:
+                graph, e = step(graph, *events)
+            else:
+                graph, e = step(graph)
+            if e is None:
+                es[i] = acc[:ii]
+                break
+            acc[ii] = e
+        if e is None:
+            break
+    return GraphBatches(
+        graph, 
+        cast(
+            tuple[tuple[Event, ...], ...], 
+            tuple(map(tuple, es))
+        )
+    )
 
 def iter_steps(
     graph: Graph, 

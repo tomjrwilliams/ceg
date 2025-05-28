@@ -1,6 +1,7 @@
 
 from __future__ import annotations
 
+import logging
 import abc
 from typing import Generic, ClassVar, Type, NamedTuple, TypeVar
 
@@ -16,6 +17,8 @@ from .refs import Ref, R, GraphInterface
 from .nodes import Event, Node, N
 
 #  ------------------
+
+logger = logging.Logger(__file__)
 
 @dataclass
 class GuardMutable:
@@ -47,6 +50,13 @@ class GuardInterface(abc.ABC, Generic[N]):
     ) -> Event | None: ...
 
     def set_prev(self, event: Event):
+        prev = event.prev
+        event = event._replace(
+            prev=(
+                prev if prev is None
+                else prev._replace(prev=None)
+            ) # stop history accumulation
+        )
         self.mut.prev = event
         return event
 
