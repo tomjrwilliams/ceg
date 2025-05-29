@@ -1,5 +1,14 @@
 import logging
-from typing import NamedTuple, Iterable, cast, Callable, overload, Literal, Generator, Iterator
+from typing import (
+    NamedTuple,
+    Iterable,
+    cast,
+    Callable,
+    overload,
+    Literal,
+    Generator,
+    Iterator,
+)
 
 from functools import partial
 
@@ -16,18 +25,22 @@ logger = logging.Logger(__file__)
 
 #  ------------------
 
+
 class Step(NamedTuple):
     event: Event
     node: Node.Any
+
 
 # TODO: namedutple with the event, node
 # so can do eg. step_until(t)
 # eg. where t is the graph or whatever
 
+
 class GraphEvent(NamedTuple):
     graph: Graph
     event: Event | None
     t: float | None
+
 
 class GraphEvents(NamedTuple):
     graph: Graph
@@ -35,7 +48,10 @@ class GraphEvents(NamedTuple):
     t: float | None
 
     def last(self) -> GraphEvent:
-        return GraphEvent(self.graph, self.events[-1], self.t)
+        return GraphEvent(
+            self.graph, self.events[-1], self.t
+        )
+
 
 class GraphBatches(NamedTuple):
     graph: Graph
@@ -46,8 +62,9 @@ class GraphBatches(NamedTuple):
         return GraphEvent(
             self.graph,
             self.events[-1][-1],
-            self.events[-1][-1].t
+            self.events[-1][-1].t,
         )
+
 
 class GraphUntilTrigger(NamedTuple):
     graph: Graph
@@ -55,10 +72,9 @@ class GraphUntilTrigger(NamedTuple):
     trigger: Event | None
     t: float | None
 
-def step(
-    graph: Graph, *events: Event
-) -> GraphEvent:
-    
+
+def step(graph: Graph, *events: Event) -> GraphEvent:
+
     queue = graph.queue
     nodes = graph.nodes
     data = graph.data
@@ -105,7 +121,7 @@ def step(
     ):
         nd = nodes[i]
         assert nd is not None, ref
-        
+
         e = guards[i].next(
             event,
             nd.ref(i),
@@ -124,9 +140,10 @@ def step(
 
     return GraphEvent(graph, event, event.t)
 
+
 def iter_batches(
-    graph: Graph, 
-    *events: Event, 
+    graph: Graph,
+    *events: Event,
     n: int = 1,
     g: int = 1,
 ):
@@ -146,23 +163,26 @@ def iter_batches(
         if not len(acc):
             return
         yield GraphEvents(
-            graph,
-            cast(tuple[Event, ...], tuple(acc)),
-            t
+            graph, cast(tuple[Event, ...], tuple(acc)), t
         )
 
+
 def batches(
-    graph: Graph, 
-    *events: Event, 
+    graph: Graph,
+    *events: Event,
     n: int = 1,
     g: int = 1,
     iter: bool = False,
 ):
     if iter:
-        return lambda: iter_batches(graph, *events, n=n, g=g)
+        return lambda: iter_batches(
+            graph, *events, n=n, g=g
+        )
     e = None
     t = None
-    es: list[list[Event|None]] = [[None for _ in range(g)] for _ in range(n)]
+    es: list[list[Event | None]] = [
+        [None for _ in range(g)] for _ in range(n)
+    ]
     for i in range(n):
         acc = es[i]
         for ii in range(g):
@@ -178,18 +198,17 @@ def batches(
         if e is None:
             break
     es_res = cast(
-        tuple[tuple[Event, ...], ...], 
-        tuple(map(tuple, [_es for _es in es if len(_es)]))
+        tuple[tuple[Event, ...], ...],
+        tuple(map(tuple, [_es for _es in es if len(_es)])),
     )
     return GraphBatches(
-        graph, 
-        es_res,
-        tuple([_es[-1].t for _es in es_res])
+        graph, es_res, tuple([_es[-1].t for _es in es_res])
     )
 
+
 def iter_steps(
-    graph: Graph, 
-    *events: Event, 
+    graph: Graph,
+    *events: Event,
     n: int = 1,
 ):
     for i in range(n):
@@ -202,9 +221,10 @@ def iter_steps(
         t = e.t
         yield GraphEvent(graph, e, t)
 
+
 def steps(
-    graph: Graph, 
-    *events: Event, 
+    graph: Graph,
+    *events: Event,
     n: int = 1,
     iter: bool = False,
 ):
@@ -222,7 +242,10 @@ def steps(
             break
         t = e.t
         es[i] = e
-    return GraphEvents(graph, tuple(cast(list[Event], es)), t)
+    return GraphEvents(
+        graph, tuple(cast(list[Event], es)), t
+    )
+
 
 def step_until(
     graph: Graph,
@@ -239,7 +262,7 @@ def step_until(
         es.append(e)
         graph, e, _ = step(graph)
     if e is None:
-        return GraphUntilTrigger(graph,tuple(es), None, t)
+        return GraphUntilTrigger(graph, tuple(es), None, t)
     t = e.t
     # if len(refs):
     # TODO until each of those not just all events
@@ -254,7 +277,7 @@ def step_until(
 
 
 def step_until_done(
-    graph: Graph, 
+    graph: Graph,
     *events: Event,
 ):
     t = None
@@ -265,5 +288,6 @@ def step_until_done(
         t = e.t
         graph, e, _ = step(graph)
     return GraphEvents(graph, tuple(es), t)
+
 
 #  ------------------

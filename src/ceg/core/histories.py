@@ -1,4 +1,3 @@
-
 import abc
 from typing import NamedTuple, cast
 from dataclasses import dataclass
@@ -9,7 +8,7 @@ import numpy as np
 import numba as nb
 
 from . import algos
-    
+
 #  ------------------
 
 # TODO: abstract out nd implementations, each class just needs:
@@ -20,19 +19,21 @@ from . import algos
 
 V = np.ndarray | float | dt.date
 
+
 @dataclass
 class HistoryMutable:
-    occupied: int # NOTE: current index occupied up to
+    occupied: int  # NOTE: current index occupied up to
+
 
 class HistoryKW(NamedTuple):
-    shape: tuple[int,  ...]
+    shape: tuple[int, ...]
     size: int
-    exponent: int # NOTE: len = 2 ** exponent
-    required: int # NOTE: max history required to be held
-    limit: int # NOTE: multiple of required to hold
+    exponent: int  # NOTE: len = 2 ** exponent
+    required: int  # NOTE: max history required to be held
+    limit: int  # NOTE: multiple of required to hold
     times: np.ndarray
-    values: np.ndarray # NOTE: flattened 1D array
-    mut: HistoryMutable 
+    values: np.ndarray  # NOTE: flattened 1D array
+    mut: HistoryMutable
 
     @classmethod
     def new(
@@ -48,7 +49,8 @@ class HistoryKW(NamedTuple):
             shape = v.shape
             dtype = v.dtype
         exponent = (
-            0 if required == 0
+            0
+            if required == 0
             else np.log2(limit) + np.ceil(np.log2(required))
         )
         size = 0 if not len(shape) else np.prod(shape)
@@ -59,29 +61,31 @@ class HistoryKW(NamedTuple):
             required,
             limit,
             np.zeros(
-                int(2 ** exponent),
+                int(2**exponent),
                 dtype=np.float64,
             ),
-            values = np.zeros(
-                int(np.prod(np.array(shape)) * (2 ** exponent)),
-                dtype=dtype, 
+            values=np.zeros(
+                int(
+                    np.prod(np.array(shape)) * (2**exponent)
+                ),
+                dtype=dtype,
             ),
-            mut=HistoryMutable(0)
+            mut=HistoryMutable(0),
         )
 
     @property
     def length(self) -> int:
-        return 2 ** self.exponent
+        return 2**self.exponent
 
 
 class LastKW(NamedTuple):
-    shape: tuple[int,  ...]
-    exponent: int # NOTE: len = 2 ** exponent
-    required: int # NOTE: max history required to be held
-    limit: int # NOTE: multiple of required to hold
+    shape: tuple[int, ...]
+    exponent: int  # NOTE: len = 2 ** exponent
+    required: int  # NOTE: max history required to be held
+    limit: int  # NOTE: multiple of required to hold
     times: np.ndarray
-    values: np.ndarray # NOTE: flattened 1D array
-    mut: HistoryMutable 
+    values: np.ndarray  # NOTE: flattened 1D array
+    mut: HistoryMutable
 
     @classmethod
     def new_mutable(cls):
@@ -110,7 +114,7 @@ class LastKW(NamedTuple):
             limit,
             np.empty((), dtype=dtype),
             np.empty((), dtype=dtype),
-            mut=cls.new_mutable()
+            mut=cls.new_mutable(),
         )
 
     @property
@@ -121,14 +125,15 @@ class LastKW(NamedTuple):
     def size(self) -> np.int64:
         return np.prod(np.array(self.shape))
 
+
 class HistoryInterface(abc.ABC):
-    shape: tuple[int,  ...]
-    exponent: int # NOTE: len = 2 ** exponent
-    required: int # NOTE: max history required to be held
-    occupied: int # NOTE: current index occupied up to
+    shape: tuple[int, ...]
+    exponent: int  # NOTE: len = 2 ** exponent
+    required: int  # NOTE: max history required to be held
+    occupied: int  # NOTE: current index occupied up to
     times: np.ndarray
-    values: np.ndarray # NOTE: flattened 1D array
-    mut: HistoryMutable 
+    values: np.ndarray  # NOTE: flattened 1D array
+    mut: HistoryMutable
 
     @property
     @abc.abstractmethod
@@ -138,10 +143,14 @@ class HistoryInterface(abc.ABC):
     def append(self, v: V, t: float): ...
 
     @abc.abstractmethod
-    def last_n_before(self, n: int, t: float) -> np.ndarray: ...
+    def last_n_before(
+        self, n: int, t: float
+    ) -> np.ndarray: ...
 
     @abc.abstractmethod
-    def last_n_between(self, n: int, l: float, r: float) -> np.ndarray: ...
+    def last_n_between(
+        self, n: int, l: float, r: float
+    ) -> np.ndarray: ...
 
     @abc.abstractmethod
     def last_before(self, t: float) -> V: ...
@@ -152,41 +161,51 @@ class HistoryInterface(abc.ABC):
     @abc.abstractmethod
     def last_t(self) -> float: ...
 
+
 #  ------------------
 
+
 class Last_0D(LastKW, HistoryInterface):
-    
+
     def last_n_before(self, n: int, t: float):
         raise ValueError(self)
 
     def last_n_between(self, n: int, l: float, r: float):
         raise ValueError(self)
+
 
 class History_0D(HistoryKW, HistoryInterface):
     pass
 
+
 class Last_1D(LastKW, HistoryInterface):
-    
+
     def last_n_before(self, n: int, t: float):
         raise ValueError(self)
 
     def last_n_between(self, n: int, l: float, r: float):
         raise ValueError(self)
+
 
 class History_1D(HistoryKW, HistoryInterface):
     pass
 
+
 class Last_2D(LastKW, HistoryInterface):
-    
+
     def last_n_before(self, n: int, t: float):
         raise ValueError(self)
 
     def last_n_between(self, n: int, l: float, r: float):
         raise ValueError(self)
 
+
 class History_2D(HistoryKW, HistoryInterface):
     pass
+
+
 #  ------------------
+
 
 def append_d0(
     occupied: int,
@@ -198,7 +217,7 @@ def append_d0(
     v: V,
 ) -> int:
     if occupied == limit * required:
-        sl = slice((limit - 1) * required, limit*required)
+        sl = slice((limit - 1) * required, limit * required)
         ts[:required] = ts[sl]
         vs[:required] = vs[sl]
         occupied = required
@@ -206,6 +225,7 @@ def append_d0(
     vs[occupied] = v
     occupied += 1
     return occupied
+
 
 def append_nd(
     occupied: int,
@@ -218,20 +238,22 @@ def append_nd(
     v: np.ndarray,
 ) -> int:
     if occupied == limit * required:
-        sl = slice((limit - 1) * required, limit*required)
+        sl = slice((limit - 1) * required, limit * required)
         ts[:required] = ts[sl]
         sl = slice(
-            (limit-1)*required*size,
-            limit*required*size
+            (limit - 1) * required * size,
+            limit * required * size,
         )
-        vs[:required*size] = vs[sl]
+        vs[: required * size] = vs[sl]
         occupied = required
     ts[occupied] = t
-    vs[occupied*size:(occupied + 1)*size] = v
+    vs[occupied * size : (occupied + 1) * size] = v
     occupied += 1
     return occupied
 
+
 #  ------------------
+
 
 class History_Null(HistoryKW, HistoryInterface):
 
@@ -256,14 +278,16 @@ class History_Null(HistoryKW, HistoryInterface):
     def last_t(self):
         return ValueError(self)
 
+
 #  ------------------
+
 
 class History_D0_F64(History_0D):
 
     @property
     def dtype(self):
         return np.float64
-    
+
     def append(self, v: float, t: float):
         self.mut.occupied = append_d0(
             self.mut.occupied,
@@ -302,7 +326,7 @@ class History_D0_F64(History_0D):
             self.times,
             t,
             self.mut.occupied,
-            self.exponent
+            self.exponent,
         )
 
     def last_between(self, l: float, r: float):
@@ -319,12 +343,14 @@ class History_D0_F64(History_0D):
         occupied = self.mut.occupied
         if occupied == 0:
             return -1
-        return self.times[occupied-1]
+        return self.times[occupied - 1]
+
 
 @dataclass
 class Last_D0_F64_Mut(HistoryMutable):
     t: float
     v: float
+
 
 class Last_D0_F64(History_D0_F64):
     mut: Last_D0_F64_Mut
@@ -352,7 +378,7 @@ class Last_D0_F64(History_D0_F64):
         if self.mut.t == -1:
             raise ValueError(self, t)
         return self.mut.v
-    
+
     def last_between(self, l: float, r: float):
         assert self.mut.t <= r, (self, r)
         last_t = self.mut.t
@@ -363,14 +389,16 @@ class Last_D0_F64(History_D0_F64):
     def last_t(self) -> float:
         return self.mut.t
 
+
 #  ------------------
+
 
 class History_D0_Date(History_0D):
 
     @property
     def dtype(self):
         return np.datetime64
-    
+
     def append(self, v: dt.date, t: float):
         self.mut.occupied = append_d0(
             self.mut.occupied,
@@ -390,7 +418,7 @@ class History_D0_Date(History_0D):
             t,
             self.mut.occupied,
             self.exponent,
-        ) # TODO: cast to M8[D]?
+        )  # TODO: cast to M8[D]?
 
     def last_n_between(self, n: int, l: float, r: float):
         return algos.last_n_between(
@@ -401,7 +429,7 @@ class History_D0_Date(History_0D):
             r,
             self.mut.occupied,
             self.exponent,
-        ) # TODO: cast to M8[D]?
+        )  # TODO: cast to M8[D]?
 
     def last_before(self, t: float) -> dt.date | None:
         res = algos.last_before(
@@ -409,13 +437,16 @@ class History_D0_Date(History_0D):
             self.times,
             t,
             self.mut.occupied,
-            self.exponent
+            self.exponent,
         )
         if np.isnan(res):
             return None
-        return cast(dt.date, (
-            cast(np.datetime64, res)
-        ).astype('M8[D]').astype('O'))
+        return cast(
+            dt.date,
+            (cast(np.datetime64, res))
+            .astype("M8[D]")
+            .astype("O"),
+        )
 
     def last_between(self, l: float, r: float):
         res = algos.last_between(
@@ -428,20 +459,25 @@ class History_D0_Date(History_0D):
         )
         if np.isnan(res):
             return None
-        return cast(dt.date, (
-            cast(np.datetime64, res)
-        ).astype('M8[D]').astype('O'))
+        return cast(
+            dt.date,
+            (cast(np.datetime64, res))
+            .astype("M8[D]")
+            .astype("O"),
+        )
 
     def last_t(self) -> float:
         occupied = self.mut.occupied
         if occupied == 0:
             return -1
-        return self.times[occupied-1]
+        return self.times[occupied - 1]
+
 
 @dataclass
 class Last_D0_Date_Mut(HistoryMutable):
     t: float
     v: dt.date
+
 
 class Last_D0_Date(History_D0_Date):
     mut: Last_D0_Date_Mut
@@ -477,20 +513,21 @@ class Last_D0_Date(History_D0_Date):
             return np.NAN
         return self.mut.v
 
-
     def last_t(self) -> float:
         return self.mut.t
+
 
 # TODO: bool, int, datetime, string (<U5, |S5 etc. for fixed, StringDType for arbitrary, astype("U5") for casting between)
 
 #  ------------------
+
 
 class History_D1_Date(History_1D):
 
     @property
     def dtype(self):
         return np.datetime64
-    
+
     def append(self, v: np.ndarray, t: float):
         self.mut.occupied = append_d0(
             self.mut.occupied,
@@ -532,7 +569,7 @@ class History_D1_Date(History_1D):
             self.size,
             t,
             self.mut.occupied,
-            self.exponent
+            self.exponent,
         ).reshape(self.shape)
 
     def last_between(self, l: float, r: float):
@@ -550,12 +587,14 @@ class History_D1_Date(History_1D):
         occupied = self.mut.occupied
         if occupied == 0:
             return -1
-        return self.times[occupied-1]
+        return self.times[occupied - 1]
+
 
 @dataclass
 class Last_D1_Date_Mut(HistoryMutable):
     t: float
     v: np.ndarray
+
 
 class Last_D1_Date(History_D1_Date):
     mut: Last_D1_Date_Mut
@@ -583,7 +622,7 @@ class Last_D1_Date(History_D1_Date):
         if self.mut.t == -1:
             raise ValueError(self, t)
         return self.mut.v
-    
+
     def last_between(self, l: float, r: float):
         assert self.mut.t <= r, (self, r)
         last_t = self.mut.t
@@ -594,12 +633,13 @@ class Last_D1_Date(History_D1_Date):
     def last_t(self) -> float:
         return self.mut.t
 
+
 class History_D1_F64(History_1D):
 
     @property
     def dtype(self):
         return np.float64
-    
+
     def append(self, v: np.ndarray, t: float):
         self.mut.occupied = append_d0(
             self.mut.occupied,
@@ -641,7 +681,7 @@ class History_D1_F64(History_1D):
             self.size,
             t,
             self.mut.occupied,
-            self.exponent
+            self.exponent,
         ).reshape(self.shape)
 
     def last_between(self, l: float, r: float):
@@ -659,12 +699,14 @@ class History_D1_F64(History_1D):
         occupied = self.mut.occupied
         if occupied == 0:
             return -1
-        return self.times[occupied-1]
+        return self.times[occupied - 1]
+
 
 @dataclass
 class Last_D1_F64_Mut(HistoryMutable):
     t: float
     v: np.ndarray
+
 
 class Last_D1_F64(History_D1_F64):
     mut: Last_D1_F64_Mut
@@ -692,7 +734,7 @@ class Last_D1_F64(History_D1_F64):
         if self.mut.t == -1:
             raise ValueError(self, t)
         return self.mut.v
-    
+
     def last_between(self, l: float, r: float):
         assert self.mut.t <= r, (self, r)
         last_t = self.mut.t
@@ -703,14 +745,16 @@ class Last_D1_F64(History_D1_F64):
     def last_t(self) -> float:
         return self.mut.t
 
+
 #  ------------------
+
 
 class History_D2_F64(History_2D):
 
     @property
     def dtype(self):
         return np.float64
-    
+
     def append(self, v: np.ndarray, t: float):
         self.mut.occupied = append_d0(
             self.mut.occupied,
@@ -752,7 +796,7 @@ class History_D2_F64(History_2D):
             self.size,
             t,
             self.mut.occupied,
-            self.exponent
+            self.exponent,
         ).reshape(self.shape)
 
     def last_between(self, l: float, r: float):
@@ -770,19 +814,30 @@ class History_D2_F64(History_2D):
         occupied = self.mut.occupied
         if occupied == 0:
             return -1
-        return self.times[occupied-1]
+        return self.times[occupied - 1]
+
 
 @dataclass
 class Last_D2_F64_Mut(HistoryMutable):
     t: float
     v: np.ndarray
 
+
 class Last_D2_F64(History_D2_F64):
     mut: Last_D2_F64_Mut
 
     @classmethod
     def new_mutable(cls):
-        return Last_D2_F64_Mut(0, -1, np.empty((1, 1,)))
+        return Last_D2_F64_Mut(
+            0,
+            -1,
+            np.empty(
+                (
+                    1,
+                    1,
+                )
+            ),
+        )
 
     @property
     def dtype(self):
@@ -803,7 +858,7 @@ class Last_D2_F64(History_D2_F64):
         if self.mut.t == -1:
             raise ValueError(self, t)
         return self.mut.v
-    
+
     def last_between(self, l: float, r: float):
         assert self.mut.t <= r, (self, r)
         last_t = self.mut.t
@@ -817,8 +872,9 @@ class Last_D2_F64(History_D2_F64):
 
 #  ------------------
 
+
 class Last:
-    
+
     D0_Date = Last_D0_Date
     Scalar_Date = Last_D0_Date
 
@@ -830,9 +886,10 @@ class Last:
 
     D1_F64 = Last_D1_F64
     Vector_F64 = Last_D1_F64
-    
+
     D2_F64 = Last_D2_F64
-    Matrix_F64=Last_D2_F64
+    Matrix_F64 = Last_D2_F64
+
 
 class History:
     Any = HistoryInterface
@@ -854,5 +911,6 @@ class History:
 
     Null = History_Null
     null = History_Null.new(np.zeros(0), 0, 2)
+
 
 #  ------------------

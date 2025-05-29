@@ -1,8 +1,16 @@
-
 from __future__ import annotations
 
 import abc
-from typing import Generic, ClassVar, Type, NamedTuple, TypeVar, ParamSpec, Callable, Concatenate
+from typing import (
+    Generic,
+    ClassVar,
+    Type,
+    NamedTuple,
+    TypeVar,
+    ParamSpec,
+    Callable,
+    Concatenate,
+)
 from typing import (
     Any,
     Iterable,
@@ -26,27 +34,31 @@ from .refs import Ref, R, GraphInterface, Scope
 
 #  ------------------
 
+
 class Event(NamedTuple):
     """
     t: float
     ref: Ref.Any
     prev: Event | None
     """
+
     t: float
     ref: Ref.Any
     prev: Event | None
 
     @classmethod
     def new(
-        cls, t: float, ref: Ref.Any, prev: Event | None=None
+        cls,
+        t: float,
+        ref: Ref.Any,
+        prev: Event | None = None,
     ):
         return cls(t, ref, prev=prev)
 
     @classmethod
-    def zero(
-        cls, ref: Ref.Any, prev: Event | None=None
-    ):
+    def zero(cls, ref: Ref.Any, prev: Event | None = None):
         return cls(0, ref, prev=prev)
+
 
 #  ------------------
 
@@ -94,9 +106,7 @@ def rec_yield_hint_types(hint):
 
 def yield_param_keys(t_kw: Type[NamedTuple]):
     seen: set[str] = set()
-    for k, h in get_type_hints(
-        t_kw
-    ).items():
+    for k, h in get_type_hints(t_kw).items():
         for h in rec_yield_hint_types(h):
             if k in seen:
                 continue
@@ -106,11 +116,14 @@ def yield_param_keys(t_kw: Type[NamedTuple]):
                 seen.add(k)
                 yield k
 
+
 #  ------------------
+
 
 class Defn(NamedTuple):
     name: str
     params: tuple[str, ...]
+
 
 def define(
     t: Type[NodeInterface],
@@ -128,55 +141,70 @@ def define(
         # dims, oritentation, etc. (from t)
     )
 
+
 #  ------------------
 
-N = TypeVar("N", bound = NamedTuple)
+N = TypeVar("N", bound=NamedTuple)
 
 V = np.ndarray | float
 
 F = ParamSpec("F")
 FRes = TypeVar("FRes")
 
+
 class NodeInterface(abc.ABC, Generic[R, N]):
-    
+
     DEF: ClassVar[Defn] = Defn("NULL", ())
 
     @abc.abstractmethod
     def pipe(
         self,
-        f: Callable[Concatenate[NodeInterface[R, N], F], FRes],
+        f: Callable[
+            Concatenate[NodeInterface[R, N], F], FRes
+        ],
         *args: F.args,
-        **kwargs: F.kwargs
+        **kwargs: F.kwargs,
     ) -> FRes: ...
-    
-    @abc.abstractmethod
-    def ref(self, i: int, slot: int | None=None) -> R: ...
 
     @abc.abstractmethod
-    def __call__(self, event: Event, graph: GraphInterface) -> V: ...
+    def ref(self, i: int, slot: int | None = None) -> R: ...
+
+    @abc.abstractmethod
+    def __call__(
+        self, event: Event, graph: GraphInterface
+    ) -> V: ...
+
 
 #  ------------------
+
 
 class Node_NullKW(NamedTuple):
     pass
 
-class Node_Null(Node_NullKW, NodeInterface[Ref.Any, Node_NullKW]):
+
+class Node_Null(
+    Node_NullKW, NodeInterface[Ref.Any, Node_NullKW]
+):
 
     def pipe(
         self,
         f: Callable[Concatenate[Node_Null, F], FRes],
         *args: F.args,
-        **kwargs: F.kwargs
+        **kwargs: F.kwargs,
     ) -> FRes:
         return f(self, *args, **kwargs)
 
-    def ref(self, i: int, slot: int | None=None) -> Ref.Any:
+    def ref(
+        self, i: int, slot: int | None = None
+    ) -> Ref.Any:
         raise ValueError(self)
 
     def __call__(self, event: Event, graph: GraphInterface):
         raise ValueError(self)
 
+
 #  ------------------
+
 
 class Node_D0_Date(NodeInterface):
 
@@ -184,11 +212,13 @@ class Node_D0_Date(NodeInterface):
         self,
         f: Callable[Concatenate[Node_D0_Date, F], FRes],
         *args: F.args,
-        **kwargs: F.kwargs
+        **kwargs: F.kwargs,
     ) -> FRes:
         return f(self, *args, **kwargs)
 
-    def ref(self, i: int, slot: int | None=None) -> Ref.D0_Date:
+    def ref(
+        self, i: int, slot: int | None = None
+    ) -> Ref.D0_Date:
         return Ref.D0_Date.new(i, slot)
 
     @abc.abstractmethod
@@ -196,17 +226,20 @@ class Node_D0_Date(NodeInterface):
         self, event: Event, graph: GraphInterface
     ) -> dt.date: ...
 
+
 class Node_D0_F64(NodeInterface):
-    
+
     def pipe(
         self,
         f: Callable[Concatenate[Node_D0_F64, F], FRes],
         *args: F.args,
-        **kwargs: F.kwargs
+        **kwargs: F.kwargs,
     ) -> FRes:
         return f(self, *args, **kwargs)
 
-    def ref(self, i: int, slot: int | None=None) -> Ref.D0_F64:
+    def ref(
+        self, i: int, slot: int | None = None
+    ) -> Ref.D0_F64:
         return Ref.D0_F64.new(i, slot)
 
     @abc.abstractmethod
@@ -214,7 +247,9 @@ class Node_D0_F64(NodeInterface):
         self, event: Event, graph: GraphInterface
     ) -> float: ...
 
+
 #  ------------------
+
 
 class Node_D1_Date(NodeInterface):
 
@@ -222,11 +257,13 @@ class Node_D1_Date(NodeInterface):
         self,
         f: Callable[Concatenate[Node_D1_Date, F], FRes],
         *args: F.args,
-        **kwargs: F.kwargs
+        **kwargs: F.kwargs,
     ) -> FRes:
         return f(self, *args, **kwargs)
 
-    def ref(self, i: int, slot: int | None=None) -> Ref.D1_Date:
+    def ref(
+        self, i: int, slot: int | None = None
+    ) -> Ref.D1_Date:
         return Ref.D1_Date.new(i, slot)
 
     @abc.abstractmethod
@@ -234,17 +271,20 @@ class Node_D1_Date(NodeInterface):
         self, event: Event, graph: GraphInterface
     ) -> np.ndarray: ...
 
+
 class Node_D1_F64(NodeInterface):
-    
+
     def pipe(
         self,
         f: Callable[Concatenate[Node_D1_F64, F], FRes],
         *args: F.args,
-        **kwargs: F.kwargs
+        **kwargs: F.kwargs,
     ) -> FRes:
         return f(self, *args, **kwargs)
 
-    def ref(self, i: int, slot: int | None=None) -> Ref.D1_F64:
+    def ref(
+        self, i: int, slot: int | None = None
+    ) -> Ref.D1_F64:
         return Ref.D1_F64.new(i, slot)
 
     @abc.abstractmethod
@@ -252,19 +292,23 @@ class Node_D1_F64(NodeInterface):
         self, event: Event, graph: GraphInterface
     ) -> np.ndarray: ...
 
+
 #  ------------------
 
+
 class Node_D2_F64(NodeInterface):
-    
+
     def pipe(
         self,
         f: Callable[Concatenate[Node_D2_F64, F], FRes],
         *args: F.args,
-        **kwargs: F.kwargs
+        **kwargs: F.kwargs,
     ) -> FRes:
         return f(self, *args, **kwargs)
 
-    def ref(self, i: int, slot: int | None=None) -> Ref.D2_F64:
+    def ref(
+        self, i: int, slot: int | None = None
+    ) -> Ref.D2_F64:
         return Ref.D2_F64.new(i, slot)
 
     @abc.abstractmethod
@@ -272,7 +316,9 @@ class Node_D2_F64(NodeInterface):
         self, event: Event, graph: GraphInterface
     ) -> np.ndarray: ...
 
+
 #  ------------------
+
 
 class Node:
     Any = NodeInterface
@@ -293,7 +339,7 @@ class Node:
     Matrox_F64 = Node_D2_F64
 
     Null = Node_Null
-    null = Node_Null()    
+    null = Node_Null()
+
 
 #  ------------------
-

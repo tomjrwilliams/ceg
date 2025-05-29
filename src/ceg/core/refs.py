@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 import abc
-from typing import NamedTuple, Protocol, Type, TypeVar, overload, Literal
+from typing import (
+    NamedTuple,
+    Protocol,
+    Type,
+    TypeVar,
+    overload,
+    Literal,
+)
 
 import numpy as np
 
@@ -9,16 +16,17 @@ from .histories import History, Last, V
 
 #  ------------------
 
-Data = tuple[
-    History.Any | tuple[History.Any, ...], ...
-]
+Data = tuple[History.Any | tuple[History.Any, ...], ...]
+
 
 class GraphInterface(Protocol):
-    
+
     @property
     def data(self) -> Data: ...
 
+
 H = TypeVar("H", bound=History.Any)
+
 
 @overload
 def history(
@@ -29,6 +37,7 @@ def history(
     slot: int | None = None,
 ) -> H: ...
 
+
 @overload
 def history(
     g: GraphInterface,
@@ -37,6 +46,7 @@ def history(
     strict: Literal[False],
     slot: int | None = None,
 ) -> H | None: ...
+
 
 def history(
     g: GraphInterface,
@@ -50,7 +60,7 @@ def history(
         if not strict and isinstance(h, History.Null):
             return None
         assert isinstance(h, t), dict(
-            h=h, t=t, strict=strict # type: ignore
+            h=h, t=t, strict=strict  # type: ignore
         )
         return h
     assert isinstance(h, tuple), (h, t, slot)
@@ -58,14 +68,17 @@ def history(
     if not strict and isinstance(h_slot, History.Null):
         return None
     assert isinstance(h_slot, t), dict(
-        h=h_slot, t=t, strict=strict # type: ignore
+        h=h_slot, t=t, strict=strict  # type: ignore
     )
     return h_slot
 
+
 #  ------------------
+
 
 class Scope(NamedTuple):
     required: int
+
 
 class RefInterface(abc.ABC):
     i: int
@@ -80,21 +93,21 @@ class RefInterface(abc.ABC):
     @abc.abstractmethod
     @overload
     def history(
-        self, 
-        g: GraphInterface, 
-        strict: bool | Literal[True] = True
+        self,
+        g: GraphInterface,
+        strict: bool | Literal[True] = True,
     ) -> History.Any: ...
 
     @abc.abstractmethod
     @overload
     def history(
-        self, 
-        g: GraphInterface, 
-        strict: Literal[False]
+        self, g: GraphInterface, strict: Literal[False]
     ) -> History.Any | None: ...
 
     @abc.abstractmethod
-    def history(self, g: GraphInterface, strict: bool = True) -> History.Any | None: ...
+    def history(
+        self, g: GraphInterface, strict: bool = True
+    ) -> History.Any | None: ...
 
     @classmethod
     @abc.abstractclassmethod
@@ -128,22 +141,28 @@ class RefKwargs(NamedTuple):
         scope: Scope | None = None,
     ):
         return cls(i, slot, scope)
-    
+
     def _select(self, last: bool | int):
-        return self._replace(scope=Scope(required=int(last)))
+        return self._replace(
+            scope=Scope(required=int(last))
+        )
+
 
 R = TypeVar("R", bound=RefInterface)
 
 #  ------------------
 
+
 class Ref_D0_Date(RefKwargs, RefInterface):
 
     def select(self, last: bool | int) -> Ref_D0_Date:
         return self._select(last)
-    
+
     @overload
     def history(
-        self, g: GraphInterface, strict: Literal[True] = True
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
     ) -> History.D0_Date: ...
 
     @overload
@@ -154,16 +173,21 @@ class Ref_D0_Date(RefKwargs, RefInterface):
     def history(
         self, g: GraphInterface, strict: bool = True
     ) -> History.D0_Date | None:
-        return history(g, self.i, History.D0_Date, strict, self.slot)
+        return history(
+            g, self.i, History.D0_Date, strict, self.slot
+        )
+
 
 class Ref_D0_F64(RefKwargs, RefInterface):
 
     def select(self, last: bool | int) -> Ref_D0_F64:
         return self._select(last)
-    
+
     @overload
     def history(
-        self, g: GraphInterface, strict: Literal[True] = True
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
     ) -> History.D0_F64: ...
 
     @overload
@@ -174,18 +198,24 @@ class Ref_D0_F64(RefKwargs, RefInterface):
     def history(
         self, g: GraphInterface, strict: bool = True
     ) -> History.D0_F64 | None:
-        return history(g, self.i, History.D0_F64, strict, self.slot)
+        return history(
+            g, self.i, History.D0_F64, strict, self.slot
+        )
+
 
 #  ------------------
+
 
 class Ref_D1_Date(RefKwargs, RefInterface):
 
     def select(self, last: bool | int) -> Ref_D1_Date:
         return self._select(last)
-    
+
     @overload
     def history(
-        self, g: GraphInterface, strict: Literal[True] = True
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
     ) -> History.D1_Date: ...
 
     @overload
@@ -196,16 +226,21 @@ class Ref_D1_Date(RefKwargs, RefInterface):
     def history(
         self, g: GraphInterface, strict: bool = True
     ) -> History.D1_Date | None:
-        return history(g, self.i, History.D1_Date, strict, self.slot)
+        return history(
+            g, self.i, History.D1_Date, strict, self.slot
+        )
+
 
 class Ref_D1_F64(RefKwargs, RefInterface):
 
     def select(self, last: bool | int) -> Ref_D1_F64:
         return self._select(last)
-    
+
     @overload
     def history(
-        self, g: GraphInterface, strict: Literal[True] = True
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
     ) -> History.D1_F64: ...
 
     @overload
@@ -216,18 +251,24 @@ class Ref_D1_F64(RefKwargs, RefInterface):
     def history(
         self, g: GraphInterface, strict: bool = True
     ) -> History.D1_F64 | None:
-        return history(g, self.i, History.D1_F64, strict, self.slot)
+        return history(
+            g, self.i, History.D1_F64, strict, self.slot
+        )
+
 
 #  ------------------
+
 
 class Ref_D2_F64(RefKwargs, RefInterface):
 
     def select(self, last: bool | int) -> Ref_D2_F64:
         return self._select(last)
-    
+
     @overload
     def history(
-        self, g: GraphInterface, strict: Literal[True] = True
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
     ) -> History.D2_F64: ...
 
     @overload
@@ -238,9 +279,13 @@ class Ref_D2_F64(RefKwargs, RefInterface):
     def history(
         self, g: GraphInterface, strict: bool = True
     ) -> History.D2_F64 | None:
-        return history(g, self.i, History.D2_F64, strict, self.slot)
+        return history(
+            g, self.i, History.D2_F64, strict, self.slot
+        )
+
 
 #  ------------------
+
 
 class Ref:
     Any = RefInterface
@@ -256,7 +301,7 @@ class Ref:
 
     D1_F64 = Ref_D1_F64
     Vector_F64 = Ref_D1_F64
-    
+
     D2_F64 = Ref_D2_F64
     Matrix_F64 = Ref_D2_F64
 
@@ -294,5 +339,6 @@ class Ref:
             return Last.D2_F64.new(v, required, 1)
         #
         raise ValueError(ref)
+
 
 #  ------------------

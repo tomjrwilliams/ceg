@@ -23,10 +23,21 @@ import itertools
 
 from frozendict import frozendict
 
-from .algos import set_tuple, frozendict_append_tuple, fold_star
+from .algos import (
+    set_tuple,
+    frozendict_append_tuple,
+    fold_star,
+)
 from .histories import History
 from .refs import Ref, Scope, Data, R
-from .nodes import N, Node, define, Defn, Event, yield_params
+from .nodes import (
+    N,
+    Node,
+    define,
+    Defn,
+    Event,
+    yield_params,
+)
 from .guards import Guard, Loop
 
 logger = logging.Logger(__file__)
@@ -41,8 +52,10 @@ T = TypeVar("T")
 class Key(NamedTuple):
     pass
 
+
 class Value(NamedTuple):
     pass
+
 
 TNodes = tuple[Node.Any, ...]
 TGuards = tuple[Guard.Any, ...]
@@ -51,6 +64,7 @@ UStream = tuple[frozendict[int, tuple[str, ...]], ...]
 DStream = frozendict[int, tuple[int, ...]]
 
 State = frozendict[Key, Value]
+
 
 class GraphKW(NamedTuple):
 
@@ -64,8 +78,10 @@ class GraphKW(NamedTuple):
     data: Data
     state: State
 
+
 F = ParamSpec("F")
 FRes = TypeVar("FRes")
+
 
 class Graph(GraphKW):
     """
@@ -84,7 +100,7 @@ class Graph(GraphKW):
         self,
         f: Callable[Concatenate[Graph, F], FRes],
         *args: F.args,
-        **kwargs: F.kwargs
+        **kwargs: F.kwargs,
     ) -> FRes:
         return f(self, *args, **kwargs)
 
@@ -97,18 +113,16 @@ class Graph(GraphKW):
         return cls(
             queue=queue,
             nodes=(),
-            guards = (),
+            guards=(),
             index=index,
             ustream=(),
             dstream=dstream,
-            required=frozendict(), # type: ignore
+            required=frozendict(),  # type: ignore
             data=(),
-            state=frozendict()  # type: ignore
+            state=frozendict(),  # type: ignore
         )
-    
-    def with_state(
-        self, key: Key, value: Value
-    ) -> Graph:
+
+    def with_state(self, key: Key, value: Value) -> Graph:
         return self._replace(
             state=self.state.set(key, value)
         )
@@ -120,7 +134,9 @@ class Graph(GraphKW):
         when: Guard.Any[N] | None = None,
         keep: int | None = 1,
     ) -> tuple[Graph, R]:
-        return bind(self, node=node, ref=ref, when=when, keep=keep)
+        return bind(
+            self, node=node, ref=ref, when=when, keep=keep
+        )
 
     @contextlib.contextmanager
     def mutable(
@@ -146,25 +162,28 @@ class Graph(GraphKW):
         finally:
             assert is_done(), ctxt
 
+
 class MutableBind(Protocol):
 
     def __call__(
         self,
-        node: Node.Any[R, N] | None=None,
-        ref: R | Type[R] | None=None,
+        node: Node.Any[R, N] | None = None,
+        ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
         keep: int | None = 1,
     ) -> R: ...
+
 
 class ImplicitBind(Protocol):
 
     def __call__(
         self,
-        node: Node.Any[R, N] | None=None,
-        ref: R | Type[R] | None=None,
+        node: Node.Any[R, N] | None = None,
+        ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
         keep: int | None = 1,
     ) -> R: ...
+
 
 class MutableContext(NamedTuple):
     bind: MutableBind
@@ -217,7 +236,9 @@ def graph_context(
         nonlocal DONE
         assert not DONE, (node, ref)
         # TODO: partition
-        g, res = g.bind(node=node, ref=ref, when=when, keep=keep)
+        g, res = g.bind(
+            node=node, ref=ref, when=when, keep=keep
+        )
         return res
 
     def state() -> Graph:
@@ -263,7 +284,9 @@ def init_node(
     dstream: DStream,
     data: Data,
     when: Guard.Any[N] | None = None,
-) -> tuple[TNodes, TGuards, UStream, DStream, Data, dict[int, int]]:
+) -> tuple[
+    TNodes, TGuards, UStream, DStream, Data, dict[int, int]
+]:
     i = ref.i
     nodes = set_tuple(nodes, i, node, Node.null)
     acc: defaultdict[int, list[str]] = defaultdict(list)
@@ -294,17 +317,18 @@ def init_node(
         frozendict_append_tuple,
         zip(params, itertools.repeat(ref.i, len(params))),
     )
-    data = set_tuple(
-        data, i, History.null, History.null
-    )
+    data = set_tuple(data, i, History.null, History.null)
     # init is on first value (need to know shape, not necessarily fixed at runtime)
     if when is None:
         when = Guard.AllReady.new().init(ref, params)
     else:
         when = when.init(ref, params)
 
-    guards = set_tuple(guards, i, when, Guard.AllReady.new())
+    guards = set_tuple(
+        guards, i, when, Guard.AllReady.new()
+    )
     return nodes, guards, ustream, dstream, data, required
+
 
 #  ------------------
 
@@ -328,7 +352,7 @@ def bind(
     i: int
     res: R
     ustream: UStream
-    
+
     #
     (
         queue,
@@ -342,7 +366,7 @@ def bind(
         state,
     ) = graph
     #
-    
+
     # TODO: unpack and bind state
     # where state is passed as arg on the node itself
     # so same as param iteration?
@@ -362,8 +386,22 @@ def bind(
         i = index.get(node, len(graph.nodes))
         res = node.ref(i)
         if i == len(graph.nodes):
-            nodes, guards, ustream, dstream, data, req = init_node(
-                node, res, nodes, guards, ustream, dstream, data, when=when
+            (
+                nodes,
+                guards,
+                ustream,
+                dstream,
+                data,
+                req,
+            ) = init_node(
+                node,
+                res,
+                nodes,
+                guards,
+                ustream,
+                dstream,
+                data,
+                when=when,
             )  # type: ignore
     elif isinstance(node, Node.Any) and isinstance(
         ref, Ref.Any
@@ -372,8 +410,22 @@ def bind(
         assert i == ref.i, (node, ref, i)
         res = ref
         if nodes[i] == Node.null:
-            nodes, guards, ustream, dstream, data, req = init_node(
-                node, res, nodes, guards, ustream, dstream, data, when=when
+            (
+                nodes,
+                guards,
+                ustream,
+                dstream,
+                data,
+                req,
+            ) = init_node(
+                node,
+                res,
+                nodes,
+                guards,
+                ustream,
+                dstream,
+                data,
+                when=when,
             )  # type: ignore
     else:
         raise ValueError(type(node), type(ref), node, ref)
@@ -382,9 +434,9 @@ def bind(
         req = req | {i: keep}
 
     required = required | {
-        p: r for p, r in req.items()
-        if p not in required
-        or required.get(p, 0) < r
+        p: r
+        for p, r in req.items()
+        if p not in required or required.get(p, 0) < r
     }
 
     graph = Graph(
@@ -400,5 +452,6 @@ def bind(
     )
 
     return graph, res
+
 
 #  ------------------

@@ -4,4 +4,3 @@
 # weighted thereof
 
 # all, any
-
