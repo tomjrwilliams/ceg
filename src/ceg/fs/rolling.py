@@ -2,7 +2,7 @@ from typing import NamedTuple, ClassVar
 import numpy
 import numpy as np
 
-from ..core import Graph, Node, Ref, Event, Loop, Defn, define, steps
+from ..core import Graph, Node, Ref, Event, Loop, Defn, define, steps, batches
 
 #  ------------------
 
@@ -17,27 +17,22 @@ class sum_kw(NamedTuple):
 
 class sum(sum_kw, Node.Scalar_F64):
     """
-    scalar mean (optional rolling window)
-    v: Ref.Scalar_F64
-    window: int
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> g, r0 = rand.gaussian.walk(g, mean=1, keep=3)
     >>> with g.implicit() as (bind, done):
-    ...     mu = bind(mean.new(r))
-    ...     mu_3 = bind(mean.new(r, window=3))
+    ...     r1 = bind(sum.new(r0, window=3))
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(mu, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
-    >>> list(
-    ...     numpy.round(g.select(mu_3, es[-1]), 2)
-    ... )
-    [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
+    >>> for g, es, t in batches(g, Event.zero(r0), n=5, g=2, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
+    ...     print(v0, v1)
+    1.13 1.13
+    1.99 3.12
+    3.63 6.75
+    4.74 10.37
+    5.2 13.58
     """
 
     DEF: ClassVar[Defn] = define(
@@ -69,27 +64,22 @@ class mean_kw(NamedTuple):
 
 class mean(mean_kw, Node.Scalar_F64):
     """
-    scalar mean (optional rolling window)
-    v: Ref.Scalar_F64
-    window: int
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> g, r0 = rand.gaussian.walk(g, mean=1, keep=3)
     >>> with g.implicit() as (bind, done):
-    ...     mu = bind(mean.new(r))
-    ...     mu_3 = bind(mean.new(r, window=3))
+    ...     r1 = bind(mean.new(r0, window=3))
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(mu, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
-    >>> list(
-    ...     numpy.round(g.select(mu_3, es[-1]), 2)
-    ... )
-    [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
+    >>> for g, es, t in batches(g, Event.zero(r0), n=5, g=2, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
+    ...     print(v0, v1)
+    1.13 1.13
+    1.99 1.56
+    3.63 2.25
+    4.74 3.46
+    5.2 4.53
     """
 
     DEF: ClassVar[Defn] = define(
@@ -185,27 +175,22 @@ class std_kw(NamedTuple):
 
 class std(std_kw, Node.Scalar_F64):
     """
-    scalar mean (optional rolling window)
-    v: Ref.Scalar_F64
-    window: int
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> g, r0 = rand.gaussian.walk(g, mean=1, keep=3)
     >>> with g.implicit() as (bind, done):
-    ...     mu = bind(std.new(r))
-    ...     mu_3 = bind(std.new(r, window=3))
+    ...     r1 = bind(std.new(r0, window=3))
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(mu, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
-    >>> list(
-    ...     numpy.round(g.select(mu_3, es[-1]), 2)
-    ... )
-    [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
+    >>> for g, es, t in batches(g, Event.zero(r0), n=5, g=2, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
+    ...     print(v0, v1)
+    1.13 0.0
+    1.99 0.43
+    3.63 1.04
+    4.74 1.13
+    5.2 0.66
     """
 
     DEF: ClassVar[Defn] = define(
@@ -221,6 +206,7 @@ class std(std_kw, Node.Scalar_F64):
     def __call__(
         self, event: Event, graph: Graph
     ):
+        # TODO: if only one observation, return NAN?
         return np.nanstd(
             self.v.history(graph).last_n_before(self.window, event.t)
         )
@@ -302,27 +288,22 @@ class rms_kw(NamedTuple):
 
 class rms(rms_kw, Node.Scalar_F64):
     """
-    scalar mean (optional rolling window)
-    v: Ref.Scalar_F64
-    window: int
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> g, r0 = rand.gaussian.walk(g, mean=1, keep=3)
     >>> with g.implicit() as (bind, done):
-    ...     mu = bind(rms.new(r))
-    ...     mu_3 = bind(rms.new(r, window=3))
+    ...     r1 = bind(rms.new(r0, window=3))
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(mu, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
-    >>> list(
-    ...     numpy.round(g.select(mu_3, es[-1]), 2)
-    ... )
-    [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
+    >>> for g, es, t in batches(g, Event.zero(r0), n=5, g=2, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
+    ...     print(v0, v1)
+    1.13 1.13
+    1.99 1.62
+    3.63 2.48
+    4.74 3.63
+    5.2 4.57
     """
 
     DEF: ClassVar[Defn] = define(
@@ -438,27 +419,26 @@ class cov_kw(NamedTuple):
 
 class cov(cov_kw, Node.Scalar_F64):
     """
-    scalar mean (optional rolling window)
-    v: Ref.Scalar_F64
-    window: int
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> when = Loop.every(1)
+    >>> g, r0 = g.bind(rand.gaussian.new(), when=when, keep = 3)
+    >>> g, r1 = g.bind(rand.gaussian.new(), when=when, keep = 3)
     >>> with g.implicit() as (bind, done):
-    ...     mu = bind(mean.new(r))
-    ...     mu_3 = bind(mean.new(r, window=3))
+    ...     r2 = bind(cov.new(r0, r1, 3))
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(mu, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
-    >>> list(
-    ...     numpy.round(g.select(mu_3, es[-1]), 2)
-    ... )
-    [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
+    >>> es = [Event.zero(r0), Event.zero(r1)]
+    >>> for g, es, t in batches(g, *es, n=5, g=3, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
+    ...     v2 = round(r2.history(g).last_before(t), 2)
+    ...     print(v0, v1, v2)
+    0.13 -0.13 0.0
+    0.64 0.1 0.03
+    -0.54 0.36 -0.06
+    1.3 0.95 0.15
+    -0.7 -1.27 0.64
     """
 
     DEF: ClassVar[Defn] = define(
@@ -489,6 +469,8 @@ class cov(cov_kw, Node.Scalar_F64):
         v1 = self.v1.history(graph).last_n_before(self.window, event.t)
         v2 = self.v2.history(graph).last_n_before(self.window, event.t)
 
+        # TODO: if only one observation, return NAN?
+
         if self.mu_1 is not None:
             mu_1 = self.mu_1.history(graph).last_before(event.t)
         else:
@@ -505,6 +487,8 @@ class cov(cov_kw, Node.Scalar_F64):
 
         return res
 
+# TODO: corr (pearson, spearman), linear beta
+
 #  ------------------
 
 
@@ -513,7 +497,7 @@ class pca_kw(NamedTuple):
     #
     vs: tuple[Ref.Scalar_F64, ...]
     window: int
-    keep: int
+    factors: int
     mus: tuple[Ref.Scalar_F64, ...] | None
     signs: tuple[int | None] | None
     centre: bool
@@ -523,21 +507,25 @@ class pca(pca_kw, Node.Vector_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> when = Loop.every(1)
+    >>> g, r0 = g.bind(rand.gaussian.new(), when=when, keep = 3)
+    >>> g, r1 = g.bind(rand.gaussian.new(), when=when, keep = 3)
     >>> with g.implicit() as (bind, done):
-    ...     mu = bind(mean.new(r))
-    ...     mu_3 = bind(mean.new(r, window=3))
+    ...     r2 = bind(pca.new((r0, r1), window=3, factors=1))
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(mu, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
-    >>> list(
-    ...     numpy.round(g.select(mu_3, es[-1]), 2)
-    ... )
-    [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
+    >>> es = [Event.zero(r0), Event.zero(r1)]
+    >>> for g, es, t in batches(g, *es, n=5, g=3, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
+    ...     v2 = r2.history(g).last_before(t).reshape((2+1, 1))
+    ...     eig = round(v2[0,0], 2)
+    ...     loading = np.round(v2[1:, 0], 2)
+    ...     print(v0, v1, eig, loading)
+    0.13 -0.13 nan [nan nan]
+    0.64 0.1 0.66 [0.99 0.12]
+    -0.54 0.36 0.86 [-0.97  0.24]
+    1.3 0.95 1.74 [-0.87 -0.49]
+    -0.7 -1.27 2.12 [-0.69 -0.72]
     """
 
     DEF: ClassVar[Defn] = define(
@@ -549,13 +537,13 @@ class pca(pca_kw, Node.Vector_F64):
         cls,
         vs: tuple[Ref.Scalar_F64, ...],
         window: int,
-        keep: int,
+        factors: int,
         mus: tuple[Ref.Scalar_F64, ...] | None=None,
         signs: tuple[int | None] | None = None,
         centre: bool = False,
     ):
         return cls(
-            cls.DEF.name, vs=vs, window=window, keep=keep, mus=mus,signs=signs, centre=centre
+            cls.DEF.name, vs=vs, window=window, factors=factors, mus=mus,signs=signs, centre=centre
         )
 
     def __call__(
@@ -594,17 +582,17 @@ class pca(pca_kw, Node.Vector_F64):
         ].T
 
         if vs.size <= len(mus):
-            e = np.array([np.NAN for _ in range(self.keep)])
+            e = np.array([np.NAN for _ in range(self.factors)])
             u = np.array([np.NAN for _ in mus])
             U = np.hstack([
                 np.expand_dims(u, 1)
-                for _ in range(self.keep)
+                for _ in range(self.factors)
             ])
             return np.vstack([
                 np.expand_dims(e, 0),
                 U
             ]).reshape(
-                (self.keep * (len(mus) + 1))
+                (self.factors * (len(mus) + 1))
             )
 
         # (window, n variables)
@@ -630,9 +618,9 @@ class pca(pca_kw, Node.Vector_F64):
                         continue
                 U[:, s] *= -1
 
-        if self.keep is not None:
-            U = U[:, :self.keep]
-            e = e[:self.keep]
+        if self.factors is not None:
+            U = U[:, :self.factors]
+            e = e[:self.factors]
             # Vt = Vt[:, :self.keep]
 
         # TODO: now we have tuple returns, use them
@@ -645,7 +633,7 @@ class pca(pca_kw, Node.Vector_F64):
                 np.expand_dims(e, 0),
                 U
             ]).reshape(
-                (self.keep * (len(mus) + 1))
+                (self.factors * (len(mus) + 1))
             )
         except:
             raise ValueError(vs, U, e)
@@ -703,10 +691,10 @@ class pca_scale(pca_scale_kw, Node.Scalar_F64):
         # first row is the eignenvalues
         n = graph.nodes[self.v.i]
         assert isinstance(n, pca), n
-        keep = n.keep
+        factors = n.factors
         vs = self.v.history(graph).last_before(event.t)
         vs = vs.reshape(
-            int(vs.shape[0] / keep), keep, 
+            int(vs.shape[0] / factors), factors, 
         )
         return vs[0,self.factor]
 
@@ -738,10 +726,10 @@ class pca_weights(pca_weights_kw, Node.Vector_F64):
         # first row is eigenvalues. then weights are cols of remainder
         n = graph.nodes[self.v.i]
         assert isinstance(n, pca), n
-        keep = n.keep
+        factors = n.factors
         vs = self.v.history(graph).last_before(event.t)
         vs = vs.reshape(
-            int(vs.shape[0] / keep), keep, 
+            int(vs.shape[0] / factors), factors, 
         )
         w = vs[1:,self.factor]
         return w

@@ -8,7 +8,7 @@ from typing import NamedTuple, ClassVar
 import numpy
 import numpy as np
 
-from ..core import Graph, Node, Ref, Event, Loop, Defn, define, steps
+from ..core import Graph, Node, Ref, Event, Loop, Defn, define, steps, batches
 
 #  ------------------
 
@@ -21,26 +21,25 @@ class ratio_kw(NamedTuple):
 
 class ratio(ratio_kw, Node.Scalar_F64):
     """
-    scalar mean (optional rolling window)
-    v: Ref.Scalar_F64
-    window: float | None
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> g, r0 = g.bind(rand.gaussian.new(), when=Loop.every(1))
+    >>> g, r1 = g.bind(rand.gaussian.new(), when=Loop.every(1))
     >>> with g.implicit() as (bind, done):
-    ...     rat = bind(ratio.new(r, r))
+    ...     r2 = bind(ratio.new(r0, r1))
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(mu, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
-    >>> list(
-    ...     numpy.round(g.select(mu_3, es[-1]), 2)
-    ... )
-    [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
+    >>> es = [Event.zero(r0), Event.zero(r1)]
+    >>> for g, es, t in batches(g, *es, n=5, g=3, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
+    ...     v2 = round(r2.history(g).last_before(t), 2)
+    ...     print(v0, v1, v2)
+    0.13 -0.13 -0.95
+    0.64 0.1 6.11
+    -0.54 0.36 -1.48
+    1.3 0.95 1.38
+    -0.7 -1.27 0.56
     """
 
     DEF: ClassVar[Defn] = define(
@@ -75,26 +74,25 @@ class pct_diff_kw(NamedTuple):
 
 class pct_diff(pct_diff_kw, Node.Scalar_F64):
     """
-    scalar mean (optional rolling window)
-    v: Ref.Scalar_F64
-    window: float | None
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> g, r0 = g.bind(rand.gaussian.new(), when=Loop.every(1))
+    >>> g, r1 = g.bind(rand.gaussian.new(), when=Loop.every(1))
     >>> with g.implicit() as (bind, done):
-    ...     rat = bind(ratio.new(r, r))
+    ...     r2 = bind(pct_diff.new(r0, r1))
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(mu, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
-    >>> list(
-    ...     numpy.round(g.select(mu_3, es[-1]), 2)
-    ... )
-    [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
+    >>> es = [Event.zero(r0), Event.zero(r1)]
+    >>> for g, es, t in batches(g, *es, n=5, g=3, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
+    ...     v2 = round(r2.history(g).last_before(t), 2)
+    ...     print(v0, v1, v2)
+    0.13 -0.13 -1.95
+    0.64 0.1 5.11
+    -0.54 0.36 -2.48
+    1.3 0.95 0.38
+    -0.7 -1.27 -0.44
     """
 
     DEF: ClassVar[Defn] = define(
@@ -110,13 +108,6 @@ class pct_diff(pct_diff_kw, Node.Scalar_F64):
     def __call__(
         self, event: Event, graph: Graph
     ):
-        # i_l = i_r = 1
-        # if self.shift is not None:
-        #     l_shift, r_shift = self.shift
-        #     if l_shift is not None:
-        #         i_l = i_l + l_shift
-        #     if r_shift is not None:
-        #         i_r = i_r + r_shift
         l = self.l.history(graph).last_before(event.t)
         r = self.r.history(graph).last_before(event.t)
         if np.isnan(l) or np.isnan(r):
@@ -135,26 +126,25 @@ class subtract_kw(NamedTuple):
 
 class subtract(subtract_kw, Node.Scalar_F64):
     """
-    scalar mean (optional rolling window)
-    v: Ref.Scalar_F64
-    window: float | None
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = gaussian.bind(g)
+    >>> g, r0 = g.bind(rand.gaussian.new(), when=Loop.every(1))
+    >>> g, r1 = g.bind(rand.gaussian.new(), when=Loop.every(1))
     >>> with g.implicit() as (bind, done):
-    ...     rat = bind(ratio.new(r, r))
+    ...     r2 = bind(subtract.new(r0, r1))
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(mu, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
-    >>> list(
-    ...     numpy.round(g.select(mu_3, es[-1]), 2)
-    ... )
-    [0.13, 0.06, 0.25, 0.46, 0.53, 0.5]
+    >>> es = [Event.zero(r0), Event.zero(r1)]
+    >>> for g, es, t in batches(g, *es, n=5, g=3, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
+    ...     v2 = round(r2.history(g).last_before(t), 2)
+    ...     print(v0, v1, v2)
+    0.13 -0.13 0.26
+    0.64 0.1 0.54
+    -0.54 0.36 -0.9
+    1.3 0.95 0.36
+    -0.7 -1.27 0.56
     """
 
     DEF: ClassVar[Defn] = define(

@@ -26,30 +26,38 @@ class Step(NamedTuple):
 
 class GraphEvent(NamedTuple):
     graph: Graph
-    event: Event
+    event: Event | None
+    t: float | None
 
 class GraphEvents(NamedTuple):
     graph: Graph
     events: tuple[Event, ...]
+    t: float | None
 
     def last(self) -> GraphEvent:
-        return GraphEvent(self.graph, self.events[-1])
+        return GraphEvent(self.graph, self.events[-1], self.t)
 
 class GraphBatches(NamedTuple):
     graph: Graph
     events: tuple[tuple[Event, ...], ...]
+    t: tuple[float, ...]
 
     def last(self) -> GraphEvent:
-        return GraphEvent(self.graph, self.events[-1][-1])
+        return GraphEvent(
+            self.graph,
+            self.events[-1][-1],
+            self.events[-1][-1].t
+        )
 
 class GraphUntilTrigger(NamedTuple):
     graph: Graph
     events: tuple[Event, ...]
     trigger: Event | None
+    t: float | None
 
 def step(
     graph: Graph, *events: Event
-) -> tuple[Graph, Event | None]:
+) -> GraphEvent:
     
     queue = graph.queue
     nodes = graph.nodes
@@ -63,7 +71,7 @@ def step(
         event = heappop(queue)
     except IndexError:
         # implies done?
-        return graph, None
+        return GraphEvent(graph, None, None)
 
     try:
         t, ref, prev = event
@@ -92,9 +100,9 @@ def step(
     dstream = graph.dstream
     guards = graph.guards
 
-    for i in dstream.get(ref.i, (
+    for i in dstream.get(ref.i, ()) + (
         (ref.i,) if not len(graph.ustream[ref.i]) else ()
-    )):
+    ):
         nd = nodes[i]
         assert nd is not None, ref
         
@@ -114,7 +122,7 @@ def step(
         else:
             raise ValueError(e)
 
-    return GraphEvent(graph, event)
+    return GraphEvent(graph, event, event.t)
 
 def iter_batches(
     graph: Graph, 
@@ -122,18 +130,26 @@ def iter_batches(
     n: int = 1,
     g: int = 1,
 ):
+    t = None
     for i in range(n):
         acc: list[Event | None] = [None for _ in range(g)]
         for ii in range(g):
             if i == 0 and ii == 0:
-                graph, e = step(graph, *events)
+                graph, e, _ = step(graph, *events)
             else:
-                graph, e = step(graph)
+                graph, e, _ = step(graph)
             if e is None:
                 acc = acc[:ii]
                 break
+            t = e.t
             acc[ii] = e
-        yield GraphEvents(graph, cast(tuple[Event, ...], tuple(acc)))
+        if not len(acc):
+            return
+        yield GraphEvents(
+            graph,
+            cast(tuple[Event, ...], tuple(acc)),
+            t
+        )
 
 def batches(
     graph: Graph, 
@@ -145,26 +161,30 @@ def batches(
     if iter:
         return lambda: iter_batches(graph, *events, n=n, g=g)
     e = None
+    t = None
     es: list[list[Event|None]] = [[None for _ in range(g)] for _ in range(n)]
     for i in range(n):
         acc = es[i]
         for ii in range(g):
             if i == 0 and ii == 0:
-                graph, e = step(graph, *events)
+                graph, e, _ = step(graph, *events)
             else:
-                graph, e = step(graph)
+                graph, e, _ = step(graph)
             if e is None:
                 es[i] = acc[:ii]
                 break
+            t = e.t
             acc[ii] = e
         if e is None:
             break
+    es_res = cast(
+        tuple[tuple[Event, ...], ...], 
+        tuple(map(tuple, [_es for _es in es if len(_es)]))
+    )
     return GraphBatches(
         graph, 
-        cast(
-            tuple[tuple[Event, ...], ...], 
-            tuple(map(tuple, es))
-        )
+        es_res,
+        tuple([_es[-1].t for _es in es_res])
     )
 
 def iter_steps(
@@ -174,12 +194,13 @@ def iter_steps(
 ):
     for i in range(n):
         if i == 0:
-            graph, e = step(graph, *events)
+            graph, e, _ = step(graph, *events)
         else:
-            graph, e = step(graph)
+            graph, e, _ = step(graph)
         if e is None:
             break
-        yield GraphEvent(graph, e)
+        t = e.t
+        yield GraphEvent(graph, e, t)
 
 def steps(
     graph: Graph, 
@@ -189,17 +210,19 @@ def steps(
 ):
     if iter:
         return lambda: iter_steps(graph, *events, n=n)
+    t = None
     es: list[Event | None] = [None for _ in range(n)]
     for i in range(n):
         if i == 0:
-            graph, e = step(graph, *events)
+            graph, e, _ = step(graph, *events)
         else:
-            graph, e = step(graph)
+            graph, e, _ = step(graph)
         if e is None:
             es = es[:i]
             break
+        t = e.t
         es[i] = e
-    return GraphEvents(graph, tuple(cast(list[Event], es)))
+    return GraphEvents(graph, tuple(cast(list[Event], es)), t)
 
 def step_until(
     graph: Graph,
@@ -207,35 +230,40 @@ def step_until(
     *events: Event,
 ):
     # TODO: concat with the given events
+    t = None
     es = []
-    graph, e = step(graph, *events)
+    graph, e, _ = step(graph, *events)
     if e is None:
         return graph, None, (e,)
     while e is not None and not f(graph, e):
         es.append(e)
-        graph, e = step(graph)
+        graph, e, _ = step(graph)
     if e is None:
-        return GraphUntilTrigger(graph,tuple(es), None)
+        return GraphUntilTrigger(graph,tuple(es), None, t)
+    t = e.t
     # if len(refs):
     # TODO until each of those not just all events
     trigger = e
     while e is not None and e.t <= trigger.t:
         es.append(e)
-        graph, e = step(graph)
+        graph, e, _ = step(graph)
     if e is not None:
         es.append(e)
-    return GraphUntilTrigger(graph, tuple(es), trigger)
+        t = e.t
+    return GraphUntilTrigger(graph, tuple(es), trigger, t)
 
 
 def step_until_done(
     graph: Graph, 
     *events: Event,
 ):
+    t = None
     es = []
-    graph, e = step(graph, *events)
+    graph, e, _ = step(graph, *events)
     while e is not None:
         es.append(e)
+        t = e.t
         graph, e = step(graph)
-    return GraphEvents(graph, tuple(es))
+    return GraphEvents(graph, tuple(es), t)
 
 #  ------------------

@@ -110,7 +110,7 @@ def last_ix_before(
     if t[0] > before:
         return -1
     pow = 1
-    ix = step = 2 ** (exponent - 1)
+    ix = step = int(2 ** (exponent - 1))
     while pow < exponent:
         tt = t[ix-1]
         pow += 1

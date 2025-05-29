@@ -1,9 +1,11 @@
-from typing import NamedTuple, ClassVar
+import logging
+from typing import NamedTuple, ClassVar, cast
 import numpy
 import numpy as np
 
 from ..core import Graph, Node, Ref, Event, Loop, Defn, define, steps, batches
 
+logger = logging.Logger(__file__)
 #  ------------------
 
 # abs, log, pow, shift, scale, clip, tanh
@@ -23,16 +25,19 @@ class pct_change(pct_change_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = rand.gaussian.walk(g)
+    >>> g, r0 = rand.gaussian.walk(g, mean=1, keep=2)
     >>> with g.implicit() as (bind, done):
-    ...     ch = bind(pct_change.new(r))
+    ...     r1 = bind(pct_change.new(r0))
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(ch, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
+    >>> for g, es, t in batches(g, Event.zero(r0), n=5, g=2, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
+    ...     print(v0, v1)
+    1.13 nan
+    1.99 0.77
+    3.63 0.82
+    4.74 0.3
+    5.2 0.1
     """
 
     DEF: ClassVar[Defn] = define(
@@ -72,9 +77,9 @@ class sqrt(sqrt_kw, Node.Scalar_F64):
     >>> with g.implicit() as (bind, done):
     ...     r1 = bind(sqrt.new(r0))
     ...     g = done()
-    >>> for g, es in batches(g, Event.zero(r0), n=5, g=2, iter=True)():
-    ...     v0 = round(r0.history(g).last_before(es[-1].t), 2)
-    ...     v1 = round(r1.history(g).last_before(es[-1].t), 2)
+    >>> for g, es, t in batches(g, Event.zero(r0), n=5, g=2, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
     ...     print(v0, v1)
     0.13 0.35
     -0.01 -0.08
@@ -114,16 +119,19 @@ class sq(sq_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = rand.gaussian.walk(g)
+    >>> g, r0 = rand.gaussian.walk(g)
     >>> with g.implicit() as (bind, done):
-    ...     ch = bind(sq.new(r))
+    ...     r1 = bind(sq.new(r0))
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(ch, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
+    >>> for g, es, t in batches(g, Event.zero(r0), n=5, g=2, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
+    ...     print(v0, v1)
+    0.13 0.02
+    -0.01 -0.0
+    0.63 0.4
+    0.74 0.55
+    0.2 0.04
     """
 
     DEF: ClassVar[Defn] = define(
@@ -157,16 +165,19 @@ class cum_sum(cum_sum_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = rand.gaussian.walk(g)
+    >>> g, r0 = g.bind(rand.gaussian.new(), when=Loop.every(1), keep=2)
     >>> with g.implicit() as (bind, done):
-    ...     ch = bind(cum_sum.new(r))
+    ...     r1 = bind(cum_sum.new(r0), keep=2)
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(ch, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
+    >>> for g, es, t in batches(g, Event.zero(r0), n=5, g=2, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
+    ...     print(v0, v1)
+    0.13 0.13
+    -0.13 -0.01
+    0.64 0.63
+    0.1 0.74
+    -0.54 0.2
     """
 
     DEF: ClassVar[Defn] = define(
@@ -186,7 +197,8 @@ class cum_sum(cum_sum_kw, Node.Scalar_F64):
         v = hist.last_before(event.t)
         if event.prev is None:
             return v
-        prev = hist.last_before(event.prev.t)
+        acc = cast(Ref.Scalar_F64, event.ref)
+        prev = acc.history(graph).last_before(event.prev.t)
         if np.isnan(prev):
             return v
         elif np.isnan(v):
@@ -205,16 +217,19 @@ class cum_prod(cum_prod_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r = rand.gaussian.walk(g)
+    >>> g, r0 = g.bind(rand.gaussian.new(), when=Loop.every(1))
     >>> with g.implicit() as (bind, done):
-    ...     ch = bind(cum_prod.new(r, a = 1))
+    ...     r1 = bind(cum_prod.new(r0, a=1.), keep=2)
     ...     g = done()
-    ...
-    >>> g, es = g.steps(Event(0, r), n=18)
-    >>> list(numpy.round(g.select(r, es[-1]), 2))
-    [0.13, -0.01, 0.63, 0.74, 0.2, 0.56]
-    >>> list(numpy.round(g.select(ch, es[-1]), 2))
-    [0.13, 0.06, 0.25, 0.37, 0.34, 0.38]
+    >>> for g, es, t in batches(g, Event.zero(r0), n=5, g=2, iter=True)():
+    ...     v0 = round(r0.history(g).last_before(t), 2)
+    ...     v1 = round(r1.history(g).last_before(t), 2)
+    ...     print(v0, v1)
+    0.13 1.13
+    -0.13 0.98
+    0.64 1.6
+    0.1 1.77
+    -0.54 0.82
     """
 
     DEF: ClassVar[Defn] = define(
@@ -235,7 +250,8 @@ class cum_prod(cum_prod_kw, Node.Scalar_F64):
         v = hist.last_before(event.t)
         if event.prev is None:
             return self.a + v
-        prev = hist.last_before(event.prev.t)
+        acc = cast(Ref.Scalar_F64, event.ref)
+        prev = acc.history(graph).last_before(event.prev.t)
         if np.isnan(prev):
             return self.a + v
         elif np.isnan(v):

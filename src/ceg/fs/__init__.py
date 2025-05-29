@@ -4,5 +4,5 @@ from . import rand
 from . import unary
 from . import binary
 from . import agg
-# from . import stats
+from . import rolling
 # from . import mm

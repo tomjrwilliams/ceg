@@ -49,13 +49,22 @@ class GuardInterface(abc.ABC, Generic[N]):
         self, event: Event, ref: Ref.Any, node: N, graph: GraphInterface
     ) -> Event | None: ...
 
-    def set_prev(self, event: Event):
-        prev = event.prev
+    def set_prev(
+        self, 
+        event: Event,
+        trigger: Event | None,
+    ):
+        if (
+            self.mut.prev is None 
+            and trigger is not None
+            and event.ref == trigger.ref
+        ):
+            self.mut.prev = trigger
         event = event._replace(
             prev=(
-                prev if prev is None
-                else prev._replace(prev=None)
-            ) # stop history accumulation
+                None if self.mut.prev is None
+                else self.mut.prev._replace(prev=None)
+            )
         )
         self.mut.prev = event
         return event
@@ -103,7 +112,7 @@ class AllReady(AllReadyKW, GuardInterface[N]):
     ) -> Event | None:
         # NOTE: ref is of the node, event is of param
         # TODO: now we have prev
-        # assume we always push a final event, can simply wait for prev != event.t, fire event(t=prev)?
+        # assume we always push a final event, can simply wait for prev != event.t, fire event(t=prev)? but then events arent strictly ordered?
         t = event.t
         i = event.ref.i
         if not len(self.ts) or t > self.ts[-1]:
@@ -117,7 +126,7 @@ class AllReady(AllReadyKW, GuardInterface[N]):
             heappop(self.queue)
         if not len(self.queue) or self.queue[0][0] > t_next:
             heappop(self.ts)
-            return self.set_prev(Event(t, ref, event))
+            return self.set_prev(Event.new(t, ref), event)
         return None
     
 #  ------------------
@@ -148,11 +157,9 @@ class LoopConst(LoopConstKw, GuardInterface[N]):
         graph: GraphInterface
     ) -> Event | None:
         assert event.ref.eq(ref), (self, node, ref, event)
-        return self.set_prev(
-            event._replace(
-                t=event.t + self.step, prev=event
-            )
-        )
+        return self.set_prev(event._replace(
+            t=event.t + self.step,
+        ), event)
 
 class LoopUntilDateKw(NamedTuple):
     mut: GuardMutable
@@ -190,12 +197,12 @@ class LoopUntilDate(LoopUntilDateKw, GuardInterface[N]):
         h = self.date.history(graph, strict=False)
         if h is None:
             assert event.t == 0, event
-            return event
+            return self.set_prev(event, None)
         d = h.last_before(event.t)
         if d == self.until:
             return None
         return self.set_prev(
-            event._replace(t=event.t + self.step, prev=event)
+            event._replace(t=event.t + self.step), event
         )
 
 
@@ -231,9 +238,7 @@ class LoopRand(LoopRandKw, GuardInterface[N]):
             step = rng.normal(*self.params, size=None)
         else:
             raise ValueError(self)
-        return self.set_prev(
-            event._replace(t=event.t + step, prev=event)
-        )
+        return self.set_prev(event._replace(t=event.t + step), event)
 
 #  ------------------
 
@@ -285,9 +290,7 @@ class MonthEnd(ByDateKW, GuardInterface[N]):
             # if all_series(
             #     graph, params.keys(), lambda e: e.t.last == event.t
             # ):
-            return self.set_prev(
-                event._replace(ref=ref, prev=event)
-            )
+            return self.set_prev(event._replace(ref=ref), event)
         return None
 
 class QuarterStart(ByDateKW, GuardInterface[N]):
@@ -359,13 +362,9 @@ class SignChange(ByValueKW, GuardInterface[N]):
         if np.isnan(v0) or np.isnan(v1):
             return None
         elif v0 > 0 and v1 < 0:
-            return self.set_prev(
-                event._replace(ref=ref, prev=event)
-            )
+            return self.set_prev(event._replace(ref=ref), event)
         elif v1 > 0 and v0 < 0:
-            return self.set_prev(
-                event._replace(ref=ref, prev=event)
-            )
+            return self.set_prev(event._replace(ref=ref), event)
         return None
 
 # NOTE: for eg. cooling off, probably best to do that with a node (ie. a sign_change node, and then a second sign_change_w_cool_off) and then just use the sign change 
