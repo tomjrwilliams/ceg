@@ -263,7 +263,7 @@ def step_until_done(
     while e is not None:
         es.append(e)
         t = e.t
-        graph, e = step(graph)
+        graph, e, _ = step(graph)
     return GraphEvents(graph, tuple(es), t)
 
 #  ------------------

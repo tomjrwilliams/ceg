@@ -49,16 +49,16 @@ class gaussian(gaussian_kw, Node.D0_F64):
     >>> rng(seed=0, reset=True)
     >>> g = Graph.new()
     >>> g, r = g.bind(gaussian.new(), when=Loop.every(1))
-    >>> for g, e in steps(g, Event.zero(r), n=3, iter=True)():
-    ...     print(np.round(r.history(g).last_before(e.t), 4))
+    >>> for g, e, t in steps(g, Event.zero(r), n=3, iter=True)():
+    ...     print(np.round(r.history(g).last_before(t), 4))
     0.1257
     -0.1321
     0.6404
     >>> rng(seed=0, reset=True)
     >>> g = Graph.new()
     >>> g, r = gaussian.walk(g)
-    >>> for g, e in steps(g, Event.zero(r), n=3, iter=True)():
-    ...     print(np.round(r.history(g).last_before(e.t), 4))
+    >>> for g, e, t in steps(g, Event.zero(r), n=3, iter=True)():
+    ...     print(np.round(r.history(g).last_before(t), 4))
     0.1257
     -0.0064
     0.634
@@ -126,16 +126,16 @@ class gaussian_1d(gaussian_1d_kw, Node.D1_F64):
     >>> rng(seed=0, reset=True)
     >>> g = Graph.new()
     >>> g, r = g.bind(gaussian_1d.new((2,)), when=Loop.every(1))
-    >>> for g, e in steps(g, Event.zero(r), n=3, iter=True)():
-    ...     print(np.round(r.history(g).last_before(e.t), 4))
+    >>> for g, e, t in steps(g, Event.zero(r), n=3, iter=True)():
+    ...     print(np.round(r.history(g).last_before(t), 4))
     [ 0.1257 -0.1321]
     [0.6404 0.1049]
     [-0.5357  0.3616]
     >>> rng(seed=0, reset=True)
     >>> g = Graph.new()
     >>> g, r = gaussian_1d.walk(g, (2,))
-    >>> for g, e in steps(g, Event.zero(r), n=3, iter=True)():
-    ...     print(np.round(r.history(g).last_before(e.t), 4))
+    >>> for g, e, t in steps(g, Event.zero(r), n=3, iter=True)():
+    ...     print(np.round(r.history(g).last_before(t), 4))
     [ 0.1257 -0.1321]
     [ 0.7662 -0.0272]
     [0.2305 0.3344]
@@ -205,8 +205,8 @@ class gaussian_2d(gaussian_2d_kw, Node.D2_F64):
     >>> rng(seed=0, reset=True)
     >>> g = Graph.new()
     >>> g, r = g.bind(gaussian_2d.new((2,2)), when=Loop.every(1))
-    >>> for g, e in steps(g, Event.zero(r), n=3, iter=True)():
-    ...     print(np.round(r.history(g).last_before(e.t), 4))
+    >>> for g, e, t in steps(g, Event.zero(r), n=3, iter=True)():
+    ...     print(np.round(r.history(g).last_before(t), 4))
     [[ 0.1257 -0.1321]
      [ 0.6404  0.1049]]
     [[-0.5357  0.3616]
@@ -216,8 +216,8 @@ class gaussian_2d(gaussian_2d_kw, Node.D2_F64):
     >>> rng(seed=0, reset=True)
     >>> g = Graph.new()
     >>> g, r = gaussian_2d.walk(g, (2,2))
-    >>> for g, e in steps(g, Event.zero(r), n=3, iter=True)():
-    ...     print(np.round(r.history(g).last_before(e.t), 4))
+    >>> for g, e, t in steps(g, Event.zero(r), n=3, iter=True)():
+    ...     print(np.round(r.history(g).last_before(t), 4))
     [[ 0.1257 -0.1321]
      [ 0.6404  0.1049]]
     [[-0.4099  0.2295]

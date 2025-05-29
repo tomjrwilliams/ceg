@@ -18,8 +18,8 @@ class daily(daily_kw, Node.Scalar_Date):
     >>> start = dt.date(2025, 1, 1)
     >>> end = dt.date(2025, 1, 6)
     >>> g, r = Graph.new().pipe(daily.loop, start, end)
-    >>> g, e = g.pipe(steps, Event(0, r), n=6).last()
-    >>> e.ref.history(g).last_before(e.t)
+    >>> g, e, t = g.pipe(steps, Event.zero(r), n=6).last()
+    >>> e.ref.history(g).last_before(t)
     datetime.date(2025, 1, 6)
     """
 
