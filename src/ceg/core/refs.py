@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime as dt
+
 import abc
 from typing import (
     NamedTuple,
@@ -177,6 +179,9 @@ class Ref_D0_Date(RefKwargs, RefInterface):
             g, self.i, History.D0_Date, strict, self.slot
         )
 
+    def last_before(self, g: GraphInterface, t: float) -> dt.date | None:
+        return self.history(g).last_before(t)
+
 
 class Ref_D0_F64(RefKwargs, RefInterface):
 
@@ -201,6 +206,9 @@ class Ref_D0_F64(RefKwargs, RefInterface):
         return history(
             g, self.i, History.D0_F64, strict, self.slot
         )
+
+    def last_before(self, g: GraphInterface, t: float) -> float | None:
+        return self.history(g).last_before(t)
 
 
 #  ------------------
@@ -282,6 +290,57 @@ class Ref_D2_F64(RefKwargs, RefInterface):
         return history(
             g, self.i, History.D2_F64, strict, self.slot
         )
+#  ------------------
+
+
+class Ref_D1_F64_D2_F64(RefKwargs, RefInterface):
+
+    def select(self, last: bool | int) -> Ref_D1_F64_D2_F64:
+        return self._select(last)
+
+    @overload
+    def history(
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
+        slot: Literal[0] = 0,
+    ) -> History.D1_F64: ...
+
+    @overload
+    def history(
+        self, g: GraphInterface, strict: Literal[False],
+        slot: Literal[0] = 0,
+    ) -> History.D1_F64 | None: ...
+
+    @overload
+    def history(
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
+        slot: Literal[1] = 1,
+    ) -> History.D2_F64: ...
+
+    @overload
+    def history(
+        self, g: GraphInterface, strict: Literal[False],
+        slot: Literal[1] = 1,
+    ) -> History.D2_F64 | None: ...
+
+    def history(
+        self, 
+        g: GraphInterface, strict: bool = True, slot: int | None = None,
+    ) -> History.D1_F64 | History.D2_F64 | None:
+        assert slot is not None, self
+        if slot == 0:
+            return history(
+                g, self.i, History.D1_F64, strict, slot
+            )
+        elif slot == 1:
+            return history(
+                g, self.i, History.D2_F64, strict, slot
+            )
+        else:
+            raise ValueError(self)
 
 
 #  ------------------
@@ -305,6 +364,8 @@ class Ref:
     D2_F64 = Ref_D2_F64
     Matrix_F64 = Ref_D2_F64
 
+    D1_F64_D2_F64 = Ref_D1_F64_D2_F64
+
     @staticmethod
     def history(
         ref: Ref.Any,
@@ -324,7 +385,7 @@ class Ref:
         elif isinstance(ref, Ref_D0_Date) and required == 1:
             return Last.D0_Date.new(v, required, 1)
         #
-        if isinstance(ref, Ref_D1_F64) and required > 1:
+        elif isinstance(ref, Ref_D1_F64) and required > 1:
             return History.D1_F64.new(v, required, limit)
         elif isinstance(ref, Ref_D1_F64) and required == 1:
             return Last.D1_F64.new(v, required, 1)
@@ -333,10 +394,21 @@ class Ref:
         elif isinstance(ref, Ref_D1_Date) and required == 1:
             return Last.D1_Date.new(v, required, 1)
         #
-        if isinstance(ref, Ref_D2_F64) and required > 1:
+        elif isinstance(ref, Ref_D2_F64) and required > 1:
             return History.D2_F64.new(v, required, limit)
         elif isinstance(ref, Ref_D2_F64) and required == 1:
             return Last.D2_F64.new(v, required, 1)
+        #
+        elif isinstance(ref, Ref_D1_F64_D2_F64) and required > 1:
+            return (
+                History.D1_F64.new(v, required, limit),
+                History.D2_F64.new(v, required, limit),
+            )
+        elif isinstance(ref, Ref_D1_F64_D2_F64) and required == 1:
+            return (
+                Last.D1_F64.new(v, required, 1),
+                Last.D2_F64.new(v, required, 1)
+            )
         #
         raise ValueError(ref)
 

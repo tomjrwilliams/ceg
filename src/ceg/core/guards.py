@@ -91,24 +91,24 @@ class AnyN(NamedTuple):
     pass
 
 
-class AllReadyKW(NamedTuple):
+class ReadyAllKW(NamedTuple):
     mut: GuardMutable
     params: tuple[int, ...]
     ts: list[float]
     queue: list[tuple[float, int]]
 
 
-class AllReady(AllReadyKW, GuardInterface[N]):
+class ReadyAll(ReadyAllKW, GuardInterface[N]):
 
     @classmethod
-    def new(cls) -> AllReady:
-        return AllReady(GuardMutable(), (), [], [])  # type: ignore
+    def new(cls) -> ReadyAll:
+        return ReadyAll(GuardMutable(), (), [], [])  # type: ignore
 
     def init(
         self,
         ref: Ref.Any,
         params: frozendict[int, tuple[str, ...]],
-    ) -> AllReady:
+    ) -> ReadyAll:
         ts = []
         queue = []
         heapify(ts)
@@ -143,6 +143,37 @@ class AllReady(AllReadyKW, GuardInterface[N]):
         if not len(self.queue) or self.queue[0][0] > t_next:
             heappop(self.ts)
             return self.set_prev(Event.new(t, ref), event)
+        return None
+
+class ReadyRefKW(NamedTuple):
+    mut: GuardMutable
+    ref: Ref.Any
+
+
+class ReadyRef(ReadyRefKW, GuardInterface[N]):
+
+    @classmethod
+    def new(cls, ref: Ref.Any) -> ReadyAll:
+        return ReadyRef(GuardMutable(), ref)  # type: ignore
+
+    def init(
+        self,
+        ref: Ref.Any,
+        params: frozendict[int, tuple[str, ...]],
+    ) -> ReadyRef:
+        return self
+
+    def next(
+        self,
+        event: Event,
+        ref: Ref.Any,
+        node: N,
+        graph: GraphInterface,
+    ) -> Event | None:
+        if event.ref == self.ref:
+            return self.set_prev(event._replace(
+                ref=ref, prev=None
+            ), event)
         return None
 
 
@@ -430,8 +461,13 @@ class SignChange(ByValueKW, GuardInterface[N]):
 class Guard:
     Any = GuardInterface
 
-    AllReady = AllReady
+class Ready:
+    All = ReadyAll
+    Ref = ReadyRef
 
+    @classmethod
+    def ref(cls, ref: Ref.Any):
+        return ReadyRef.new(ref)
 
 class Loop:
     Const = LoopConst

@@ -1,5 +1,6 @@
+import logging
 import abc
-from typing import NamedTuple, cast
+from typing import NamedTuple, cast, Type
 from dataclasses import dataclass
 
 import datetime as dt
@@ -9,6 +10,8 @@ import numba as nb
 
 from . import algos
 
+logger = logging.Logger(__file__)
+
 #  ------------------
 
 # TODO: abstract out nd implementations, each class just needs:
@@ -17,7 +20,7 @@ from . import algos
 
 #  ------------------
 
-V = np.ndarray | float | dt.date
+V = np.ndarray | np.datetime64 | float | dt.date
 
 
 @dataclass
@@ -44,7 +47,10 @@ class HistoryKW(NamedTuple):
     ):
         if not isinstance(v, np.ndarray):
             shape = ()
-            dtype = np.dtype(type(v))
+            if type(v) in {dt.date, dt.datetime}:
+                dtype = "datetime64[ns]"
+            else:
+                dtype = np.dtype(type(v))
         else:
             shape = v.shape
             dtype = v.dtype
@@ -54,22 +60,23 @@ class HistoryKW(NamedTuple):
             else np.log2(limit) + np.ceil(np.log2(required))
         )
         size = 0 if not len(shape) else np.prod(shape)
+        values=np.empty(
+            int(
+                np.prod(np.array(shape)) * (2**exponent)
+            ),
+            dtype=dtype,
+        )
         return cls(
             shape,
             int(size),
             exponent,
             required,
             limit,
-            np.zeros(
+            np.empty(
                 int(2**exponent),
                 dtype=np.float64,
             ),
-            values=np.zeros(
-                int(
-                    np.prod(np.array(shape)) * (2**exponent)
-                ),
-                dtype=dtype,
-            ),
+            values=values,
             mut=HistoryMutable(0),
         )
 
@@ -320,7 +327,7 @@ class History_D0_F64(History_0D):
             self.exponent,
         )
 
-    def last_before(self, t: float):
+    def last_before(self, t: float) -> float | None:
         return algos.last_before(
             self.values,
             self.times,
@@ -329,7 +336,7 @@ class History_D0_F64(History_0D):
             self.exponent,
         )
 
-    def last_between(self, l: float, r: float):
+    def last_between(self, l: float, r: float) -> float | None:
         return algos.last_between(
             self.values,
             self.times,
@@ -400,6 +407,7 @@ class History_D0_Date(History_0D):
         return np.datetime64
 
     def append(self, v: dt.date, t: float):
+        v_np = np.datetime64(v, "ns")
         self.mut.occupied = append_d0(
             self.mut.occupied,
             self.required,
@@ -407,7 +415,8 @@ class History_D0_Date(History_0D):
             self.values,
             self.times,
             t,
-            v,
+            v_np,
+            # np.datetime64,
         )
 
     def last_n_before(self, n: int, t: float):
@@ -439,8 +448,8 @@ class History_D0_Date(History_0D):
             self.mut.occupied,
             self.exponent,
         )
-        if np.isnan(res):
-            return None
+        if res is None:
+            return res
         return cast(
             dt.date,
             (cast(np.datetime64, res))
@@ -457,8 +466,8 @@ class History_D0_Date(History_0D):
             self.mut.occupied,
             self.exponent,
         )
-        if np.isnan(res):
-            return None
+        if res is None:
+            return res
         return cast(
             dt.date,
             (cast(np.datetime64, res))
@@ -589,6 +598,16 @@ class History_D1_Date(History_1D):
             return -1
         return self.times[occupied - 1]
 
+def np_to_date_0d(v: np.datetime64) -> dt.date:
+    return (
+        v.astype("M8[D]").astype("O")
+    )
+
+def np_to_date_1d(v: np.ndarray) -> list[dt.date]:
+    return list(
+        v.astype("M8[D]")
+        .astype("O")
+    )
 
 @dataclass
 class Last_D1_Date_Mut(HistoryMutable):

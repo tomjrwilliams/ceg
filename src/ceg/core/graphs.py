@@ -38,7 +38,7 @@ from .nodes import (
     Event,
     yield_params,
 )
-from .guards import Guard, Loop
+from .guards import Guard, Ready, Loop
 
 logger = logging.Logger(__file__)
 
@@ -47,6 +47,88 @@ logger = logging.Logger(__file__)
 T = TypeVar("T")
 
 #  ------------------
+
+
+# TODO: use pydnatic dataclas
+
+# check that you can subglass graph to extend the discriminated union
+
+# with new nodes, guards
+
+# discriminate easily enough on type field, add to guard, similar new and define syntax
+
+
+# histories and refs we know up front what teh range is, but can do that as well in theory?
+
+
+# TODO: given a model entry
+
+# have a streamlit func that looks up sig given name
+
+# and creates an editable table for params
+
+
+# run, and then you get back a table of the nodes
+
+# table (s) - a nodes query window
+
+# ideally with twisties per type
+
+# eg. a boolean column and a flag to set unset all
+
+# where the boolean edits the table to unhide the child rows
+
+
+# so the parent row shows the count as well as boolean
+
+
+# editable and then you can press sync, that will try and reload the graph with new params if edited
+
+
+# and then have a boolean for keeping various columns
+# possibly a ref to the index to, not a boolean
+
+
+# and then those outputs will be given length(sim) histories, indexed on that ref
+# and returned to teh streamlit
+
+# for graphing
+
+
+# where the graphs can be like the nodes in that you press a button and it creates such a componetn dynamically?
+
+# https://discuss.streamlit.io/t/filter-data-in-data-editor/52055/24
+
+
+# store the params as keyval pairs in a single col each
+
+# and then the nodes can be given default aliases as a param 
+
+
+# these extra cols to index to ref and alias will be turned to more nodes under the hood
+
+# so when you refresh the node query will be larger
+
+
+# and then the graph can show you all the ones you've set to expose to the streamlit in the legend
+
+# perhaps you end up wanting a way to bind to scope of a particular graph?
+
+
+# TODO: for now lets get it working where the streamlit can give you a dnyamic table of the entry func sig
+
+# and can show the graphs returned back by the app
+
+# one way if you cant dynamically create which presumably you can by just loop and plot?
+
+# is to have a whole bunch of hidden ones, one of each type ordered
+# and then you're allowed a max up to n, so we have n * types
+
+# but we hide and set empty all but the selected tpye for each index
+
+
+
+
 
 
 class Key(NamedTuple):
@@ -320,12 +402,12 @@ def init_node(
     data = set_tuple(data, i, History.null, History.null)
     # init is on first value (need to know shape, not necessarily fixed at runtime)
     if when is None:
-        when = Guard.AllReady.new().init(ref, params)
+        when = Ready.All.new().init(ref, params)
     else:
         when = when.init(ref, params)
 
     guards = set_tuple(
-        guards, i, when, Guard.AllReady.new()
+        guards, i, when, Ready.All.new()
     )
     return nodes, guards, ustream, dstream, data, required
 

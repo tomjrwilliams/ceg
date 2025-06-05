@@ -246,11 +246,26 @@ def steps(
         graph, tuple(cast(list[Event], es)), t
     )
 
+def until_triggered(
+    f: Callable[[Graph, Event], bool],
+    graph: Graph,
+    event: Event,
+    next: bool = False,
+    ii: int = 0,
+):
+    if not next:
+        return f(graph, event)
+    if not len(graph.queue):
+        return True
+    if ii == 0:
+        return False
+    return f(graph, graph.queue[0])
 
 def step_until(
     graph: Graph,
     f: Callable[[Graph, Event], bool],
     *events: Event,
+    next: bool = False,
 ):
     # TODO: concat with the given events
     t = None
@@ -258,7 +273,7 @@ def step_until(
     graph, e, _ = step(graph, *events)
     if e is None:
         return graph, None, (e,)
-    while e is not None and not f(graph, e):
+    while e is not None and not until_triggered(f, graph, e, next):
         es.append(e)
         graph, e, _ = step(graph)
     if e is None:
@@ -275,6 +290,91 @@ def step_until(
         t = e.t
     return GraphUntilTrigger(graph, tuple(es), trigger, t)
 
+def iter_batch_until(
+    graph: Graph,
+    f: Callable[[Graph, Event], bool],
+    *events: Event,
+    n: int = 1,
+    next: bool = False,
+):
+    e = None
+    t = None
+    es: list[list[Event | None]] = [
+        [] for _ in range(n)
+    ]
+    for i in range(n):
+        acc = es[i]
+        ii = 0
+        while (
+            i == 0 and ii == 0
+        ) or (
+            e is not None
+            and not until_triggered(f, graph, e, next, ii)
+        ):
+            if i == 0 and ii == 0:
+                graph, e, _ = step(graph, *events)
+            else:
+                graph, e, _ = step(graph)
+            ii += 1
+            if e is None:
+                break
+            t = e.t
+            acc.append(e)
+            # TODO: and all at the same t? (but only if not next)
+        if e is None:
+            break
+        if len(acc):
+            acc = cast(list[Event], acc)
+            yield GraphEvents(
+                graph, tuple(acc), acc[-1].t
+            )
+        
+def batch_until(
+    graph: Graph,
+    f: Callable[[Graph, Event], bool],
+    *events: Event,
+    n: int = 1,
+    iter: bool = False,
+    next: bool = False,
+):
+    if iter:
+        return lambda: iter_batch_until(
+            graph, f, *events, n=n, next=next
+        )
+    e = None
+    t = None
+    es: list[list[Event | None]] = [
+        [] for _ in range(n)
+    ]
+    for i in range(n):
+        acc = es[i]
+        ii = 0
+        while (
+            i == 0 and ii == 0
+        ) or (
+            e is not None
+            and not until_triggered(f, graph, e, next)
+        ):
+            if i == 0 and ii == 0:
+                graph, e, _ = step(graph, *events)
+            else:
+                graph, e, _ = step(graph)
+            ii += 1
+            if e is None:
+                break
+            t = e.t
+            acc.append(e)
+            # TODO: and all at the same t? (but only if not next)
+        if e is None:
+            break
+    es_res = cast(
+        tuple[tuple[Event, ...], ...],
+        tuple(map(tuple, [_es for _es in es if len(_es)])),
+    )
+    return GraphBatches(
+        graph, es_res, tuple([_es[-1].t for _es in es_res])
+    )
+# TODO: batch until
 
 def step_until_done(
     graph: Graph,

@@ -74,7 +74,7 @@ class pct_change(pct_change_kw, Node.Scalar_F64):
         hist = self.v.history(graph)
         v0 = hist.last_before(event.t)
         v1 = hist.last_before(event.prev.t)
-        if np.isnan(v0) or np.isnan(v1):
+        if v0 is None or v1 is None or np.isnan(v0) or np.isnan(v1):
             return np.NAN
         return (v0 / v1) - 1
 
@@ -120,7 +120,7 @@ class sqrt(sqrt_kw, Node.Scalar_F64):
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
-        if np.isnan(v):
+        if v is None or np.isnan(v):
             return v
         if v < 0:
             return -1 * (np.sqrt(-1 * v))
@@ -168,7 +168,7 @@ class sq(sq_kw, Node.Scalar_F64):
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
-        if np.isnan(v):
+        if v is None or np.isnan(v):
             return v
         if v < 0:
             return -1 * (np.square(-1 * v))
@@ -227,9 +227,9 @@ class cum_sum(cum_sum_kw, Node.Scalar_F64):
             return v
         acc = cast(Ref.Scalar_F64, event.ref)
         prev = acc.history(graph).last_before(event.prev.t)
-        if np.isnan(prev):
+        if prev is None or np.isnan(prev):
             return v
-        elif np.isnan(v):
+        elif v is None or np.isnan(v):
             return prev
         return prev + v
 
@@ -285,12 +285,14 @@ class cum_prod(cum_prod_kw, Node.Scalar_F64):
     def __call__(self, event: Event, graph: Graph):
         hist = self.v.history(graph)
         v = hist.last_before(event.t)
+        if v is None:
+            return v
         if event.prev is None:
             return self.a + v
         acc = cast(Ref.Scalar_F64, event.ref)
         prev = acc.history(graph).last_before(event.prev.t)
-        if np.isnan(prev):
+        if prev is None or np.isnan(prev):
             return self.a + v
-        elif np.isnan(v):
+        elif v is None or np.isnan(v):
             return prev
         return prev * (self.a + v)

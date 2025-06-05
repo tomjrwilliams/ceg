@@ -130,6 +130,8 @@ class gaussian(gaussian_kw, Node.D0_F64):
         if event.prev is None or self.v is None:
             return step
         v = self.v.history(graph).last_before(event.t)
+        if v is None:
+            return step
         return v + step
 
 

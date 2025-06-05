@@ -28,6 +28,7 @@ class daily_kw(NamedTuple):
     prev: Ref.Scalar_Date
     start: dt.date
     end: dt.date
+    n: int
 
 
 class daily(daily_kw, Node.Scalar_Date):
@@ -52,9 +53,10 @@ class daily(daily_kw, Node.Scalar_Date):
         self: Ref.Scalar_Date,
         start: dt.date,
         end: dt.date,
+        n: int = 1
     ):
         return cls(
-            cls.DEF.name, prev=self, start=start, end=end
+            cls.DEF.name, prev=self, start=start, end=end, n=n
         )
 
     @classmethod
@@ -63,12 +65,13 @@ class daily(daily_kw, Node.Scalar_Date):
         g: Graph,
         start: dt.date,
         end: dt.date,
+        n: int = 1,
         step=1.0,
         keep: int = 1,
     ):
         g, r = g.bind(None, Ref.Scalar_Date)
         g, r = cls.new(
-            r.select(last=keep), start, end
+            r.select(last=keep), start, end, n=n
         ).pipe(g.bind, r, Loop.UntilDate.new(step, end, r))
         return g, cast(Ref.Scalar_Date, r)
 
@@ -80,7 +83,7 @@ class daily(daily_kw, Node.Scalar_Date):
             raise ValueError(dict(self=self, h=h))
         d = h.last_before(event.t)
         assert d is not None, self
-        d = d + dt.timedelta(days=1)
+        d = d + dt.timedelta(days=self.n)
         if d > self.end:
             raise ValueError(self, d)
         return d
