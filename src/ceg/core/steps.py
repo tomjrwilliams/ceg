@@ -171,13 +171,30 @@ def iter_batches(
             graph, cast(tuple[Event, ...], tuple(acc)), t
         )
 
+@overload
+def batches(
+    graph: Graph,
+    *events: Event,
+    n: int = 1,
+    g: int = 1,
+    iter: Literal[False] = False,
+) -> GraphBatches: ...
+
+@overload
+def batches(
+    graph: Graph,
+    *events: Event,
+    n: int = 1,
+    g: int = 1,
+    iter: bool = True
+) -> Callable[[], Generator[GraphEvents, None, None]]: ...
 
 def batches(
     graph: Graph,
     *events: Event,
     n: int = 1,
     g: int = 1,
-    iter: bool = False,
+    iter = False,
 ):
     if iter:
         return lambda: iter_batches(

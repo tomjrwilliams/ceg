@@ -4,19 +4,18 @@ sys.path.append("./src")
 from typing import Any
 from frozendict import frozendict
 
-from ceg.app.examples import ExamplePage
-from ceg.app import nav
+import ceg.app as app
 
 shared: frozendict[
     str, Any
 ] = frozendict() # type: ignore
 
 pages: frozendict[
-    str, tuple[nav.Page, ...]
+    str, tuple[app.nav.Page, ...]
 ] = frozendict() # type: ignore
 
-pages = pages.set("example", (
-    ExamplePage(shared),
+pages = pages.set("rand", (
+    app.rand.Gaussian(shared),
 ))
 
-nav.page(pages).run()
+app.nav.page(pages).run()
