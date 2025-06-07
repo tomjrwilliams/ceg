@@ -122,9 +122,14 @@ def step(graph: Graph, *events: Event) -> GraphEvent:
         nd = nodes[i]
         assert nd is not None, ref
 
+        try:
+            nd_ref = nd.ref(i)
+        except:
+            raise ValueError(nd)
+
         e = guards[i].next(
             event,
-            nd.ref(i),
+            nd_ref,
             nd,
             graph,
         )

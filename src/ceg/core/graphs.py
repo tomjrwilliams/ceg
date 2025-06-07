@@ -314,6 +314,8 @@ def init_node(
     # print(node.DEF.params)
     # print(acc)
 
+    # TODO: if any fields are named ref, throw
+
     params: frozendict[int, tuple[str, ...]] = frozendict(
         zip(acc.keys(), map(tuple, acc.values()))
     )  # type: ignore

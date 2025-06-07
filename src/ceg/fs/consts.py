@@ -1,6 +1,6 @@
 
-from typing import NamedTuple, ClassVar
-import numpy
+from typing import NamedTuple, ClassVar, cast
+
 import numpy as np
 
 from ..core import (
@@ -23,26 +23,67 @@ class const_float_kw(NamedTuple):
     type: str
     #
     v: float
+    rf: Ref.Scalar_F64 | None
 
 
 class const_float(const_float_kw, Node.D0_F64):
     """
     >>> g = Graph.new()
-    >>> g, r0 = const_float(1.)
-    >>> for g, e, t in steps(g, Event.zero(r0), n=5):
+    >>> g, r0 = g.pipe(const_float.zero_every, 1.)
+    >>> e = Event.zero(r0)
+    >>> for g, e, t in steps(g, e, n=3, iter=True)():
     ...     print(r0.history(g).last_before(t))
-    -0.07 0.01
-    0.37 0.13
-    -0.37 0.14
-    0.73 0.54
-    -0.17 0.03
+    0.0
+    0.0
+    0.0
     """
 
     DEF: ClassVar[Defn] = define(Node.D0_F64, const_float_kw)
 
     @classmethod
-    def new(cls, v: float):
-        return cls(cls.DEF.name, v=v)
+    def one(cls, sign = 1):
+        return cls.new(1. * sign)
+
+    @classmethod
+    def zero(cls):
+        return cls.new(0.)
+
+    @classmethod
+    def one_every(
+        cls,
+        g: Graph,
+        step=1.0,
+        keep: int = 1,
+        sign: float = 1.,
+    ):
+        return cls.every(g, sign, step=step, keep=keep)
+
+    @classmethod
+    def zero_every(
+        cls,
+        g: Graph,
+        step=1.0,
+        keep: int = 1,
+    ):
+        return cls.every(g, 0., step=step, keep=keep)
+
+    @classmethod
+    def every(
+        cls,
+        g: Graph,
+        v: float,
+        step=1.0,
+        keep: int = 1,
+    ):
+        g, r = g.bind(None, Ref.Scalar_F64)
+        g, r = cls.new(
+            v=v, rf=r.select(last=keep)
+        ).pipe(g.bind, r, Loop.every(step), keep=keep)
+        return g, cast(Ref.Scalar_F64, r)
+
+    @classmethod
+    def new(cls, v: float, rf: Ref.Scalar_F64 | None = None):
+        return cls(cls.DEF.name, v=v, rf=rf)
 
     def __call__(self, event: Event, graph: Graph):
         return self.v
