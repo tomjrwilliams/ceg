@@ -156,7 +156,7 @@ class Gaussian(Page):
             "kw-3": pl.String,
             "kw-4": pl.String,
         })
-        st.text("rand:")
+        st.text("rolling:")
         df_rolling = cast(
             pl.DataFrame,
             st.data_editor(schema_rolling, num_rows="dynamic")

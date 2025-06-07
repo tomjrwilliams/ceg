@@ -1,5 +1,9 @@
+from typing import NamedTuple
 import datetime as dt
 import zipfile
+
+from frozendict import frozendict
+
 import polars
 import pathlib
 
@@ -7,37 +11,37 @@ import pathlib
 
 import contextlib
 
-# TODO: just use classes
+class Folder:
+    ETF="etf"
+    FUT="futures"
+    CON="individual_contracts_archive"
+    # TODO: _update
+    FX="fx"
+    IND="index"
 
-FOLDERS = StringNamespace(
-    ETF="etf",
-    GEN="futures",
-    FUT="individual_contracts_archive",
-    # and _update
-    FX="fx",
-    IND="index",
-)
-# etf_A ... Z:
-SUFFIXES = {
-    FOLDERS.ETF: NestedStringNamespace(
-        FILE=StringNamespace(
+class SuffixMap(NamedTuple):
+    file: frozendict[str, str]
+    folder: frozendict[str, str]
 
-        ),
-        FOLDER=StringNamespace(
+
+class Suffix:
+    ETF: SuffixMap = SuffixMap(
+        file=frozendict(empty=""),
+        folder=frozendict(
             adjsplitdiv="adjsplitdiv",
-            # adjsplit="",
+            # adjsplit=""
             # unadj
         )
-    ),
-    FOLDERS.GEN: NestedStringNamespace(
-        FILE=StringNamespace(
+    )
+    FUT: SuffixMap = SuffixMap(
+        file=frozendict(
             ratio="continuous_ratio_adjusted",
         ),
-        FOLDER=StringNamespace(
+        folder=frozendict(
             ratio="contin_adj_ratio",
-        )
+        ),
     )
-}
+
 # etf suffixes:
 # adjsplitdiv
 
@@ -61,18 +65,11 @@ def open_file(
     suffix_folder = None
     suffix_file = None
     if suffix is not None:
-        suffixes = SUFFIXES[folder]
-        suffix_folder = getattr(
-            getattr(suffixes, "FOLDER"),
-            suffix
-        )
-        suffix_file = getattr(
-            getattr(suffixes, "FILE"),
-            suffix,
-            None
-        )
+        suffixes: SuffixMap = getattr(Suffix, folder)
+        suffix_folder = suffixes.folder.get(suffix)
+        suffix_file = suffixes.file.get(suffix)
 
-    if folder == FOLDERS.ETF:
+    if folder == Folder.ETF:
         folder = f"{folder}_{symbol[0]}"
 
     folder_stem = f"{folder}_{snap}_{freq}"

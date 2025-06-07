@@ -16,7 +16,12 @@ class Page_Interface:
 class Page(Page_Kw, Page_Interface):
     pass
 
-def page(pages: frozendict[str, tuple[Page, ...]]):
+def page(
+    pages: frozendict[str, tuple[Page, ...]],
+    page_config: dict = {}
+):
+    if len(page_config):
+        st.set_page_config(**page_config)
     return st.navigation({
         section: [p.run for p in ps] # type: ignore
         for section, ps in pages.items()

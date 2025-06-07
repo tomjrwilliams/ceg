@@ -18,4 +18,4 @@ pages = pages.set("rand", (
     app.rand.Gaussian(shared),
 ))
 
-app.nav.page(pages).run()
+app.nav.page(pages, page_config=dict(page_title="ceg")).run()

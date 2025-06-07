@@ -230,8 +230,8 @@ class Node_D0_Date(NodeInterface):
 class Node_D0_F64(NodeInterface):
 
     
-    @abc.abstractclassmethod
     @classmethod
+    @abc.abstractclassmethod
     def new(cls, **kwargs) -> Node_D0_F64: ...
 
     def pipe(
