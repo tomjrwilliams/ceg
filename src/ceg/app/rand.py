@@ -71,8 +71,8 @@ TYPES = {
 def parse_kwarg(kw: str, refs: dict[str, ceg.Ref.Scalar_F64]):
     # TODO: pass in the type so we can infer from sig
     k, v = kw.split("=")
-    if ":" in v:
-        v, t = v.split(":")
+    if ":" in k:
+        k, t = k.split(":")
         if t == "ref":
             v = refs[v]
         else:
