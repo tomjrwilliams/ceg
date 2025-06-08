@@ -38,7 +38,7 @@ class const_float(const_float_kw, Node.D0_F64):
     0.0
     """
 
-    DEF: ClassVar[Defn] = define(Node.D0_F64, const_float_kw)
+    DEF: ClassVar[Defn] = define.node(Node.D0_F64, const_float_kw)
 
     @classmethod
     def one(cls, sign = 1):

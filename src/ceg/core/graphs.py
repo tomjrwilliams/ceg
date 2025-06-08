@@ -11,6 +11,7 @@ from typing import (
     Callable,
     Literal,
     Protocol,
+    Generic,
     overload,
 )
 from heapq import heapify, heappush, heappop
@@ -33,10 +34,11 @@ from .refs import Ref, Scope, Data, R
 from .nodes import (
     N,
     Node,
-    define,
     Defn,
     Event,
     yield_params,
+    yield_param_keys,
+    NodeInterface,
 )
 from .guards import Guard, Ready, Loop
 
@@ -464,5 +466,72 @@ def bind(
 
     return graph, res
 
+
+#  ------------------
+
+P = ParamSpec("P")
+O = TypeVar("O", bound = Node.Any)
+R = TypeVar("R", bound = Ref.Any)
+
+class fs:
+    pass
+
+Fs = TypeVar("Fs", bound=fs)
+
+class HasNew(Generic[O, P, R, Fs]):
+
+    def __call__(self, NAME: str, *args: P.args, **kwargs: P.kwargs) -> O: ...
+
+    @classmethod
+    def fs(cls) -> Type[Fs]: ...
+
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> R: ...
+
+    @classmethod
+    def new(cls, *args: P.args, **kwargs: P.kwargs) -> O: ...
+
+    @classmethod
+    def bind(cls, g: Graph, *args: P.args, **kwargs: P.kwargs) -> tuple[Graph, R]:
+        g, r = g.bind(node=cls.new(*args, **kwargs))
+        return g, cls.ref(r)
+
+class define:
+
+    fs = fs
+
+    @staticmethod
+    def node(
+        t: Type[NodeInterface],
+        t_kw: Type[NamedTuple],
+    ):
+        params = tuple(yield_param_keys(t_kw))
+
+        assert t_kw.__name__[-3:].lower() == "_kw", t_kw
+        name = t_kw.__name__[:-3]
+
+        return Defn(
+            name=name,
+            params=params,  # the keys
+            # dims, oritentation, etc. (from t)
+        )
+
+    @staticmethod
+    def bind_from_new(
+        new: Callable[P, O],
+        ref: Callable[[Ref.Any], R],
+        fs: Type[Fs]
+    ) -> Callable[
+        [Type[O]], HasNew[O, P, R, Fs]
+    ]:
+        def decorator(cls):
+            class cls_new(cls, HasNew):
+
+                @classmethod
+                def fs(cls) -> Type[Fs]:
+                    return fs
+
+            return cls_new
+        return decorator
 
 #  ------------------

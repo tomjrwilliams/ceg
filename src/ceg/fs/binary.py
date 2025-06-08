@@ -68,7 +68,7 @@ class ratio(ratio_kw, Node.Scalar_F64):
     -0.7 -1.27 0.56
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, ratio_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, ratio_kw)
 
     @classmethod
     def new(cls, l: Ref.Scalar_F64, r: Ref.Scalar_F64):
@@ -132,7 +132,7 @@ class pct_diff(pct_diff_kw, Node.Scalar_F64):
     -0.7 -1.27 -0.44
     """
 
-    DEF: ClassVar[Defn] = define(
+    DEF: ClassVar[Defn] = define.node(
         Node.Scalar_F64, pct_diff_kw
     )
 
@@ -205,7 +205,7 @@ class subtract(subtract_kw, Node.Scalar_F64):
     -0.7 -1.27 0.56
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, ratio_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, ratio_kw)
 
     @classmethod
     def new(cls, l: Ref.Scalar_F64, r: Ref.Scalar_F64):

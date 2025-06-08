@@ -15,7 +15,6 @@ from ..core import (
     Defn,
     define,
     steps,
-    intro,
 )
 
 import numpy as np
@@ -47,7 +46,7 @@ def rng(seed: int, reset: bool = False):
 
 #  ------------------
 
-
+# TODO: change to _def?
 class gaussian_kw(NamedTuple):
     type: str
     #
@@ -72,7 +71,7 @@ class gaussian_kw(NamedTuple):
     ):
         return gaussian("gaussian", mean=mean, std=std, seed=seed, v=v)
 
-class gaussian_fs(intro.fs):
+class gaussian_fs(define.fs):
     
     @classmethod
     def walk(
@@ -90,7 +89,7 @@ class gaussian_fs(intro.fs):
         ).pipe(g.bind, r, Loop.Const.new(step))
         return g, cast(Ref.Scalar_F64, r)
 
-@intro.bind_from_new(gaussian_kw.new, gaussian_kw.ref, gaussian_fs)
+@define.bind_from_new(gaussian_kw.new, gaussian_kw.ref, gaussian_fs)
 class gaussian(gaussian_kw, Node.D0_F64):
     """
     gaussian noise (pass v=self to get random walk)
@@ -128,7 +127,7 @@ class gaussian(gaussian_kw, Node.D0_F64):
     0.634
     """
 
-    DEF: ClassVar[Defn] = define(Node.D0_F64, gaussian_kw)
+    DEF: ClassVar[Defn] = define.node(Node.D0_F64, gaussian_kw)
 
     def __call__(self, event: Event, graph: Graph):
         step = rng(self.seed).normal(
@@ -189,7 +188,7 @@ class gaussian_1d(gaussian_1d_kw, Node.D1_F64):
     [0.2305 0.3344]
     """
 
-    DEF: ClassVar[Defn] = define(Node.D1_F64, gaussian_kw)
+    DEF: ClassVar[Defn] = define.node(Node.D1_F64, gaussian_kw)
 
     @classmethod
     def new(
@@ -290,7 +289,7 @@ class gaussian_2d(gaussian_2d_kw, Node.D2_F64):
      [ 1.3211  1.0933]]
     """
 
-    DEF: ClassVar[Defn] = define(Node.D2_F64, gaussian_kw)
+    DEF: ClassVar[Defn] = define.node(Node.D2_F64, gaussian_kw)
 
     @classmethod
     def new(

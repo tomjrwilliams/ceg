@@ -124,24 +124,6 @@ class Defn(NamedTuple):
     name: str
     params: tuple[str, ...]
 
-
-def define(
-    t: Type[NodeInterface],
-    t_kw: Type[NamedTuple],
-):
-
-    params = tuple(yield_param_keys(t_kw))
-
-    assert t_kw.__name__[-3:].lower() == "_kw", t_kw
-    name = t_kw.__name__[:-3]
-
-    return Defn(
-        name=name,
-        params=params,  # the keys
-        # dims, oritentation, etc. (from t)
-    )
-
-
 #  ------------------
 
 N = TypeVar("N", bound=NamedTuple)

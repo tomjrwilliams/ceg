@@ -58,7 +58,7 @@ class align_d0_date(align_d0_date_kw, Node.D0_Date):
     """
 
 
-    DEF: ClassVar[Defn] = define(
+    DEF: ClassVar[Defn] = define.node(
         Node.Scalar_Date, align_d0_date_kw
     )
 
@@ -113,7 +113,7 @@ class align_d0_f64(align_d0_f64_kw, Node.D0_F64):
     4.0 0.27 -1.37 nan 1.32 1.32
     """
 
-    DEF: ClassVar[Defn] = define(
+    DEF: ClassVar[Defn] = define.node(
         Node.Scalar_F64, align_d0_f64_kw
     )
 
@@ -144,7 +144,7 @@ class lag_d0_f64_kw(NamedTuple):
 # NOTE: probably used after align
 class lag_d0_f64(lag_d0_f64_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[Defn] = define(
+    DEF: ClassVar[Defn] = define.node(
         Node.Scalar_F64, lag_d0_f64_kw
     )
 
@@ -168,7 +168,7 @@ class lag_d0_date_kw(NamedTuple):
 # NOTE: probably used after align
 class lag_d0_date(lag_d0_date_kw, Node.Scalar_Date):
 
-    DEF: ClassVar[Defn] = define(
+    DEF: ClassVar[Defn] = define.node(
         Node.Scalar_Date, lag_d0_date_kw
     )
 

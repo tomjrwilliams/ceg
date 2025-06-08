@@ -45,7 +45,7 @@ class daily(daily_kw, Node.Scalar_Date):
     datetime.date(2025, 1, 6)
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_Date, daily_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_Date, daily_kw)
 
     @classmethod
     def new(

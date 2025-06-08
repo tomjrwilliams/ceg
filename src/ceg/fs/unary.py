@@ -60,7 +60,7 @@ class pct_change(pct_change_kw, Node.Scalar_F64):
     5.2 0.1
     """
 
-    DEF: ClassVar[Defn] = define(
+    DEF: ClassVar[Defn] = define.node(
         Node.Scalar_F64, pct_change_kw
     )
 
@@ -112,7 +112,7 @@ class sqrt(sqrt_kw, Node.Scalar_F64):
     0.2 0.45
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, sqrt_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, sqrt_kw)
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64):
@@ -160,7 +160,7 @@ class sq(sq_kw, Node.Scalar_F64):
     0.2 0.04
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, sq_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, sq_kw)
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64):
@@ -212,7 +212,7 @@ class cum_sum(cum_sum_kw, Node.Scalar_F64):
     -0.54 0.2
     """
 
-    DEF: ClassVar[Defn] = define(
+    DEF: ClassVar[Defn] = define.node(
         Node.Scalar_F64, cum_sum_kw
     )
 
@@ -273,7 +273,7 @@ class cum_prod(cum_prod_kw, Node.Scalar_F64):
     -0.54 0.82
     """
 
-    DEF: ClassVar[Defn] = define(
+    DEF: ClassVar[Defn] = define.node(
         Node.Scalar_F64, cum_prod_kw
     )
 

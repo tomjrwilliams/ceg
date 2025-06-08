@@ -63,7 +63,7 @@ class vs_x_vec(vs_x_vec_kw, Node.D0_F64):
     -0.17 -0.98 1.0
     """
 
-    DEF: ClassVar[Defn] = define(Node.D0_F64, vs_x_vec_kw)
+    DEF: ClassVar[Defn] = define.node(Node.D0_F64, vs_x_vec_kw)
 
     @classmethod
     def new(
@@ -137,7 +137,7 @@ class v_x_vec_i(v_x_vec_i_kw, Node.D0_F64):
     -0.17 0.03
     """
 
-    DEF: ClassVar[Defn] = define(Node.D0_F64, v_x_vec_i_kw)
+    DEF: ClassVar[Defn] = define.node(Node.D0_F64, v_x_vec_i_kw)
 
     @classmethod
     def new(

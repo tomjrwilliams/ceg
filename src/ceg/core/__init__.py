@@ -9,7 +9,7 @@ from .histories import History
 from .refs import Ref, Scope
 from .nodes import Node, Defn, Event
 from .guards import Guard, Ready, Loop, ByDate, ByValue
-from .graphs import Graph, define, Key, Value
+from .graphs import Graph, Key, Value, define
 from .steps import (
     step,
     steps,

@@ -54,7 +54,7 @@ class sum(sum_kw, Node.Scalar_F64):
     5.2 13.58
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, sum_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, sum_kw)
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, window: int):
@@ -107,7 +107,7 @@ class mean(mean_kw, Node.Scalar_F64):
     5.2 4.53
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, mean_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, mean_kw)
 
     @classmethod
     def new(
@@ -136,7 +136,7 @@ class mean_w_kw(NamedTuple):
 
 class mean_w(mean_w_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, mean_w_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, mean_w_kw)
 
     @classmethod
     def new(
@@ -208,7 +208,7 @@ class mean_ew(mean_ew_kw, Node.Scalar_F64):
     5.2 4.06
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, mean_ew_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, mean_ew_kw)
 
     @classmethod
     def new(
@@ -274,7 +274,7 @@ class std(std_kw, Node.Scalar_F64):
     5.2 0.66
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, std_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, std_kw)
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, window: int):
@@ -300,7 +300,7 @@ class std_w_kw(NamedTuple):
 
 class std_w(std_w_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, std_w_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, std_w_kw)
 
     @classmethod
     def new(
@@ -361,7 +361,7 @@ class std_ew(std_ew_kw, Node.Scalar_F64):
     5.2 4.06 1.13
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, std_ew_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, std_ew_kw)
 
     @classmethod
     def new(
@@ -435,7 +435,7 @@ class rms(rms_kw, Node.Scalar_F64):
     5.2 4.57
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, rms_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, rms_kw)
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, window: int):
@@ -465,7 +465,7 @@ class rms_w_kw(NamedTuple):
 
 class rms_w(rms_w_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, rms_w_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, rms_w_kw)
 
     @classmethod
     def new(
@@ -521,7 +521,7 @@ class rms_ew(rms_ew_kw, Node.Scalar_F64):
     5.2 4.32
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, rms_ew_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, rms_ew_kw)
 
     @classmethod
     def new(
@@ -590,7 +590,7 @@ class max(max_kw, Node.Scalar_F64):
     1.2 1.54
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, max_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, max_kw)
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, window: int):
@@ -613,7 +613,7 @@ class max_w_kw(NamedTuple):
 
 class max_w(rms_w_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, max_w_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, max_w_kw)
 
     @classmethod
     def new(
@@ -674,7 +674,7 @@ class max_ew(max_ew_kw, Node.Scalar_F64):
     1.2 1.1 1.37
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, max_ew_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, max_ew_kw)
 
     @classmethod
     def new(
@@ -747,7 +747,7 @@ class min(min_kw, Node.Scalar_F64):
     -0.8 -0.8
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, min_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, min_kw)
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, window: int):
@@ -771,7 +771,7 @@ class min_w_kw(NamedTuple):
 
 class min_w(min_w_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, min_w_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, min_w_kw)
 
     @classmethod
     def new(
@@ -832,7 +832,7 @@ class min_ew(min_ew_kw, Node.Scalar_F64):
     -0.8 -0.37 -0.8
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, min_ew_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, min_ew_kw)
 
     @classmethod
     def new(
@@ -915,7 +915,7 @@ class skew(skew_kw, Node.Scalar_F64):
     -0.8 -0.67
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, skew_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, skew_kw)
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, window: int):
@@ -964,7 +964,7 @@ class kurtosis(kurtosis_kw, Node.Scalar_F64):
     -0.8 -1.5
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, kurtosis_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, kurtosis_kw)
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, window: int):
@@ -1016,7 +1016,7 @@ class quantile(quantile_kw, Node.Scalar_F64):
     -0.8 -0.06
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, quantile_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, quantile_kw)
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, q: float, window: int):
@@ -1041,7 +1041,7 @@ class quantile_w_kw(NamedTuple):
 
 class quantile_w(min_w_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, quantile_w_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, quantile_w_kw)
 
     @classmethod
     def new(
@@ -1070,7 +1070,7 @@ class quantile_ew_kw(NamedTuple):
 
 class quantile_ew(quantile_ew_kw, Node.Scalar_F64):
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, quantile_ew_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, quantile_ew_kw)
 
     @classmethod
     def new(
@@ -1138,7 +1138,7 @@ class cov(cov_kw, Node.Scalar_F64):
     -0.7 -1.27 0.64
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, cov_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, cov_kw)
 
     @classmethod
     def new(
@@ -1238,7 +1238,7 @@ class corr(corr_kw, Node.Scalar_F64):
     5.83 5.02 0.97
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, corr_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, corr_kw)
 
     @classmethod
     def new(
@@ -1314,7 +1314,7 @@ class beta(beta_kw, Node.Scalar_F64):
     5.83 5.02 1.31
     """
 
-    DEF: ClassVar[Defn] = define(Node.Scalar_F64, beta_kw)
+    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, beta_kw)
 
     @classmethod
     def new(
@@ -1395,7 +1395,7 @@ class pca(pca_kw, Node.D1_F64_D2_F64):
     -0.7 -1.27 2.12 [-0.69 -0.72]
     """
 
-    DEF: ClassVar[Defn] = define(Node.D1_F64_D2_F64, pca_kw)
+    DEF: ClassVar[Defn] = define.node(Node.D1_F64_D2_F64, pca_kw)
 
     @classmethod
     def new(
