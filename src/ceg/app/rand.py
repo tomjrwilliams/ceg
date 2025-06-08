@@ -43,7 +43,7 @@ def rows_to_refs_rand(
             continue
         elif row["walk"]:
             g, r = g.pipe(
-                ceg.fs.rand.gaussian.walk,
+                ceg.fs.rand.gaussian.fs().walk,
                 mean=row["mean"],
                 std=row["sigma"],
                 seed=1 or row["seed"],

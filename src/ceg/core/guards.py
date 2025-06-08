@@ -179,7 +179,6 @@ class ReadyRef(ReadyRefKW, GuardInterface[N]):
 
 #  ------------------
 
-
 class LoopConstKw(NamedTuple):
     mut: GuardMutable
     step: float
@@ -205,7 +204,7 @@ class LoopConst(LoopConstKw, GuardInterface[N]):
         node: N,
         graph: GraphInterface,
     ) -> Event | None:
-        assert event.ref.eq(ref), (self, node, ref, event)
+        assert event.ref.eq(ref), ("self", self, "node",  node, "ref",ref, "event",event)
         return self.set_prev(
             event._replace(
                 t=event.t + self.step,
@@ -248,7 +247,7 @@ class LoopUntilDate(LoopUntilDateKw, GuardInterface[N]):
         node: N,
         graph: GraphInterface,
     ) -> Event | None:
-        assert event.ref.eq(ref), (self, node, ref, event)
+        assert event.ref.eq(ref), ("self", self, "node",  node, "ref",ref, "event",event)
         h = self.date.history(graph, strict=False)
         if h is None:
             assert event.t == 0, event
@@ -292,7 +291,7 @@ class LoopRand(LoopRandKw, GuardInterface[N]):
         node: N,
         graph: GraphInterface,
     ) -> Event | None:
-        assert event.ref.eq(ref), (self, node, ref, event)
+        assert event.ref.eq(ref), ("self", self, "node",  node, "ref",ref, "event",event)
         if self.dist == "normal":
             step = rng.normal(*self.params, size=None)
         else:

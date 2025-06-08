@@ -15,6 +15,7 @@ from ..core import (
     Defn,
     define,
     steps,
+    intro,
 )
 
 import numpy as np
@@ -55,7 +56,41 @@ class gaussian_kw(NamedTuple):
     seed: int
     v: Ref.D0_F64 | None
 
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        if isinstance(i, Ref.Any):
+            return cast(Ref.Scalar_F64, i)
+        return Ref.D0_F64.new(i, slot)
 
+    @classmethod
+    def new(
+        cls,
+        mean: float = 0.0,
+        std: float = 1.0,
+        seed: int = 0,
+        v: Ref.D0_F64 | None = None,
+    ):
+        return gaussian("gaussian", mean=mean, std=std, seed=seed, v=v)
+
+class gaussian_fs(intro.fs):
+    
+    @classmethod
+    def walk(
+        cls,
+        g: Graph,
+        mean: float = 0.0,
+        std: float = 1.0,
+        seed: int = 0,
+        step=1.0,
+        keep: int = 1,
+    ):
+        g, r = g.bind(None, Ref.Scalar_F64)
+        g, r = gaussian.new(
+            mean, std, seed, v=r.select(last=keep)
+        ).pipe(g.bind, r, Loop.Const.new(step))
+        return g, cast(Ref.Scalar_F64, r)
+
+@intro.bind_from_new(gaussian_kw.new, gaussian_kw.ref, gaussian_fs)
 class gaussian(gaussian_kw, Node.D0_F64):
     """
     gaussian noise (pass v=self to get random walk)
@@ -79,7 +114,7 @@ class gaussian(gaussian_kw, Node.D0_F64):
     0.6404
     >>> rng(seed=0, reset=True)
     >>> g = Graph.new()
-    >>> g, r = gaussian.walk(g)
+    >>> g, r = gaussian.fs().walk(g)
     >>> for g, e, t in steps(
     ...     g, Event.zero(r), n=3, iter=True
     ... )():
@@ -95,34 +130,6 @@ class gaussian(gaussian_kw, Node.D0_F64):
 
     DEF: ClassVar[Defn] = define(Node.D0_F64, gaussian_kw)
 
-    @classmethod
-    def new(
-        cls,
-        mean: float = 0.0,
-        std: float = 1.0,
-        seed: int = 0,
-        v: Ref.D0_F64 | None = None,
-    ):
-        return cls(
-            cls.DEF.name, mean=mean, std=std, seed=seed, v=v
-        )
-
-    @classmethod
-    def walk(
-        cls,
-        g: Graph,
-        mean: float = 0.0,
-        std: float = 1.0,
-        seed: int = 0,
-        step=1.0,
-        keep: int = 1,
-    ):
-        g, r = g.bind(None, Ref.Scalar_F64)
-        g, r = cls.new(
-            mean, std, seed, v=r.select(last=keep)
-        ).pipe(g.bind, r, Loop.Const.new(step))
-        return g, cast(Ref.Scalar_F64, r)
-
     def __call__(self, event: Event, graph: Graph):
         step = rng(self.seed).normal(
             self.mean, self.std, size=None
@@ -133,7 +140,6 @@ class gaussian(gaussian_kw, Node.D0_F64):
         if v is None:
             return step
         return v + step
-
 
 class gaussian_1d_kw(NamedTuple):
     type: str

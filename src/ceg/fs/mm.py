@@ -31,10 +31,10 @@ class vs_x_vec(vs_x_vec_kw, Node.D0_F64):
     >>> from . import rand
     >>> from .arrays import vs_to_vec
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=-0.2,
     ... )
-    >>> g, r1 = rand.gaussian.walk(
+    >>> g, r1 = rand.gaussian.fs().walk(
     ...     g, mean=-0.2,
     ... )
     >>> with g.implicit() as (bind, done):
@@ -108,10 +108,10 @@ class v_x_vec_i(v_x_vec_i_kw, Node.D0_F64):
     >>> from . import rand
     >>> from .arrays import vs_to_vec
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=-0.2,
     ... )
-    >>> g, r1 = rand.gaussian.walk(
+    >>> g, r1 = rand.gaussian.fs().walk(
     ...     g, mean=-0.2,
     ... )
     >>> with g.implicit() as (bind, done):

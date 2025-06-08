@@ -87,9 +87,9 @@ class align_d0_f64(align_d0_f64_kw, Node.D0_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(g, step = 1.)
-    >>> g, r1 = rand.gaussian.walk(g, step = 1.5, keep = 3)
-    >>> g, r2 = rand.gaussian.walk(g, step = 2., keep = 3)
+    >>> g, r0 = rand.gaussian.fs().walk(g, step = 1.)
+    >>> g, r1 = rand.gaussian.fs().walk(g, step = 1.5, keep = 3)
+    >>> g, r2 = rand.gaussian.fs().walk(g, step = 2., keep = 3)
     >>> with g.implicit() as (bind, done):
     ...     r10 = bind(align.scalar_f64.new(r1, r0), when=Ready.ref(r0), keep=2)
     ...     r20 = bind(align.scalar_f64.new(r2, r0), when=Ready.ref(r0), keep=2)

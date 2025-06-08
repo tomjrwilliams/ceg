@@ -30,7 +30,7 @@ class sum(sum_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=1, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -83,7 +83,7 @@ class mean(mean_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=1, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -184,7 +184,7 @@ class mean_ew(mean_ew_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=1, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -250,7 +250,7 @@ class std(std_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=1, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -333,7 +333,7 @@ class std_ew(std_ew_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=1, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -411,7 +411,7 @@ class rms(rms_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=1, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -497,7 +497,7 @@ class rms_ew(rms_ew_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=1, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -566,7 +566,7 @@ class max(max_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=0.2, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -646,7 +646,7 @@ class max_ew(max_ew_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=0.2, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -723,7 +723,7 @@ class min(min_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=-0.2, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -804,7 +804,7 @@ class min_ew(min_ew_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=-0.2, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -891,7 +891,7 @@ class skew(skew_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=-0.2, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -940,7 +940,7 @@ class kurtosis(kurtosis_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=-0.2, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -992,7 +992,7 @@ class quantile(quantile_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=-0.2, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -1204,10 +1204,10 @@ class corr(corr_kw, Node.Scalar_F64):
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> when = Loop.every(1)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=1, keep=3
     ... )
-    >>> g, r1 = rand.gaussian.walk(
+    >>> g, r1 = rand.gaussian.fs().walk(
     ...     g, mean=1, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
@@ -1279,10 +1279,10 @@ class beta(beta_kw, Node.Scalar_F64):
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> when = Loop.every(1)
-    >>> g, r0 = rand.gaussian.walk(
+    >>> g, r0 = rand.gaussian.fs().walk(
     ...     g, mean=1, keep=3
     ... )
-    >>> g, r1 = rand.gaussian.walk(
+    >>> g, r1 = rand.gaussian.fs().walk(
     ...     g, mean=1, keep=3
     ... )
     >>> with g.implicit() as (bind, done):
