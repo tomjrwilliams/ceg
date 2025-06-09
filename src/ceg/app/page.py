@@ -157,7 +157,7 @@ def rows_to_refs(
     for i, row in enumerate(df.iter_rows(named=True)):
         if empty_row(row, "label", "func"):
             continue
-        
+
         func_name = row["func"]
         if func_name not in universe:
             raise ValueError(f"Not found: {func_name}")
@@ -216,6 +216,12 @@ class Dynamic(DynamicKw, Page):
             pl.DataFrame,
             st.data_editor(schema_events, num_rows="dynamic")
         )
+
+        # TODO: remove the df_events, have an init field
+        # if true, we assume ready even if no dot
+        # or false likewise (none defaults to false can stil have dot)
+
+        # so no need for df_events table, no second loop
 
         steps = 100 # TODO param on page
 

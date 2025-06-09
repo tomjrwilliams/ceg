@@ -364,6 +364,23 @@ def get_daily_bars(
         ).select(*BARS_SCHEMA.keys())
     return res
 
+# TODO: probably split out to bars.api
+# bars.daily etc.
+
+# and then id on graph new
+# and id for node
+
+# probably have a mut field on the object
+# with the generator
+
+# have an lru cache on the data behind it
+
+# probably don't do anything else epsecially fancy?
+# generally you're not going to be loading later so after the initial pass
+# thats it - may as well not keep around any more than necessary for the sim
+
+# ie. for each generator actually in use
+
 PRODUCT_FOLDERS = {
     PRODUCTS.ETF: historic.FOLDERS.ETF,
     PRODUCTS.GEN: historic.FOLDERS.GEN,
