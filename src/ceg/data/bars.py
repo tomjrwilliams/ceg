@@ -1,29 +1,27 @@
 from __future__ import annotations
 
-#  ------------------
-
 from typing import ClassVar, NamedTuple, Literal, overload
 
 import os
-import datetime
-from functools import partial
+import datetime as dt
+from functools import partial, wraps
 
-import polars
-import numpy
+import polars as pl
+import numpy as np
 
-from ..apis.ib import universes
-
-from ..apis.ib.prices.db import DB, Contract, Query, T, E, C
-from ..apis.ib.prices.historic import historic
-
-from ..apis.frd import data
-from ..apis.frd.data import StringNamespace, NestedStringNamespace
-
+from ..apis import frd
 from .. import core
+from ..core import define
 
 #  ------------------
 
-ONE_DAY = datetime.timedelta(days=1)
+class Products:
+    FUT = "FUT"
+    ETF = "ETF"
+
+#  ------------------
+
+ONE_DAY = dt.timedelta(days=1)
 
 IB_BAR_METHOD = "IB_BAR_METHOD"
 IB_DATABASE = "IB_DATABASE"
@@ -51,12 +49,6 @@ def env(
     raise ValueError(key)
 
 #  ------------------
-
-PRODUCTS = StringNamespace(
-    GENERIC="GENERIC",
-    GEN="GENERIC",
-    ETF="ETF",
-)
 
 class Bar(NamedTuple):
     product: str
@@ -88,78 +80,72 @@ class Bar(NamedTuple):
             description=description,
         )
 
-IB_IDENTIFIERS: dict[
-    tuple[str, str], tuple[str, str]
-] = {
-    (PRODUCTS.GEN, "ES"): (T.EQ, "ES"),
-}
-
-def bar_to_ib_contract(
-    bar: Bar,
-    currency: str | None=None,
-    exchange: str | None=None,
-    primary_exchange: str | None=None,
-    last_trade: str | None=None,
-    local_symbol: str | None=None,
-    strike: float | None=None,
-    right: str | None=None,
-    multiplier: str | None=None,
-    sec_id: str | None=None,
-    sec_id_type: str | None=None,
-    description: str | None=None,
-    include_expired: bool | None=None,
-) -> Contract:
-    try:
-        t, s = IB_IDENTIFIERS[
-            (bar.product, bar.symbol)
-        ]
-    except:
-        raise ValueError(bar)
-    kwargs = dict(
-        currency=currency,
-        exchange=exchange,
-        primary_exchange=primary_exchange,
-        last_trade=last_trade,
-        local_symbol=local_symbol,
-        strike=strike,
-        right=right,
-        multiplier=multiplier,
-        sec_id=sec_id,
-        sec_id_type=sec_id_type,
-        description=description,
-        include_expired=include_expired,
-    )
-    try:
-        con = universes.CONTRACTS[(t, s)]
-        con_d = con._asdict()
-    except:
-        raise ValueError(bar, t, s)
-    kwargs = {
-        k: (
-            v if v is not None
-            else con_d[k]
-        ) for k, v in kwargs.items()
-    }
-    return Contract.new(
-        t,
-        s, 
-        **{
-            k: v for k, v 
-            in kwargs.items() 
-            if v is not None
-        } # type: ignore
-    )
+# def bar_to_ib_contract(
+#     bar: Bar,
+#     currency: str | None=None,
+#     exchange: str | None=None,
+#     primary_exchange: str | None=None,
+#     last_trade: str | None=None,
+#     local_symbol: str | None=None,
+#     strike: float | None=None,
+#     right: str | None=None,
+#     multiplier: str | None=None,
+#     sec_id: str | None=None,
+#     sec_id_type: str | None=None,
+#     description: str | None=None,
+#     include_expired: bool | None=None,
+# ) -> Contract:
+#     try:
+#         t, s = IB_IDENTIFIERS[
+#             (bar.product, bar.symbol)
+#         ]
+#     except:
+#         raise ValueError(bar)
+#     kwargs = dict(
+#         currency=currency,
+#         exchange=exchange,
+#         primary_exchange=primary_exchange,
+#         last_trade=last_trade,
+#         local_symbol=local_symbol,
+#         strike=strike,
+#         right=right,
+#         multiplier=multiplier,
+#         sec_id=sec_id,
+#         sec_id_type=sec_id_type,
+#         description=description,
+#         include_expired=include_expired,
+#     )
+#     try:
+#         con = universes.CONTRACTS[(t, s)]
+#         con_d = con._asdict()
+#     except:
+#         raise ValueError(bar, t, s)
+#     kwargs = {
+#         k: (
+#             v if v is not None
+#             else con_d[k]
+#         ) for k, v in kwargs.items()
+#     }
+#     return Contract.new(
+#         t,
+#         s, 
+#         **{
+#             k: v for k, v 
+#             in kwargs.items() 
+#             if v is not None
+#         } # type: ignore
+#     )
 
 #  ------------------
 
 BARS_SCHEMA = {
-    "date": polars.Date,
-    "open": polars.Float64,
-    "high": polars.Float64,
-    "low": polars.Float64,
-    "close": polars.Float64,
-    "volume": polars.Float64,
-    "wap": polars.Float64,
+    "date": pl.Date,
+    "open": pl.Float64,
+    "high": pl.Float64,
+    "low": pl.Float64,
+    "close": pl.Float64,
+    "volume": pl.Float64,
+    "wap": pl.Float64,
 }
 
 BAR_FIELD_INDICES = {
@@ -168,17 +154,23 @@ BAR_FIELD_INDICES = {
     if k != "date"
 }
 
+class Fields:
+    OPEN = BAR_FIELD_INDICES["open"]
+    HIGH = BAR_FIELD_INDICES["high"]
+    LOW = BAR_FIELD_INDICES["low"]
+    CLOSE = BAR_FIELD_INDICES["close"]
+    VOLUME = BAR_FIELD_INDICES["volume"]
+    WAP = BAR_FIELD_INDICES["wap"]
 
 #  ------------------
 
 def get_daily_level(
     bar: Bar,
-    start: datetime.date,
-    end: datetime.date,
+    start: dt.date,
+    end: dt.date,
     field: str | int,
     df: bool = False,
-    at: datetime.date | None = None,
-    fp: str | None = None,
+    at: dt.date | None = None,
 ):
     if df:
         assert isinstance(field, str), field
@@ -188,7 +180,6 @@ def get_daily_level(
             end,
             df=True,
             at=at,
-            fp=fp,
         ).select("date", field)
     i = (
         field if isinstance(field, int)
@@ -200,7 +191,6 @@ def get_daily_level(
         end,
         df=df,
         at=at,
-        fp=fp,
     )[:, i]
 
 get_daily_open = partial(
@@ -233,65 +223,61 @@ get_daily_wap = partial(
 CACHE: dict[
     Bar, 
     tuple[
-        datetime.date, 
-        datetime.date,
-        core.Array.np_2D
+        dt.date, 
+        dt.date,
+        np.ndarray # 2d
     ]
 ] = {}
 
 FRD_SCHEMA = {
-    "date": polars.Date,
-    "open": polars.Float64,
-    "high": polars.Float64,
-    "low": polars.Float64,
-    "close": polars.Float64,
-    "volume": polars.Float64,
-    "open_interest": polars.Float64,
+    "date": pl.Date,
+    "open": pl.Float64,
+    "high": pl.Float64,
+    "low": pl.Float64,
+    "close": pl.Float64,
+    "volume": pl.Float64,
+    "open_interest": pl.Float64,
 }
 
 @overload
 def get_daily_bars(
     bar: Bar,
-    start: datetime.date,
-    end: datetime.date,
-    df: Literal[False] = False,
+    start: dt.date,
+    end: dt.date,
     at: Literal[None] = None,
-    fp: str | None = None,
-) -> core.Array.np_2D: ...
-
-@overload
-def get_daily_bars(
-    bar: Bar,
-    start: datetime.date,
-    end: datetime.date,
     df: Literal[False] = False,
-    at: datetime.date = None,
-    fp: str | None = None,
-) -> core.Array.np_1D: ...
+) -> np.ndarray: ... # 2d
 
 @overload
 def get_daily_bars(
     bar: Bar,
-    start: datetime.date,
-    end: datetime.date,
-    df: Literal[True] = True,
-    at: datetime.date | None = None,
-    fp: str | None = None,
-) -> polars.DataFrame: ...
+    start: dt.date,
+    end: dt.date,
+    at: dt.date,
+    df: Literal[False] = False,
+) -> np.ndarray: ... # 1d
+
+@overload
+def get_daily_bars(
+    bar: Bar,
+    start: dt.date,
+    end: dt.date,
+    at: dt.date | None = None,
+    df: bool = True,
+) -> pl.DataFrame: ...
 
 def get_daily_bars(
     bar: Bar,
-    start: datetime.date,
-    end: datetime.date,
+    start: dt.date,
+    end: dt.date,
+    at: dt.date | None = None,
     df: bool = False,
-    at: datetime.date | None = None,
-    fp: str | None = None,
 ):
     key = bar
     if key not in CACHE:
         cache_end = end
         cache_start = end + ONE_DAY
-        res = numpy.empty((0, 6))
+        res = np.empty((0, 6))
     else:
         cache_start, cache_end, res = CACHE[key]
 
@@ -303,24 +289,24 @@ def get_daily_bars(
         schema = BARS_SCHEMA
 
     if start < cache_start:
-        bars: polars.DataFrame = f_get(
+        bars: pl.DataFrame = f_get(
             bar,
             start,
             cache_start - ONE_DAY,
         )
-        res = numpy.vstack((
+        res = np.vstack((
             bars.select(*list(schema.keys())[1:])
             .to_numpy(),
             res,
         ))
         cache_start = start
     if end > cache_end:
-        bars: polars.DataFrame = f_get(
+        bars: pl.DataFrame = f_get(
             bar,
             end + ONE_DAY,
             cache_end,
         )
-        res = numpy.vstack((
+        res = np.vstack((
             res,
             bars.select(*list(schema.keys())[1:])
             .to_numpy(),
@@ -336,21 +322,18 @@ def get_daily_bars(
             res,
         )
     if at is not None:
-        i_l = (at - cache_start).days
-        i_r = i_l + 1
+        return res[(at - cache_start).days]
     else:
         i_l = (start - cache_start).days
         i_r = (cache_end - end).days
 
-    if at is not None:
-        res = res[i_l]
-    elif i_r > 0:
+    if i_r > 0:
         res = res[i_l:-i_r,:]
     else:
         res = res[i_l:]
         
     if df:
-        return polars.DataFrame(
+        return pl.DataFrame(
             res.T,
             schema = {
                 k: v for k, v in 
@@ -358,32 +341,15 @@ def get_daily_bars(
                 if k != "date"
             }
         ).with_columns(
-            polars.date_range(
+            pl.date_range(
                 start, end
             ).alias("date")
         ).select(*BARS_SCHEMA.keys())
     return res
 
-# TODO: probably split out to bars.api
-# bars.daily etc.
-
-# and then id on graph new
-# and id for node
-
-# probably have a mut field on the object
-# with the generator
-
-# have an lru cache on the data behind it
-
-# probably don't do anything else epsecially fancy?
-# generally you're not going to be loading later so after the initial pass
-# thats it - may as well not keep around any more than necessary for the sim
-
-# ie. for each generator actually in use
-
 PRODUCT_FOLDERS = {
-    PRODUCTS.ETF: historic.FOLDERS.ETF,
-    PRODUCTS.GEN: historic.FOLDERS.GEN,
+    Products.ETF: frd.data.Folders.ETF,
+    Products.FUT: frd.data.Folders.FUTG,
     # etc.
 }
 ADJUSTMENT_SUFFIXES = {
@@ -399,14 +365,12 @@ ADJUSTMENT_SUFFIXES = {
 
 def get_daily_bars_frd(
     bar: Bar,
-    start: datetime.date,
-    end: datetime.date,
+    start: dt.date,
+    end: dt.date,
     fp: str | None = None,
-) -> polars.DataFrame:
-    return historic.read_file(
-        parent=env(
-            FRD_DIRECTORY, fp
-        ),
+) -> pl.DataFrame:
+    return frd.data.read_file(
+        parent=env(FRD_DIRECTORY, fp),
         folder=PRODUCT_FOLDERS[bar.product],
         symbol=bar.symbol,
         suffix=ADJUSTMENT_SUFFIXES[bar.adjust],
@@ -416,200 +380,127 @@ def get_daily_bars_frd(
         end=end,
     )
 
-
 def get_daily_bars_ib(
     bar: Bar,
-    start: datetime.date,
-    end: datetime.date,
+    start: dt.date,
+    end: dt.date,
     fp: str | None = None,
-) -> polars.DataFrame:
-    # TODO: other kwrags as on the bar?
-    # have to ignore from hash?
-    con: Contract = bar_to_ib_contract(
-        bar
-    )
-    return historic.req_daily_bars(
-        env("IB_DATABASE", fp),
-        con,
-        start,
-        end,
-        bar_method=env(
-            "IB_BAR_METHOD",
-            "MIDPOINT"
-            # or trades if index
-        ),
-        use_rth=True,
-        df=True,
-    )
+) -> pl.DataFrame:
+    # # TODO: other kwrags as on the bar?
+    # # have to ignore from hash?
+    # con: Contract = bar_to_ib_contract(
+    #     bar
+    # )
+    # return historic.req_daily_bars(
+    #     env("IB_DATABASE", fp),
+    #     con,
+    #     start,
+    #     end,
+    #     bar_method=env(
+    #         "IB_BAR_METHOD",
+    #         "MIDPOINT"
+    #         # or trades if index
+    #     ),
+    #     use_rth=True,
+    #     df=True,
+    # )
+    raise ValueError(bar)
 
 #  ------------------
 
 
-class daily_bar_kw(NamedTuple):
-    type: str
-    #
-    d: core.Ref.Object
-    bar: Bar
-
 def f_daily_bar(
-    self: daily_bar | daily_level,
+    self: daily_bar_kw | daily_level_kw,
     event: core.Event,
     graph: core.Graph
 ):
-    dx = graph.select(self.d, event, t = False, i = -1)
-
-    d = graph.nodes[self.d.i]
-
-    start = d.start # type: ignore
-    end = d.end # type: ignore
-
+    assert self.bar is not None, self
+    dx = self.d.history(graph).last_before(event.t)
+    if dx is None:
+        return np.array([
+            None for _ in range(len(BARS_SCHEMA))
+        ])
     return get_daily_bars(
         self.bar,
-        start,
-        end,
+        dx,
+        dt.date.today(),
         df=False,
         at=dx,
     )
 
-class daily_bar(daily_bar_kw, core.Node.Col1D):
+def new_bar(
+    bar: Bar | None,
+    product: str | None,
+    symbol: str | None,
+):
+    if bar is None:
+        assert product is not None, product
+        assert symbol is not None, symbol
+        bar = Bar.new(
+            product=product, symbol=symbol
+        )
+    return bar, product, symbol
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col1D, daily_bar_kw
-    )
+class daily_bar_kw(NamedTuple):
+    type: str
+    #
+    d: core.Ref.Scalar_Date
+    product: str | None
+    symbol: str | None
+    bar: Bar | None
+
+    @classmethod
+    def ref(cls, i: int | core.Ref.Any, slot: int | None = None) -> core.Ref.Vector_F64:
+        return core.Ref.d1_f64(i, slot=slot)
 
     @classmethod
     def new(
         cls,
-        d: core.Ref.Object,
-        bar: Bar
+        d: core.Ref.Scalar_Date,
+        product: str | None,
+        symbol: str | None,
+        bar: Bar | None,
     ):
-        return cls(
-            cls.DEF.name, d=d, bar = bar
+        bar, product, symbol = new_bar(bar, product, symbol)
+        return daily_bar(
+            "daily_bar",
+            d=d,
+            bar = bar,
+            product=product,
+            symbol=symbol,
         )
+
+
+class daily_bar_fs(define.fs):
+    pass
+
+
+@define.bind_from_new(daily_bar_kw.new, daily_bar_kw.ref, daily_bar_fs)
+class daily_bar(daily_bar_kw, core.Node.D1_F64):
+
+    DEF: ClassVar[core.Defn] = core.define.node(
+        core.Node.D1_F64, daily_bar_kw
+    )
 
     def __call__(
         self, event: core.Event, graph: core.Graph
     ):
         return f_daily_bar(self, event, graph)
 
-class daily_bars_kw(NamedTuple):
-    type: str
-    #
-    d: core.Ref.Object
-    bar: Bar
-    window: int | datetime.timedelta | None
-
-def f_daily_bars(
-    self: daily_bars | daily_levels,
-    event: core.Event,
-    graph: core.Graph
-):
-    # time series of 2d, each size window (window meaning depends on flags)
-    # TODO: drop none (and thus allow count in not none if itn)
-    
-    ds = graph.select(self.d, event, t = False)
-    dx = ds[-1]
-
-    d = graph.nodes[self.d.i]
-
-    start = d.start # type: ignore
-    end = d.end # type: ignore
-
-    if isinstance(self.window, int):
-        window = datetime.timedelta(days=self.window)
-    else:
-        window = self.window
-
-    d_ref = dx + window
-
-    if d_ref > dx:
-        d_start = dx
-        d_end = d_ref
-    elif d_ref < dx:
-        d_start = dx
-        d_end = d_ref
-    else:
-        d_start = d_end = dx
-    
-    vs = get_daily_bars(
-        self.bar,
-        start,
-        end,
-        df=False,
-        at = (
-            None if d_start != d_end else d_start
-        )
-    )
-
-    if d_start == d_end:
-        return vs
-    elif window is None:
-        return vs
-    
-    ex = (end - d_end).days
-    if ex > 0:
-        vs = vs[:, :-ex]
-
-    sx = (d_start - start).days
-    if sx > 0:
-        vs = vs[:, sx:]
-
-    return vs
-
-class daily_bars(daily_bars_kw, core.Node.Col2D):
-
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col2D, daily_bars_kw
-    )
-
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Object,
-        bar: Bar,
-        window: int | datetime.timedelta | None,
-    ):
-        return cls(
-            cls.DEF.name,
-            d=d,
-            bar=bar,
-            window=window,
-        )
-
-    def __call__(
-        self, event: core.Event, graph: core.Graph
-    ):
-        return f_daily_bars(self, event, graph)
-
 #  ------------------
 
 class daily_level_kw(NamedTuple):
     type: str
     #
-    d: core.Ref.Object
-    bar: Bar
+    d: core.Ref.Scalar_Date
+    bar: Bar | None
+    product: str | None
+    symbol: str | None
     field: str | int
 
-class daily_level(
-    daily_level_kw, core.Node.Col
-):
-
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col, daily_bar_kw
-    )
     @classmethod
-    def new(
-        cls,
-        d: core.Ref.Object,
-        bar: Bar,
-        field: str | int,
-    ):
-        return cls(
-            cls.DEF.name,
-            d=d,
-            bar=bar,
-            field=field,
-        )
+    def ref(cls, i: int | core.Ref.Any, slot: int | None = None) -> core.Ref.Scalar_F64:
+        return core.Ref.d0_f64(i, slot=slot)
 
     def __call__(
         self, event: core.Event, graph: core.Graph
@@ -623,303 +514,210 @@ class daily_level(
         
         return vs[fx]
 
-class daily_levels_kw(NamedTuple):
-    type: str
-    #
-    d: core.Ref.Object
-    bar: Bar
-    field: str | int
-    window: int | datetime.timedelta | None
+class daily_open_kw(daily_level_kw):
 
-class daily_levels(daily_levels_kw, core.Node.Col1D):
+    @classmethod
+    def new(
+        cls,
+        d: core.Ref.Scalar_Date,
+        product: str | None,
+        symbol: str | None,
+        bar: Bar | None,
+        field: str | int = "open",
+    ):
+        assert field == "open", (cls, field)
+        bar, product, symbol = new_bar(bar, product, symbol)
+        return daily_open(
+            "daily_open",
+            d=d,
+            bar=bar,
+            product=product,
+            symbol=symbol,
+            field=field,
+        )
 
-    DEF: ClassVar[core.Defn] = core.define(
-        core.Node.Col1D, daily_bars_kw
+@define.bind_from_new(daily_open_kw.new, daily_level_kw.ref, daily_bar_fs)
+class daily_open(daily_open_kw, core.Node.D0_F64):
+
+    DEF: ClassVar[core.Defn] = core.define.node(
+        core.Node.D0_F64, daily_open_kw
     )
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Object,
-        bar: Bar,
-        window: int | datetime.timedelta | None,
-        field: str | int,
-        method: str | None = None,
-        db: str | None = None,
-    ):
-        return cls(
-            cls.DEF.name,
-            d=d,
-            bar=bar,
-            field=field,
-            window=window,
-        )
 
-    def __call__(
-        self, event: core.Event, graph: core.Graph
-    ):
-        
-        vs = f_daily_bars(self, event, graph)
-        
-        if isinstance(self.field, str):
-            fx = BAR_FIELD_INDICES[self.field]
-        else:
-            fx = self.field
-        
-        return vs[:, fx]
-
-#  ------------------
-
-class daily_open(daily_level):
+class daily_high_kw(daily_level_kw):
 
     @classmethod
     def new(
         cls,
-        d: core.Ref.Object,
-        bar: Bar,
-        field: str | int = "open",
-    ):
-        assert field == "open", (cls, field)
-        return cls(
-            cls.DEF.name,
-            d=d,
-            bar=bar,
-            field=field,
-        )
-
-class daily_opens(daily_levels):
-
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Object,
-        bar: Bar,
-        window: int | None,
-        field: str | int = "open",
-    ):
-        assert field == "open", (cls, field)
-        return cls(
-            cls.DEF.name,
-            d=d,
-            bar=bar,
-            field=field,
-            window=window,
-        )
-
-
-class daily_high(daily_level):
-
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Object,
-        bar: Bar,
+        d: core.Ref.Scalar_Date,
+        product: str | None,
+        symbol: str | None,
+        bar: Bar | None,
         field: str | int = "high",
     ):
         assert field == "high", (cls, field)
-        return cls(
-            cls.DEF.name,
+        bar, product, symbol = new_bar(bar, product, symbol)
+        return daily_high(
+            "daily_high",
             d=d,
             bar=bar,
+            product=product,
+            symbol=symbol,
             field=field,
         )
 
-class daily_highs(daily_levels):
+@define.bind_from_new(daily_high_kw.new, daily_level_kw.ref, daily_bar_fs)
+class daily_high(daily_high_kw, core.Node.D0_F64):
+
+    DEF: ClassVar[core.Defn] = core.define.node(
+        core.Node.D0_F64, daily_high_kw
+    )
+class daily_low_kw(daily_level_kw):
 
     @classmethod
     def new(
         cls,
-        d: core.Ref.Object,
-        bar: Bar,
-        window: int | None,
-        field: str | int = "high",
-    ):
-        assert field == "high", (cls, field)
-        return cls(
-            cls.DEF.name,
-            d=d,
-            bar=bar,
-            field=field,
-            window=window,
-        )
-
-class daily_low(daily_level):
-
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Object,
-        bar: Bar,
+        d: core.Ref.Scalar_Date,
+        product: str | None,
+        symbol: str | None,
+        bar: Bar | None,
         field: str | int = "low",
     ):
         assert field == "low", (cls, field)
-        return cls(
-            cls.DEF.name,
+        bar, product, symbol = new_bar(bar, product, symbol)
+        return daily_low(
+            "daily_low",
             d=d,
             bar=bar,
+            product=product,
+            symbol=symbol,
             field=field,
         )
 
-class daily_lows(daily_levels):
+@define.bind_from_new(daily_low_kw.new, daily_level_kw.ref, daily_bar_fs)
+class daily_low(daily_low_kw, core.Node.D0_F64):
+
+    DEF: ClassVar[core.Defn] = core.define.node(
+        core.Node.D0_F64, daily_low_kw
+    )
+
+class daily_close_kw(daily_level_kw):
 
     @classmethod
     def new(
         cls,
-        d: core.Ref.Object,
-        bar: Bar,
-        window: int | None,
-        field: str | int = "low",
-    ):
-        assert field == "low", (cls, field)
-        return cls(
-            cls.DEF.name,
-            d=d,
-            bar=bar,
-            field=field,
-            window=window,
-        )
-
-class daily_close(daily_level):
-
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Object,
-        bar: Bar,
+        d: core.Ref.Scalar_Date,
+        product: str | None,
+        symbol: str | None,
+        bar: Bar | None,
         field: str | int = "close",
     ):
         assert field == "close", (cls, field)
-        return cls(
-            cls.DEF.name,
+        bar, product, symbol = new_bar(bar, product, symbol)
+        return daily_close(
+            "daily_close",
             d=d,
             bar=bar,
+            product=product,
+            symbol=symbol,
             field=field,
         )
 
-class daily_closes(daily_levels):
+class daily_close_fs(daily_bar_fs):
+    pass
+
+
+@define.bind_from_new(daily_close_kw.new, daily_level_kw.ref, daily_close_fs)
+class daily_close(daily_close_kw, core.Node.D0_F64):
+
+    DEF: ClassVar[core.Defn] = core.define.node(
+        core.Node.D0_F64, daily_close_kw
+    )
+
+class daily_volume_kw(daily_level_kw):
 
     @classmethod
     def new(
         cls,
-        d: core.Ref.Object,
-        bar: Bar,
-        window: int | None,
-        field: str | int = "close",
-    ):
-        assert field == "close", (cls, field)
-        return cls(
-            cls.DEF.name,
-            d=d,
-            bar=bar,
-            field=field,
-            window=window,
-        )
-
-class daily_volume(daily_level):
-
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Object,
-        bar: Bar,
+        d: core.Ref.Scalar_Date,
+        product: str | None,
+        symbol: str | None,
+        bar: Bar | None,
         field: str | int = "volume",
     ):
         assert field == "volume", (cls, field)
-        return cls(
-            cls.DEF.name,
+        bar, product, symbol = new_bar(bar, product, symbol)
+        return daily_volume(
+            "daily_volume",
             d=d,
             bar=bar,
+            product=product,
+            symbol=symbol,
             field=field,
         )
 
-class daily_volumes(daily_levels):
+@define.bind_from_new(daily_volume_kw.new, daily_level_kw.ref, daily_bar_fs)
+class daily_volume(daily_volume_kw, core.Node.D0_F64):
+
+    DEF: ClassVar[core.Defn] = core.define.node(
+        core.Node.D0_F64, daily_volume_kw
+    )
+class daily_wap_kw(daily_level_kw):
 
     @classmethod
     def new(
         cls,
-        d: core.Ref.Object,
-        bar: Bar,
-        window: int | None,
-        field: str | int = "volume",
-    ):
-        assert field == "volume", (cls, field)
-        return cls(
-            cls.DEF.name,
-            d=d,
-            bar=bar,
-            field=field,
-            window=window,
-        )
-
-class daily_wap(daily_level):
-
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Object,
-        bar: Bar,
+        d: core.Ref.Scalar_Date,
+        product: str | None,
+        symbol: str | None,
+        bar: Bar | None,
         field: str | int = "wap",
     ):
         assert field == "wap", (cls, field)
-        return cls(
-            cls.DEF.name,
+        bar, product, symbol = new_bar(bar, product, symbol)
+        return daily_wap(
+            "daily_wap",
             d=d,
             bar=bar,
+            product=product,
+            symbol=symbol,
             field=field,
         )
 
-class daily_waps(daily_levels):
+@define.bind_from_new(daily_wap_kw.new, daily_level_kw.ref, daily_bar_fs)
+class daily_wap(daily_wap_kw, core.Node.D0_F64):
+
+    DEF: ClassVar[core.Defn] = core.define.node(
+        core.Node.D0_F64, daily_wap_kw
+    )
+class daily_open_interest_kw(daily_level_kw):
 
     @classmethod
     def new(
         cls,
-        d: core.Ref.Object,
-        bar: Bar,
-        window: int | None,
-        field: str | int = "wap",
-    ):
-        assert field == "wap", (cls, field)
-        return cls(
-            cls.DEF.name,
-            d=d,
-            bar=bar,
-            field=field,
-            window=window,
-        )
-
-class daily_open_interest(daily_level):
-
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Object,
-        bar: Bar,
+        d: core.Ref.Scalar_Date,
+        product: str | None,
+        symbol: str | None,
+        bar: Bar | None,
         field: str | int = "open_interest",
     ):
         assert field == "open_interest", (cls, field)
-        return cls(
-            cls.DEF.name,
+        bar, product, symbol = new_bar(bar, product, symbol)
+        return daily_open_interest(
+            "daily_open_interest",
             d=d,
             bar=bar,
+            product=product,
+            symbol=symbol,
             field=field,
         )
 
-class daily_open_interests(daily_levels):
+@define.bind_from_new(daily_open_interest_kw.new, daily_level_kw.ref, daily_bar_fs)
+class daily_open_interest(daily_open_interest_kw, core.Node.D0_F64):
 
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Object,
-        bar: Bar,
-        window: int | None,
-        field: str | int = "open_interest",
-    ):
-        assert field == "open_interest", (cls, field)
-        return cls(
-            cls.DEF.name,
-            d=d,
-            bar=bar,
-            field=field,
-            window=window,
-        )
+    DEF: ClassVar[core.Defn] = core.define.node(
+        core.Node.D0_F64, daily_open_interest_kw
+    )
+    
+
 
 #  ------------------

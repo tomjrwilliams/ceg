@@ -1,10 +1,14 @@
 import sys
 sys.path.append("./src")
 
-from typing import Any, cast
+from typing import Any, cast, Callable
+from functools import wraps
+
 from frozendict import frozendict
 
+import ceg
 import ceg.fs as fs
+import ceg.data as data
 import ceg.app as app
 
 shared: frozendict[
@@ -23,6 +27,11 @@ pages = (
             shared, 
             cast(app.page.Universe, frozendict({
                 "gaussian.walk": fs.rand.gaussian.fs().walk,
+                "days": fs.dates.daily.fs().loop,
+                "close": (
+                    data.bars.daily_close.bind,
+                    data.bars.daily_close.new,
+                )
             }))
         )
     ))

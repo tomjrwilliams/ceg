@@ -9,6 +9,7 @@ from typing import (
     Type,
     TypeVar,
     overload,
+    cast,
     Literal,
 )
 
@@ -411,6 +412,35 @@ class Ref:
             )
         #
         raise ValueError(ref)
+    
+    @classmethod
+    def d0_f64(
+        cls,
+        i: int | Ref.Any,
+        slot: int | None = None
+    ) -> Ref_D0_F64:
+        if isinstance(i, Ref.Any):
+            return cast(Ref.D0_F64, i)
+        return Ref.D0_F64.new(i, slot)
 
+    @classmethod
+    def d1_f64(
+        cls,
+        i: int | Ref.Any,
+        slot: int | None = None
+    ) -> Ref_D1_F64:
+        if isinstance(i, Ref.Any):
+            return cast(Ref.D1_F64, i)
+        return Ref.D1_F64.new(i, slot)
+
+    @classmethod
+    def d0_date(
+        cls,
+        i: int | Ref.Any,
+        slot: int | None = None
+    ) -> Ref_D0_Date:
+        if isinstance(i, Ref.Any):
+            return cast(Ref.D0_Date, i)
+        return Ref.D0_Date.new(i, slot)
 
 #  ------------------

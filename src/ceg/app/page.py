@@ -1,5 +1,5 @@
 from typing import cast, Iterable, Callable, get_type_hints, get_args, get_origin, Type, NamedTuple, Union
-
+import datetime as dt
 import math
 import numpy as np
 import polars as pl
@@ -12,7 +12,16 @@ from ceg.app.nav import Shared, Page
 import ceg
 
 def repr_type(t: Type):
-    s = str(t).split("<class '")[1].split("'>")[0]
+    s = str(t)
+    if s.endswith(".args"):
+        return "*args"
+    elif s.endswith(".kwargs"):
+        return "**kwargs"
+    try:
+        s = s.split("<class '")[1].split("'>")[0]
+    except:
+        return s
+    s = s.replace("datetime.", "")
     if s.endswith(".core.graphs.Graph"):
         return "Graph"
     return s.strip()
@@ -31,16 +40,28 @@ class Annot(NamedTuple):
             return f"{s}|None"
         return s
 
+class Signature(NamedTuple):
+    annots: frozendict[str, Annot]
+    depth: int
+    f: Callable
+
 Universe = frozendict[str, ceg.Node.Any | Callable]
-Signatures = frozendict[str, frozendict[str, Annot]]
+Signatures = frozendict[str, Signature]
 
 def signatures(
     universe: Universe
 ) -> Signatures:
     res = cast(Signatures, frozendict())
     for key, f in universe.items():
+        depth = 0
         annots = {}
-        hints = get_type_hints(f)
+        if isinstance(f, tuple):
+            f, r = f
+            hints = get_type_hints(r)
+        else:
+            hints = get_type_hints(f)
+        returns = hints.pop("return", None)
+        print("returns", returns)
         for k, h in hints.items():
             if get_origin(h) is Union:
                 args = get_args(h)
@@ -55,7 +76,11 @@ def signatures(
                     annots[k] = Annot(args, optional=False, union=True)
             else:
                 annots[k] = Annot(h, False, False)
-        res = res.set(key, frozendict(annots))
+        res = res.set(key, Signature(
+            cast(frozendict[str, Annot], frozendict(annots)),
+            depth,
+            f
+        ))
     return cast(Signatures, res)
 
 def signatures_df(sigs: Signatures) -> pl.DataFrame:
@@ -64,10 +89,11 @@ def signatures_df(sigs: Signatures) -> pl.DataFrame:
             **{"func": k},
             **{
                 f"kw-{i}": f"{k}:{annot.repr()}"
-                for i, (k, annot) in enumerate(annots.items())
+                for i, (k, annot)
+                in enumerate(sig.annots.items())
             }
         }
-        for k, annots in sigs.items()
+        for k, sig in sigs.items()
     ])
 
 def empty_cell(cell):
@@ -95,6 +121,20 @@ TYPES = {
     "float": float,
 }
 
+def parse_date(v: str):
+    if v.isnumeric():
+        y = int(v)
+        return dt.date(y, 1, 1)
+    vs = v.split(".")
+    if len(vs) == 2:
+        y, m = v
+        return dt.date(int(y), int(m), 1)
+    elif len(vs) == 3:
+        y, m, d = v
+        return dt.date(int(y), int(m), int(d))
+    else:
+        raise ValueError(v)
+
 def parse_kwarg(
     kw: str, 
     refs: dict[str, ceg.Ref.Any],
@@ -106,6 +146,8 @@ def parse_kwarg(
         k, t = k.split(":")
         if t == "ref":
             v = refs[v]
+        elif t == "date":
+            v = parse_date(v)
         else:
             v = TYPES[t](v)
     elif k in annots:
@@ -113,7 +155,10 @@ def parse_kwarg(
         if t.union:
             for tt in t.t:
                 try:
-                    v = tt(v)
+                    if tt is dt.date:
+                        v = parse_date(v)
+                    else:
+                        v = tt(v)
                     return k, v
                 except:
                     pass
@@ -138,14 +183,14 @@ def kwargs_ready(
 def parse_kwargs(
     row: dict[str, str | None],
     refs: dict[str, ceg.Ref.Any],
-    annots: frozendict[str, Annot],
+    sig: Signature
 ):
     # TODO: pass in the type so we can infer from sig
     vs = [v for k, v in row.items() if k.startswith("kw-")]
     ready, vs = kwargs_ready(vs)
     if not ready:
         return {}
-    return dict((parse_kwarg(v, refs, annots) for v in vs))
+    return dict((parse_kwarg(v, refs, sig.annots) for v in vs))
 
 def rows_to_refs(
     g: ceg.Graph,
@@ -162,18 +207,21 @@ def rows_to_refs(
         if func_name not in universe:
             raise ValueError(f"Not found: {func_name}")
 
-        func = universe[func_name]
-        kwargs = parse_kwargs(row, refs, sigs[func_name])
+        sig = sigs[func_name]
+        func = sig.f
+
+        kwargs = parse_kwargs(row, refs, sig)
 
         if not len(kwargs):
             continue
+        
+        if sig.depth:
+            res = func(g)(**kwargs) # type: ignore
+        else:
+            res = func(g, **kwargs) # type: ignore
+            # TODO: check that the first arg is always g?
 
-        # TODO: check that the first arg is always g?
-
-        g, r = cast(
-            tuple[ceg.Graph, ceg.Ref.Any], 
-            func(g, **kwargs) # type: ignore
-        )
+        g, r = cast(tuple[ceg.Graph, ceg.Ref.Any], res)
 
         # i += offset
         # label = f"{str(i).rjust(pad, '0')}-{row['label']}"

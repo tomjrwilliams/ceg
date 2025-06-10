@@ -57,9 +57,7 @@ class gaussian_kw(NamedTuple):
 
     @classmethod
     def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        if isinstance(i, Ref.Any):
-            return cast(Ref.Scalar_F64, i)
-        return Ref.D0_F64.new(i, slot)
+        return Ref.d0_f64(i, slot=slot)
 
     @classmethod
     def new(

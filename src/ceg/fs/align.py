@@ -30,9 +30,9 @@ class align_d0_date(align_d0_date_kw, Node.D0_Date):
     >>> from . import dates
     >>> d0 = dt.date(2025, 1, 1)
     >>> d1 = dt.date(2025, 2, 1)
-    >>> g, r0 = dates.daily.loop(g, d0, d1, n = 1.)
-    >>> g, r1 = dates.daily.loop(g, d0, d1, n = 2, step=2., keep = 3)
-    >>> g, r2 = dates.daily.loop(g, d0, d1, n = 3, step=3., keep = 3)
+    >>> g, r0 = dates.daily.fs().loop(g, d0, d1, n = 1.)
+    >>> g, r1 = dates.daily.fs().loop(g, d0, d1, n = 2, step=2., keep = 3)
+    >>> g, r2 = dates.daily.fs().loop(g, d0, d1, n = 3, step=3., keep = 3)
     >>> with g.implicit() as (bind, done):
     ...     r10 = bind(align.scalar_date.new(r1, r0), when=Ready.ref(r0), keep=2)
     ...     r20 = bind(align.scalar_date.new(r2, r0), when=Ready.ref(r0), keep=2)

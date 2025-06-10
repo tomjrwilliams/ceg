@@ -11,10 +11,10 @@ import pathlib
 
 import contextlib
 
-class Folder:
+class Folders:
     ETF="etf"
-    FUT="futures"
-    CON="individual_contracts_archive"
+    FUTG="futures"
+    FUTC="individual_contracts_archive"
     # TODO: _update
     FX="fx"
     IND="index"
@@ -24,7 +24,7 @@ class SuffixMap(NamedTuple):
     folder: frozendict[str, str]
 
 
-class Suffix:
+class Suffixes:
     ETF: SuffixMap = SuffixMap(
         file=frozendict(empty=""),
         folder=frozendict(
@@ -65,11 +65,11 @@ def open_file(
     suffix_folder = None
     suffix_file = None
     if suffix is not None:
-        suffixes: SuffixMap = getattr(Suffix, folder)
+        suffixes: SuffixMap = getattr(Suffixes, folder)
         suffix_folder = suffixes.folder.get(suffix)
         suffix_file = suffixes.file.get(suffix)
 
-    if folder == Folder.ETF:
+    if folder == Folders.ETF:
         folder = f"{folder}_{symbol[0]}"
 
     folder_stem = f"{folder}_{snap}_{freq}"
