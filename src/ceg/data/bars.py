@@ -153,7 +153,7 @@ BARS_SCHEMA = {
     "low": pl.Float64,
     "close": pl.Float64,
     "volume": pl.Float64,
-    "wap": pl.Float64,
+    "open_interest": pl.Float64,
 }
 
 BAR_FIELD_INDICES = {
@@ -168,7 +168,7 @@ class Fields:
     LOW = BAR_FIELD_INDICES["low"]
     CLOSE = BAR_FIELD_INDICES["close"]
     VOLUME = BAR_FIELD_INDICES["volume"]
-    WAP = BAR_FIELD_INDICES["wap"]
+    OPEN_INTEREST = BAR_FIELD_INDICES["open_interest"]
 
 #  ------------------
 
@@ -221,9 +221,9 @@ get_daily_volume = partial(
     get_daily_level,
     field=BAR_FIELD_INDICES["volume"]
 )
-get_daily_wap = partial(
+get_daily_open_interest = partial(
     get_daily_level,
-    field=BAR_FIELD_INDICES["wap"]
+    field=BAR_FIELD_INDICES["open_interest"]
 )
 
 #  ------------------
@@ -480,9 +480,32 @@ class daily_bar_kw(NamedTuple):
         )
 
 class daily_bar(daily_bar_kw, core.Node.D1_F64):
+    """
+    >>> start = dt.date(2025, 1, 1)
+    >>> end = dt.date(2025, 1, 6)
+    >>> g, d = core.Graph.new().pipe(
+    ...     dates.daily.loop, start, end
+    ... )
+    >>> g, r = g.pipe(daily_bar.bind, d, product="FUT", symbol="ES")
+    >>> for g, es, t in core.batches(
+    ...     g, core.Event.zero(d), n=5, g=2, iter=True
+    ... )():
+    ...     dx = d.history(g).last_before(t)
+    ...     v = r.history(g).last_before(t)
+    ...     print(dx, list(v[:4]))
+    2025-01-01 [nan, nan, nan, nan]
+    2025-01-02 [6016.77, 6063.3, 5941.43, 5983.65]
+    2025-01-03 [5988.2, 6064.81, 5978.34, 6057.48]
+    2025-01-04 [nan, nan, nan, nan]
+    2025-01-05 [nan, nan, nan, nan]
+    """
 
     DEF: ClassVar[core.Defn] = core.define.node(
         core.Node.D1_F64, daily_bar_kw
+    )
+    bind = define.bind_from_new(
+        daily_bar_kw.new,
+        daily_bar_kw.ref,
     )
 
     def __call__(
@@ -515,7 +538,11 @@ class daily_level_kw(NamedTuple):
         else:
             fx = self.field
         
-        return vs[fx]
+        v = vs[fx]
+
+        if np.isnan(v):
+            return None
+        return v
     
 #  ------------------
 
@@ -542,9 +569,32 @@ class daily_open_kw(daily_level_kw):
         )
 
 class daily_open(daily_open_kw, core.Node.D0_F64):
+    """
+    >>> start = dt.date(2025, 1, 1)
+    >>> end = dt.date(2025, 1, 6)
+    >>> g, d = core.Graph.new().pipe(
+    ...     dates.daily.loop, start, end
+    ... )
+    >>> g, r = g.pipe(daily_open.bind, d, product="FUT", symbol="ES")
+    >>> for g, es, t in core.batches(
+    ...     g, core.Event.zero(d), n=5, g=2, iter=True
+    ... )():
+    ...     dx = d.history(g).last_before(t)
+    ...     v = r.history(g).last_before(t)
+    ...     print(dx, v)
+    2025-01-01 None
+    2025-01-02 6016.77
+    2025-01-03 5988.2
+    2025-01-04 None
+    2025-01-05 None
+    """
 
     DEF: ClassVar[core.Defn] = core.define.node(
         core.Node.D0_F64, daily_open_kw
+    )
+    bind = define.bind_from_new(
+        daily_open_kw.new,
+        daily_open_kw.ref,
     )
     
 #  ------------------
@@ -573,9 +623,32 @@ class daily_high_kw(daily_level_kw):
         )
 
 class daily_high(daily_high_kw, core.Node.D0_F64):
+    """
+    >>> start = dt.date(2025, 1, 1)
+    >>> end = dt.date(2025, 1, 6)
+    >>> g, d = core.Graph.new().pipe(
+    ...     dates.daily.loop, start, end
+    ... )
+    >>> g, r = g.pipe(daily_high.bind, d, product="FUT", symbol="ES")
+    >>> for g, es, t in core.batches(
+    ...     g, core.Event.zero(d), n=5, g=2, iter=True
+    ... )():
+    ...     dx = d.history(g).last_before(t)
+    ...     v = r.history(g).last_before(t)
+    ...     print(dx, v)
+    2025-01-01 None
+    2025-01-02 6063.3
+    2025-01-03 6064.81
+    2025-01-04 None
+    2025-01-05 None
+    """
 
     DEF: ClassVar[core.Defn] = core.define.node(
         core.Node.D0_F64, daily_high_kw
+    )
+    bind = define.bind_from_new(
+        daily_high_kw.new,
+        daily_high_kw.ref,
     )
     
 #  ------------------
@@ -603,9 +676,32 @@ class daily_low_kw(daily_level_kw):
         )
 
 class daily_low(daily_low_kw, core.Node.D0_F64):
+    """
+    >>> start = dt.date(2025, 1, 1)
+    >>> end = dt.date(2025, 1, 6)
+    >>> g, d = core.Graph.new().pipe(
+    ...     dates.daily.loop, start, end
+    ... )
+    >>> g, r = g.pipe(daily_low.bind, d, product="FUT", symbol="ES")
+    >>> for g, es, t in core.batches(
+    ...     g, core.Event.zero(d), n=5, g=2, iter=True
+    ... )():
+    ...     dx = d.history(g).last_before(t)
+    ...     v = r.history(g).last_before(t)
+    ...     print(dx, v)
+    2025-01-01 None
+    2025-01-02 5941.43
+    2025-01-03 5978.34
+    2025-01-04 None
+    2025-01-05 None
+    """
 
     DEF: ClassVar[core.Defn] = core.define.node(
         core.Node.D0_F64, daily_low_kw
+    )
+    bind = define.bind_from_new(
+        daily_low_kw.new,
+        daily_low_kw.ref,
     )
     
 #  ------------------
@@ -649,13 +745,13 @@ class daily_close(
     ...     g, core.Event.zero(d), n=5, g=2, iter=True
     ... )():
     ...     dx = d.history(g).last_before(t)
-    ...     v = round(r.history(g).last_before(t), 2)
+    ...     v = r.history(g).last_before(t)
     ...     print(dx, v)
-    2025-01-01 nan
+    2025-01-01 None
     2025-01-02 5983.65
     2025-01-03 6057.48
-    2025-01-04 nan
-    2025-01-05 nan
+    2025-01-04 None
+    2025-01-05 None
     """
 
     DEF: ClassVar[core.Defn] = core.define.node(
@@ -693,39 +789,32 @@ class daily_volume_kw(daily_level_kw):
         )
 
 class daily_volume(daily_volume_kw, core.Node.D0_F64):
+    """
+    >>> start = dt.date(2025, 1, 1)
+    >>> end = dt.date(2025, 1, 6)
+    >>> g, d = core.Graph.new().pipe(
+    ...     dates.daily.loop, start, end
+    ... )
+    >>> g, r = g.pipe(daily_volume.bind, d, product="FUT", symbol="ES")
+    >>> for g, es, t in core.batches(
+    ...     g, core.Event.zero(d), n=5, g=2, iter=True
+    ... )():
+    ...     dx = d.history(g).last_before(t)
+    ...     v = r.history(g).last_before(t)
+    ...     print(dx, v)
+    2025-01-01 None
+    2025-01-02 1826031.0
+    2025-01-03 1206570.0
+    2025-01-04 None
+    2025-01-05 None
+    """
 
     DEF: ClassVar[core.Defn] = core.define.node(
         core.Node.D0_F64, daily_volume_kw
     )
-
-#  ------------------
-
-class daily_wap_kw(daily_level_kw):
-
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Scalar_Date,
-        product: str | None = None,
-        symbol: str | None = None,
-        bar: Bar | None = None,
-        field: str | int = "wap",
-    ):
-        assert field == "wap", (cls, field)
-        bar, product, symbol = new_bar(bar, product, symbol)
-        return daily_wap(
-            "daily_wap",
-            d=d,
-            bar=bar,
-            product=product,
-            symbol=symbol,
-            field=field,
-        )
-
-class daily_wap(daily_wap_kw, core.Node.D0_F64):
-
-    DEF: ClassVar[core.Defn] = core.define.node(
-        core.Node.D0_F64, daily_wap_kw
+    bind = define.bind_from_new(
+        daily_volume_kw.new,
+        daily_volume_kw.ref,
     )
 
 #  ------------------
@@ -753,9 +842,32 @@ class daily_open_interest_kw(daily_level_kw):
         )
 
 class daily_open_interest(daily_open_interest_kw, core.Node.D0_F64):
+    """
+    >>> start = dt.date(2025, 1, 1)
+    >>> end = dt.date(2025, 1, 6)
+    >>> g, d = core.Graph.new().pipe(
+    ...     dates.daily.loop, start, end
+    ... )
+    >>> g, r = g.pipe(daily_open_interest.bind, d, product="FUT", symbol="ES")
+    >>> for g, es, t in core.batches(
+    ...     g, core.Event.zero(d), n=5, g=2, iter=True
+    ... )():
+    ...     dx = d.history(g).last_before(t)
+    ...     v = r.history(g).last_before(t)
+    ...     print(dx, v)
+    2025-01-01 None
+    2025-01-02 2068557.0
+    2025-01-03 2061748.0
+    2025-01-04 None
+    2025-01-05 None
+    """
 
     DEF: ClassVar[core.Defn] = core.define.node(
         core.Node.D0_F64, daily_open_interest_kw
+    )
+    bind = define.bind_from_new(
+        daily_open_interest_kw.new,
+        daily_open_interest_kw.ref,
     )
     
 
