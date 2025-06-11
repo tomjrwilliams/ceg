@@ -67,7 +67,6 @@ class sum(sum_kw, Node.Scalar_F64):
             )
         )
 
-
 #  ------------------
 
 

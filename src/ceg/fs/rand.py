@@ -87,7 +87,6 @@ class gaussian_fs(define.fs):
         ).pipe(g.bind, r, Loop.Const.new(step))
         return g, cast(Ref.Scalar_F64, r)
 
-@define.bind_from_new(gaussian_kw.new, gaussian_kw.ref, gaussian_fs)
 class gaussian(gaussian_kw, Node.D0_F64):
     """
     gaussian noise (pass v=self to get random walk)

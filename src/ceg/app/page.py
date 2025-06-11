@@ -1,4 +1,5 @@
-from typing import cast, Iterable, Callable, get_type_hints, get_args, get_origin, Type, NamedTuple, Union
+from typing import cast, Iterable, Callable, get_type_hints, get_args, get_origin, Type, NamedTuple, Union, Optional
+import types
 import datetime as dt
 import math
 import numpy as np
@@ -22,9 +23,7 @@ def repr_type(t: Type):
     except:
         return s
     s = s.replace("datetime.", "")
-    if s.endswith(".core.graphs.Graph"):
-        return "Graph"
-    return s.strip()
+    return s.split(".")[-1].replace("Ref_", "").strip()
 
 class Annot(NamedTuple):
     t: Type | tuple[Type, ...]
@@ -37,13 +36,17 @@ class Annot(NamedTuple):
         else:
             s = repr_type(self.t)
         if self.optional:
-            return f"{s}|None"
+            return f"{s}|N"
         return s
 
 class Signature(NamedTuple):
     annots: frozendict[str, Annot]
     depth: int
     f: Callable
+
+    # TODO: allow explicitly pass
+    # and in construction allow masking certain kwargs
+    # eg. field for daily_close, bar etc.
 
 Universe = frozendict[str, ceg.Node.Any | Callable]
 Signatures = frozendict[str, Signature]
@@ -61,17 +64,27 @@ def signatures(
         else:
             hints = get_type_hints(f)
         returns = hints.pop("return", None)
-        print("returns", returns)
         for k, h in hints.items():
-            if get_origin(h) is Union:
+            origin = get_origin(h)
+            if (
+                origin is types.UnionType
+                or origin is Union
+            ):
                 args = get_args(h)
-                if None in args:
-                    args = tuple((a for a in args if a is not None))
-                    annots[k] = Annot(
-                        args,
-                        optional=True,
-                        union=True,
-                    )
+                if type(None) in args:
+                    args = tuple((
+                        a for a in args if a is not type(None)
+                    ))
+                    if len(args) == 1:
+                        annots[k] = Annot(
+                            args[0], optional=True, union=False
+                        )
+                    else:
+                        annots[k] = Annot(
+                            args,
+                            optional=True,
+                            union=True,
+                        )
                 else:
                     annots[k] = Annot(args, optional=False, union=True)
             else:
@@ -122,10 +135,15 @@ TYPES = {
 }
 
 def parse_date(v: str):
-    if v.isnumeric():
+    if v.isnumeric() and len(v) == 4:
         y = int(v)
         return dt.date(y, 1, 1)
-    vs = v.split(".")
+    elif v.isnumeric() and len(v) == 8:
+        y = int(v[4:])
+        m = int(v[4:6])
+        d = int(v[6:])
+        return dt.date(y, m, d)
+    vs = v.split("-")
     if len(vs) == 2:
         y, m = v
         return dt.date(int(y), int(m), 1)
@@ -164,7 +182,13 @@ def parse_kwarg(
                     pass
         else:
             assert isinstance(t.t, type), t
-            v = t.t(v)
+            try:
+                if t.t is dt.date:
+                    v = parse_date(v)
+                else:
+                    v = t.t(v)
+            except:
+                raise ValueError(v)
     elif v.isnumeric():
         v = float(v)
     return k, v
@@ -198,14 +222,20 @@ def rows_to_refs(
     refs: dict[str, ceg.Ref.Any],
     universe: Universe,
     sigs: Signatures,
+    keep: dict[str, int] = {}
 ):
+    es = []
     for i, row in enumerate(df.iter_rows(named=True)):
         if empty_row(row, "label", "func"):
             continue
 
+        init = row.pop("i")
+
         func_name = row["func"]
         if func_name not in universe:
             raise ValueError(f"Not found: {func_name}")
+
+        label = row["label"]
 
         sig = sigs[func_name]
         func = sig.f
@@ -214,20 +244,29 @@ def rows_to_refs(
 
         if not len(kwargs):
             continue
+
+        if "keep" not in kwargs and label in keep:
+            kwargs["keep"] = keep[label]
         
-        if sig.depth:
-            res = func(g)(**kwargs) # type: ignore
-        else:
-            res = func(g, **kwargs) # type: ignore
-            # TODO: check that the first arg is always g?
+        try:
+            if sig.depth:
+                res = func(g)(**kwargs) # type: ignore
+            else:
+                res = func(g, **kwargs) # type: ignore
+                # TODO: check that the first arg is always g?
+        except Exception as e:
+            raise ValueError((str(e), kwargs))
 
         g, r = cast(tuple[ceg.Graph, ceg.Ref.Any], res)
 
         # i += offset
         # label = f"{str(i).rjust(pad, '0')}-{row['label']}"
-        refs[row["label"]] = r
+        refs[label] = r
 
-    return g, refs
+        if init:
+            es.append(ceg.Event.zero(r))
+
+    return g, refs, es
 
 class DynamicKw(NamedTuple):
     name: str
@@ -246,6 +285,7 @@ class Dynamic(DynamicKw, Page):
 
         schema_model = pl.DataFrame(schema={
             "label": pl.String,
+            "i": pl.Boolean,
             **sigs_df.schema,
         })
 
@@ -256,47 +296,47 @@ class Dynamic(DynamicKw, Page):
         )
 
         st.text("init:")
-        schema_events = pl.DataFrame(schema={
+        schema_plot = pl.DataFrame(schema={
             "label": pl.String,
-            "t": pl.Int32,
+            "x": pl.Boolean,
+            "y": pl.Boolean,
+            "y2": pl.Boolean,
         })
-        df_events = cast(
+        df_plot = cast(
             pl.DataFrame,
-            st.data_editor(schema_events, num_rows="dynamic")
+            st.data_editor(schema_plot, num_rows="dynamic")
         )
-
-        # TODO: remove the df_events, have an init field
-        # if true, we assume ready even if no dot
-        # or false likewise (none defaults to false can stil have dot)
-
-        # so no need for df_events table, no second loop
 
         steps = 100 # TODO param on page
 
         g = ceg.Graph.new()
 
-        g, refs = g.pipe(
+        g, refs, es = g.pipe(
             rows_to_refs, 
             df_model,
             refs={},
             universe=self.universe,
             sigs=sigs,
+            keep={
+                label: steps
+                for label in df_plot.get_column("label")
+            }
         )
-
-        es = []
-        for r in df_events.iter_rows(named=True):
-            label = r["label"]
-            if label is None:
-                continue
-            t = 0 if r["t"] is None else r["t"]
-            es.append(ceg.Event.new(t, refs[label]))
 
         if not len(refs) or not len(es):
             return
 
         g, es, ts = ceg.batches(g, *es, n = steps, g = len(refs))
 
-        st.line_chart(pl.DataFrame({
-            r_label: r.history(g).last_n_before(steps, ts[-1])
-            for r_label, r in refs.items()
-        }))
+        data_plot = pl.DataFrame({
+            label: refs[label].history(g).last_n_before(steps, ts[-1])
+            for label in df_plot.get_column("label")
+        })
+
+        x_label = df_plot.filter(pl.col("x")).get_column("label")
+        if len(x_label) == 1:
+            st.line_chart(data=data_plot, x = x_label[0])
+        elif not len(x_label):
+            st.line_chart(data_plot)
+        else:
+            raise ValueError(df_plot)

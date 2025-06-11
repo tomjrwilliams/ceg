@@ -43,6 +43,8 @@ from .nodes import (
 )
 from .guards import Guard, Ready, Loop
 
+from functools import wraps
+from inspect import Parameter, signature, Signature
 logger = logging.Logger(__file__)
 
 #  ------------------
@@ -479,27 +481,53 @@ class fs:
 
 Fs = TypeVar("Fs", bound=fs)
 
-class HasNew(Generic[O, P, R, Fs]):
+# class HasNew(Generic[O, P, R, Fs]):
+# class HasNew(Generic[O, P, R]):
 
-    def __call__(self, NAME: str, *args: P.args, **kwargs: P.kwargs) -> O: ...
+#     # def __call__(self, NAME: str, *args: P.args, **kwargs: P.kwargs) -> O: ...
 
-    @classmethod
-    def fs(cls) -> Type[Fs]: ...
+#     # @classmethod
+#     # def fs(cls) -> Type[Fs]: ...
 
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> R: ...
+#     @classmethod
+#     def ref(cls, i: int | Ref.Any, slot: int | None = None) -> R: ...
 
-    @classmethod
-    def new(cls, *args: P.args, **kwargs: P.kwargs) -> O: ...
+#     @classmethod
+#     def new(cls, *args: P.args, **kwargs: P.kwargs) -> O: ...
 
-    @classmethod
-    def bind(cls, g: Graph, *args: P.args, **kwargs: P.kwargs) -> tuple[Graph, R]:
-        g, r = g.bind(node=cls.new(*args, **kwargs))
-        return g, cls.ref(r)
+#     @classmethod
+#     def bind(cls, g: Graph, *args: P.args, **kwargs: P.kwargs) -> tuple[Graph, R]:
+#         g, r = g.bind(node=cls.new(*args, **kwargs))
+#         return g, cls.ref(r)
+
+def prepend_argument(
+    f,
+    f_wrapped: Callable[P, PRes],
+    name: str,
+    t: Type,
+) -> Callable[P, PRes]:
+    sig = signature(f)
+    params = [
+        Parameter(
+            name,
+            Parameter.POSITIONAL_OR_KEYWORD,
+            annotation=t
+        )
+    ] + list(sig.parameters.values())
+    f_wrapped.__signature__ = sig.replace(parameters=params)
+    f_wrapped.__annotations__ = {
+        **{name: t},
+        **f_wrapped.__annotations__
+    }
+    return f_wrapped
+
+P = ParamSpec("P")
+PRes = TypeVar("PRes")
 
 class define:
 
     fs = fs
+    # bind_from_new = HasNew
 
     @staticmethod
     def node(
@@ -519,20 +547,26 @@ class define:
 
     @staticmethod
     def bind_from_new(
-        new: Callable[P, O],
-        ref: Callable[[Ref.Any], R],
-        fs: Type[Fs]
+        new: Callable[P, Node.Any],
+        ref: Callable[..., R]
     ) -> Callable[
-        [Type[O]], HasNew[O, P, R, Fs]
+        Concatenate[Graph, P], 
+        tuple[Graph, R]
     ]:
-        def decorator(cls):
-            class cls_new(cls, HasNew):
-
-                @classmethod
-                def fs(cls) -> Type[Fs]:
-                    return fs
-
-            return cls_new
-        return decorator
+        @wraps(new)
+        def bind(
+            # cls,
+            g: Graph, 
+            *args: P.args, 
+            **kwargs: P.kwargs
+        ) -> tuple[Graph, R]:
+            g, r = g.bind(node=new(*args, **kwargs))
+            return g, ref(r)
+        return prepend_argument(
+            new,
+            bind,
+            "g",
+            Graph,
+        )
 
 #  ------------------

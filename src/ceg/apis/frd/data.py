@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from typing import NamedTuple, cast
 import datetime as dt
 import zipfile
 
@@ -13,7 +13,7 @@ import contextlib
 
 class Folders:
     ETF="etf"
-    FUTG="futures"
+    FUT="futures"
     FUTC="individual_contracts_archive"
     # TODO: _update
     FX="fx"
@@ -23,24 +23,27 @@ class SuffixMap(NamedTuple):
     file: frozendict[str, str]
     folder: frozendict[str, str]
 
+class Suffix:
+    ratio = "ratio"
 
-class Suffixes:
-    ETF: SuffixMap = SuffixMap(
+suffix_maps = cast(frozendict[str, SuffixMap], frozendict({
+    Folders.ETF: SuffixMap(
         file=frozendict(empty=""),
         folder=frozendict(
             adjsplitdiv="adjsplitdiv",
             # adjsplit=""
             # unadj
         )
-    )
-    FUT: SuffixMap = SuffixMap(
+    ),
+    Folders.FUT: SuffixMap(
         file=frozendict(
             ratio="continuous_ratio_adjusted",
         ),
         folder=frozendict(
             ratio="contin_adj_ratio",
         ),
-    )
+    ),
+}))
 
 # etf suffixes:
 # adjsplitdiv
@@ -64,8 +67,9 @@ def open_file(
 ):
     suffix_folder = None
     suffix_file = None
+    
     if suffix is not None:
-        suffixes: SuffixMap = getattr(Suffixes, folder)
+        suffixes: SuffixMap = suffix_maps[folder]
         suffix_folder = suffixes.folder.get(suffix)
         suffix_file = suffixes.file.get(suffix)
 

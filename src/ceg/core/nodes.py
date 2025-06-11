@@ -133,7 +133,6 @@ V = np.ndarray | float
 F = ParamSpec("F")
 FRes = TypeVar("FRes")
 
-
 class NodeInterface(abc.ABC, Generic[R, N]):
 
     DEF: ClassVar[Defn] = Defn("NULL", ())
@@ -148,8 +147,8 @@ class NodeInterface(abc.ABC, Generic[R, N]):
         **kwargs: F.kwargs,
     ) -> FRes: ...
 
-    @abc.abstractmethod
-    def ref(self, i: int, slot: int | None = None) -> R: ...
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> R: ...
 
     @abc.abstractmethod
     def __call__(
@@ -212,9 +211,9 @@ class Node_D0_Date(NodeInterface):
 class Node_D0_F64(NodeInterface):
 
     
-    @classmethod
-    @abc.abstractclassmethod
-    def new(cls, **kwargs) -> Node_D0_F64: ...
+    # @classmethod
+    # @abc.abstractclassmethod
+    # def new(cls, **kwargs) -> Node_D0_F64: ...
 
     def pipe(
         self,

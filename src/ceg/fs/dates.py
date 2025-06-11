@@ -45,8 +45,6 @@ class daily_kw(NamedTuple):
         return daily(
             "daily", prev=prev, start=start, end=end, n=n
         )
-
-class daily_fs(define.fs):
     
     @classmethod
     def loop(
@@ -64,7 +62,7 @@ class daily_fs(define.fs):
         ).pipe(g.bind, r, Loop.UntilDate.new(step, end, r))
         return g, cast(Ref.Scalar_Date, r)
 
-@define.bind_from_new(daily_kw.new, daily_kw.ref, daily_fs)
+# @define.bind_from_new(daily_kw.new, daily_kw.ref, daily_fs)
 class daily(daily_kw, Node.Scalar_Date):
     """
     >>> start = dt.date(2025, 1, 1)
