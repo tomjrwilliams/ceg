@@ -14,13 +14,13 @@ logger = logging.Logger(__file__)
 
 #  ------------------
 
-# TODO: abstract out nd implementations, each class just needs:
+# TODO: abstract out nd implementatios, each class just needs:
 # specific type casting
-# return array annotations
+# return array annotatios
 
 #  ------------------
 
-V = np.ndarray | np.datetime64 | float | dt.date
+V = np.ndarray | np.int64 | np.datetime64 | float | dt.date
 
 
 @dataclass
@@ -48,12 +48,15 @@ class HistoryKW(NamedTuple):
         if not isinstance(v, np.ndarray):
             shape = ()
             if type(v) in {dt.date, dt.datetime}:
-                dtype = "datetime64[ns]"
+                # dtype = "datetime64[s]"
+                dtype = np.int64
             else:
                 dtype = np.dtype(type(v))
         else:
             shape = v.shape
             dtype = v.dtype
+        if np.issubdtype(dtype, np.datetime64):
+            dtype = np.int64
         exponent = (
             0
             if required == 0
@@ -74,7 +77,7 @@ class HistoryKW(NamedTuple):
             limit,
             np.empty(
                 int(2**exponent),
-                dtype=np.float64,
+                dtype=dtype,
             ),
             values=values,
             mut=HistoryMutable(0),
@@ -113,6 +116,8 @@ class LastKW(NamedTuple):
         else:
             shape = v.shape
             dtype = v.dtype
+        if np.issubdtype(dtype, np.datetime64):
+            dtype = np.int64
         exponent = 0
         return cls(
             shape,
@@ -407,7 +412,7 @@ class History_D0_Date(History_0D):
         return np.datetime64
 
     def append(self, v: dt.date, t: float):
-        v_np = np.datetime64(v, "ns")
+        v_np = np.datetime64(v, "s").astype(np.int64)
         self.mut.occupied = append_d0(
             self.mut.occupied,
             self.required,
@@ -427,7 +432,7 @@ class History_D0_Date(History_0D):
             t,
             self.mut.occupied,
             self.exponent,
-        )  # TODO: cast to M8[D]?
+        ).astype("datetime64[s]").astype("M8[D]")
 
     def last_n_between(self, n: int, l: float, r: float):
         return algos.last_n_between(
@@ -438,16 +443,16 @@ class History_D0_Date(History_0D):
             r,
             self.mut.occupied,
             self.exponent,
-        )  # TODO: cast to M8[D]?
+        ).astype("datetime64[s]").astype("M8[D]")
 
     def last_before(self, t: float) -> dt.date | None:
-        res = algos.last_before(
+        res = np.datetime64(int(algos.last_before(
             self.values,
             self.times,
             t,
             self.mut.occupied,
             self.exponent,
-        )
+        )), "s")
         if res is None:
             return res
         return cast(
@@ -466,11 +471,13 @@ class History_D0_Date(History_0D):
             self.mut.occupied,
             self.exponent,
         )
-        if res is None:
+        if np.isnan(res):
+            return None
+        elif res is None:
             return res
         return cast(
             dt.date,
-            (cast(np.datetime64, res))
+            np.datetime64(int(res), "s")
             .astype("M8[D]")
             .astype("O"),
         )
@@ -533,11 +540,14 @@ class Last_D0_Date(History_D0_Date):
 
 class History_D1_Date(History_1D):
 
+    # TODO: int64 seconds and back
+
     @property
     def dtype(self):
         return np.datetime64
 
     def append(self, v: np.ndarray, t: float):
+        v = v.astype("datetime64[s]").astype(np.int64)
         self.mut.occupied = append_d0(
             self.mut.occupied,
             self.required,
@@ -557,7 +567,7 @@ class History_D1_Date(History_1D):
             t,
             self.mut.occupied,
             self.exponent,
-        ).reshape(self.shape)
+        ).reshape(self.shape).astype("datetime64[s]")
 
     def last_n_between(self, n: int, l: float, r: float):
         return algos.last_n_between_nd(
@@ -569,7 +579,7 @@ class History_D1_Date(History_1D):
             r,
             self.mut.occupied,
             self.exponent,
-        ).reshape(self.shape)
+        ).reshape(self.shape).astype("datetime64[s]")
 
     def last_before(self, t: float):
         return algos.last_before_nd(
@@ -579,7 +589,7 @@ class History_D1_Date(History_1D):
             t,
             self.mut.occupied,
             self.exponent,
-        ).reshape(self.shape)
+        ).reshape(self.shape).astype("datetime64[s]")
 
     def last_between(self, l: float, r: float):
         return algos.last_between_nd(
@@ -590,7 +600,7 @@ class History_D1_Date(History_1D):
             r,
             self.mut.occupied,
             self.exponent,
-        ).reshape(self.shape)
+        ).reshape(self.shape).astype("datetime64[s]")
 
     def last_t(self) -> float:
         occupied = self.mut.occupied

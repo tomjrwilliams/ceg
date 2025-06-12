@@ -21,6 +21,7 @@ import numpy as np
 
 #  ------------------
 
+
 RNG = {}
 
 
@@ -68,8 +69,6 @@ class gaussian_kw(NamedTuple):
         v: Ref.D0_F64 | None = None,
     ):
         return gaussian("gaussian", mean=mean, std=std, seed=seed, v=v)
-
-class gaussian_fs(define.fs):
     
     @classmethod
     def walk(
@@ -81,6 +80,7 @@ class gaussian_fs(define.fs):
         step=1.0,
         keep: int = 1,
     ):
+        # TODO: pass in walk start value
         g, r = g.bind(None, Ref.Scalar_F64)
         g, r = gaussian.new(
             mean, std, seed, v=r.select(last=keep)
@@ -110,7 +110,7 @@ class gaussian(gaussian_kw, Node.D0_F64):
     0.6404
     >>> rng(seed=0, reset=True)
     >>> g = Graph.new()
-    >>> g, r = gaussian.fs().walk(g)
+    >>> g, r = gaussian.walk(g)
     >>> for g, e, t in steps(
     ...     g, Event.zero(r), n=3, iter=True
     ... )():

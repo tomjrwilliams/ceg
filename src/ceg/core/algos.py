@@ -225,10 +225,10 @@ def last_before(
     8.0
     """
     if t[0] > before:
-        return None
+        return np.NAN
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
-        return None
+        return np.NAN
     return v[ix]
 
 # TODO: parallel=true?
@@ -306,12 +306,12 @@ def last_between(
     nan
     """
     if t[0] > before:
-        return None
+        return np.NAN
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
-        return None
+        return np.NAN
     if t[ix] < after:
-        return None
+        return np.NAN
     return v[ix]
 
 
@@ -378,8 +378,6 @@ def last_n_before_naive(
             break
     return res
 
-
-# TODO: 0D
 
 
 @nb.jit(fastmath=True)
@@ -786,6 +784,5 @@ def last_n_between_nd(
     else:
         res[-ix * size :] = v[: ix * size]
     return res
-
 
 #  ------------------

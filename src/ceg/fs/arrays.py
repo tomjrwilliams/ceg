@@ -28,10 +28,10 @@ class vs_to_vec(vs_to_vec_kw, Node.D1_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.fs().walk(
+    >>> g, r0 = rand.gaussian.walk(
     ...     g, mean=-0.2,
     ... )
-    >>> g, r1 = rand.gaussian.fs().walk(
+    >>> g, r1 = rand.gaussian.walk(
     ...     g, mean=-0.2,
     ... )
     >>> with g.implicit() as (bind, done):

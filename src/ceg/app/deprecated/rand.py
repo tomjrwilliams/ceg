@@ -43,7 +43,7 @@ def rows_to_refs_rand(
             continue
         elif row["walk"]:
             g, r = g.pipe(
-                ceg.fs.rand.gaussian.fs().walk,
+                ceg.fs.rand.gaussian.walk,
                 mean=row["mean"],
                 std=row["sigma"],
                 seed=1 or row["seed"],
@@ -121,7 +121,8 @@ def rows_to_refs_rolling(
             ceg.fs.rolling, row["func"]
         )
         g, r = g.bind(
-            node.new(**kwargs), keep=keep,
+            node.new(**kwargs), # type: ignore
+            keep=keep,
         )
 
         # i += offset

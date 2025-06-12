@@ -540,8 +540,8 @@ class daily_level_kw(NamedTuple):
         
         v = vs[fx]
 
-        if np.isnan(v):
-            return None
+        # if np.isnan(v):
+        #     return None
         return v
     
 #  ------------------

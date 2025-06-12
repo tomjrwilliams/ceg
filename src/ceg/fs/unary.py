@@ -36,7 +36,7 @@ class pct_change(pct_change_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.fs().walk(
+    >>> g, r0 = rand.gaussian.walk(
     ...     g, mean=1, keep=2
     ... )
     >>> with g.implicit() as (bind, done):
@@ -90,7 +90,7 @@ class sqrt(sqrt_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.fs().walk(g)
+    >>> g, r0 = rand.gaussian.walk(g)
     >>> with g.implicit() as (bind, done):
     ...     r1 = bind(sqrt.new(r0))
     ...     g = done()
@@ -138,7 +138,7 @@ class sq(sq_kw, Node.Scalar_F64):
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.fs().walk(g)
+    >>> g, r0 = rand.gaussian.walk(g)
     >>> with g.implicit() as (bind, done):
     ...     r1 = bind(sq.new(r0))
     ...     g = done()

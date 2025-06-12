@@ -513,11 +513,14 @@ def prepend_argument(
             Parameter.POSITIONAL_OR_KEYWORD,
             annotation=t
         )
-    ] + list(sig.parameters.values())
+    ] + list(sig.parameters.values()) + [
+        Parameter("keep", Parameter.KEYWORD_ONLY, annotation=int | None)
+    ]
     f_wrapped.__signature__ = sig.replace(parameters=params)
     f_wrapped.__annotations__ = {
         **{name: t},
-        **f_wrapped.__annotations__
+        **f_wrapped.__annotations__,
+        **{"keep": int | None}
     }
     return f_wrapped
 
@@ -558,9 +561,13 @@ class define:
             # cls,
             g: Graph, 
             *args: P.args, 
-            **kwargs: P.kwargs
+            **kwargs: P.kwargs,
         ) -> tuple[Graph, R]:
-            g, r = g.bind(node=new(*args, **kwargs))
+            keep = kwargs.pop("keep", 1)
+            g, r = g.bind(
+                node=new(*args, **kwargs), 
+                keep=keep # type: ignore
+            )
             return g, ref(r)
         return prepend_argument(
             new,
