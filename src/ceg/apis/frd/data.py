@@ -210,6 +210,11 @@ def read_daily_file(
     
     return df
 
+# TODO: wrap the file in a aws caching if flag set
+# then just store the (relevant) files on AWS
+
+# simple script to sync to AWS
+
 def read_file(
     parent: str,
     folder: str,

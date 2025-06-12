@@ -13,7 +13,7 @@ def lines(
     product: str = "FUT",
     start: str = "2024",
     end: str = "2025",
-    steps: int = 100,
+    steps: int = 365,
     shared: app.Shared = cast(app.Shared, frozendict())
 ):
     ident = f"{product}-{symbol}"

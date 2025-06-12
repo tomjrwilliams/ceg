@@ -373,8 +373,22 @@ def df_to_line_plot(
     x_label = df.filter(pl.col("x")).get_column("label")
 
     if len(x_label) == 1:
+        x = x_label[0]
+
+        x_min = data.select(pl.col("date").min()).item()
+        x_max = data.select(pl.col("date").max()).item()
+        
+        x_l, x_r = st.slider(
+            "range",
+            min_value=x_min,
+            max_value=x_max,
+            value=(x_min, x_max)
+        )
+
         plot = plotly.express.line(
-            data, x=x_label[0], y = [
+            data.filter(
+                (pl.col("date") >= x_l) & (pl.col("date") <= x_r)
+            ), x=x, y = [
                 k for k in data.schema.keys() if k not in x_label
             ]
         )
@@ -488,6 +502,15 @@ class ModelKW(NamedTuple):
 class Model(ModelKW, Dynamic):
     pass
 
+# TODO: add param objects
+
+# and then allow kwargs passed as d:param=date
+# as well as ref
+
+# where the loading is up to you, after dfs
+
+# eg. so you can toggle them right next to graph
+
 #  ------------------
 
 class RunGraph(Transformation):
@@ -561,6 +584,10 @@ class RunGraph(Transformation):
 class AddPlot(Transformation):
 
     # TODO: take plot name and type (or type as a user selection?)
+
+    # TODO: date sliders on plot
+
+    # does that re run the underlying calc each time?
 
     def apply(
         self,
