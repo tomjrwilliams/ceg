@@ -123,9 +123,12 @@ class align_d0_f64(align_d0_f64_kw, Node.D0_F64):
 
     def __call__(self, event: Event, graph: Graph):
         if event.prev is None:
-            return self.v.history(graph).last_before(
-                event.t
-            )
+            try:
+                return self.v.history(graph).last_before(
+                    event.t
+                )
+            except:
+                return np.NAN
         return self.v.history(graph).last_between(
             event.prev.t + self.tx, event.t
         )

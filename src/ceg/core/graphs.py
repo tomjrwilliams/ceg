@@ -335,6 +335,7 @@ def init_node(
     )
     data = set_tuple(data, i, History.null, History.null)
     # init is on first value (need to know shape, not necessarily fixed at runtime)
+    
     if when is None:
         when = Ready.All.new().init(ref, params)
     else:

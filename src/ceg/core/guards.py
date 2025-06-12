@@ -68,7 +68,7 @@ class GuardInterface(abc.ABC, Generic[N]):
         if (
             self.mut.prev is None
             and trigger is not None
-            and event.ref == trigger.ref
+            and event.ref.i == trigger.ref.i
         ):
             self.mut.prev = trigger
         event = event._replace(
@@ -170,12 +170,47 @@ class ReadyRef(ReadyRefKW, GuardInterface[N]):
         node: N,
         graph: GraphInterface,
     ) -> Event | None:
-        if event.ref == self.ref:
+        if event.ref.i == self.ref.i:
             return self.set_prev(event._replace(
                 ref=ref, prev=None
             ), event)
         return None
 
+class NotNaNRefKW(NamedTuple):
+    mut: GuardMutable
+    ref: Ref.Any
+
+
+class NotNaNRef(NotNaNRefKW, GuardInterface[N]):
+
+    @classmethod
+    def new(cls, ref: Ref.Any) -> ReadyAll:
+        return NotNaNRef(GuardMutable(), ref)  # type: ignore
+
+    def init(
+        self,
+        ref: Ref.Any,
+        params: frozendict[int, tuple[str, ...]],
+    ) -> NotNaNRef:
+        return self
+
+    def next(
+        self,
+        event: Event,
+        ref: Ref.Any,
+        node: N,
+        graph: GraphInterface,
+    ) -> Event | None:
+        if event.ref.i == self.ref.i:
+            v = event.ref.history(graph).last_before(event.t)
+            if v is None:
+                return None
+            if isinstance(v, (float, np.ndarray)) and np.isnan(v):
+                return None
+            return self.set_prev(event._replace(
+                ref=ref, prev=None
+            ), event)
+        return None
 
 #  ------------------
 
@@ -463,10 +498,15 @@ class Guard:
 class Ready:
     All = ReadyAll
     Ref = ReadyRef
+    RefNotNan = NotNaNRef
 
     @classmethod
     def ref(cls, ref: Ref.Any):
         return ReadyRef.new(ref)
+
+    @classmethod
+    def ref_not_nan(cls, ref: Ref.Any):
+        return NotNaNRef.new(ref)
 
 class Loop:
     Const = LoopConst

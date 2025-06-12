@@ -101,8 +101,9 @@ class Dynamic(DynamicKw, Page):
 
     def run(self):
         shared = self.shared
-
         dfs: dict[str, pl.DataFrame] = {}
+
+        run = st.toggle("run", False)
 
         for df in self.dfs:
             df.add(dfs)
@@ -112,14 +113,15 @@ class Dynamic(DynamicKw, Page):
         refs: dict[str, ceg.Ref.Any] = {}
         es: list[ceg.Event] = []
 
-        for tf in self.tfs:
-            g, refs, es, shared = tf.apply(
-                self,
-                g,
-                refs,
-                es,
-                dfs,
-                shared,
-            )
+        if run:
+            for tf in self.tfs:
+                g, refs, es, shared = tf.apply(
+                    self,
+                    g,
+                    refs,
+                    es,
+                    dfs,
+                    shared,
+                )
 
 #  ------------------

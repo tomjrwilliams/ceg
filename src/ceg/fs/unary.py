@@ -13,6 +13,7 @@ from ..core import (
     define,
     steps,
     batches,
+    Ready,
 )
 
 logger = logging.Logger(__file__)
@@ -29,6 +30,14 @@ class pct_change_kw(NamedTuple):
     type: str
     #
     v: Ref.Scalar_F64
+
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        return Ref.d0_f64(i, slot=slot)
+
+    @classmethod
+    def new(cls, v: Ref.Scalar_F64):
+        return pct_change("pct_change", v=v)
 
 
 class pct_change(pct_change_kw, Node.Scalar_F64):
@@ -65,18 +74,23 @@ class pct_change(pct_change_kw, Node.Scalar_F64):
     )
 
     @classmethod
-    def new(cls, v: Ref.Scalar_F64):
-        return cls(cls.DEF.name, v=v)
+    def bind(cls, g: Graph, v: Ref.Scalar_F64, keep: int = 4):
+        n = cls.new(v.select(keep))
+        return g.bind(n, when=Ready.ref_not_nan(v))
 
     def __call__(self, event: Event, graph: Graph):
         if event.prev is None:
             return np.NAN  # or 0?
+
         hist = self.v.history(graph)
+
         v0 = hist.last_before(event.t)
-        v1 = hist.last_before(event.prev.t)
+        v1 = hist.last_before(event.prev.t, allow_nan=False)
+        
         if v0 is None or v1 is None or np.isnan(v0) or np.isnan(v1):
             return np.NAN
         return (v0 / v1) - 1
+
 
 
 class sqrt_kw(NamedTuple):

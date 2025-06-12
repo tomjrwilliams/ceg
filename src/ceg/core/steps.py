@@ -127,7 +127,9 @@ def step(graph: Graph, *events: Event) -> GraphEvent:
         except:
             raise ValueError(nd)
 
-        e = guards[i].next(
+        guard = guards[i]
+
+        e = guard.next(
             event,
             nd_ref,
             nd,
@@ -242,6 +244,22 @@ def iter_steps(
             break
         t = e.t
         yield GraphEvent(graph, e, t)
+
+@overload
+def steps(
+    graph: Graph,
+    *events: Event,
+    n: int = 1,
+    iter: Literal[False] = False,
+) -> GraphEvents: ...
+
+@overload
+def steps(
+    graph: Graph,
+    *events: Event,
+    n: int = 1,
+    iter: bool = False,
+) -> Callable[[], Generator[GraphEvent, None, None]]: ...
 
 
 def steps(

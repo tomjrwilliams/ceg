@@ -332,8 +332,11 @@ class History_D0_F64(History_0D):
             self.exponent,
         )
 
-    def last_before(self, t: float) -> float | None:
-        return algos.last_before(
+    def last_before(
+        self, t: float, allow_nan: bool = True
+    ) -> float | None:
+        f = algos.last_before if allow_nan else algos.last_before_not_nan
+        return f(
             self.values,
             self.times,
             t,

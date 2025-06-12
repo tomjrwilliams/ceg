@@ -231,6 +231,25 @@ def last_before(
         return np.NAN
     return v[ix]
 
+@nb.jit(fastmath=True)
+def last_before_not_nan(
+    v: np.ndarray,
+    t: np.ndarray,
+    before: float,
+    occupied: int,
+    exponent: int,
+):
+    if t[0] > before:
+        return np.NAN
+    ix = last_ix_before(t, before, occupied, exponent)
+    if ix == -1:
+        return np.NAN
+    while np.isnan(v[ix]) and ix >= 0:
+        ix -= 1
+    if ix == -1:
+        return np.NAN
+    return v[ix]
+
 # TODO: parallel=true?
 
 @nb.jit(fastmath=True)

@@ -469,6 +469,7 @@ class ModelKW(NamedTuple):
             "x": pl.Boolean,
             "y": pl.Boolean,
             "y2": pl.Boolean,
+            "align": pl.String,
         })
         if init is None:
             init = empty
@@ -503,6 +504,14 @@ class RunGraph(Transformation):
         steps = shared["steps"]
         df_plot = dfs["plot"]
 
+        align_label = (pl.col("align") == pl.lit("")) | pl.col("align").is_null()
+
+        df_align = df_plot.filter(align_label.not_())
+        df_keep = df_plot.filter(align_label)
+
+        keep_labels = df_keep.get_column("label")
+        align_labels = df_align.get_column("label")
+
         g, refs, es = g.pipe(
             rows_to_refs, 
             dfs["model"],
@@ -510,10 +519,29 @@ class RunGraph(Transformation):
             universe=page.universe,
             sigs=page.signatures,
             keep={
-                label: steps
-                for label in df_plot.get_column("label")
+                **{label: steps for label in keep_labels},
+                **{label: 4 for label in align_labels},
             }
         )
+
+        aligned = {}
+
+        for label, align in zip(
+            df_align.get_column("label"), df_align.get_column("align")
+        ):
+            ref = cast(ceg.Ref.Scalar_F64, refs[label])
+            ref_align = refs[align]
+
+            g, ref = g.bind(
+                ceg.fs.align.scalar_f64.new(ref, ref_align),
+                keep=steps,
+                when=ceg.Ready.ref(ref_align)
+            )
+            
+            aligned[label] = ref
+
+        refs = {**refs, **aligned}
+
         # TODO: for keep, iter tfs for add_plot, get name
         # combine all labels in plot dfs
         # according to relevant plot keep requirements
@@ -521,11 +549,13 @@ class RunGraph(Transformation):
         if not len(refs) or not len(es) or len(df_plot) < 2:
             return g, refs, es, shared
 
-        g, e_batches, ts = ceg.batches(
-            g, *es, n = steps, g = len(refs)
-        )
+        e = es[-1]
+        for g, e, t in ceg.steps(
+            g, *es, n = int(10e6), iter=True
+        )():
+            continue
 
-        return g, refs, e_batches[-1], shared
+        return g, refs, [e], shared
 
 
 class AddPlot(Transformation):

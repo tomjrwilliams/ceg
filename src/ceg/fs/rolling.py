@@ -243,6 +243,14 @@ class std_kw(NamedTuple):
     v: Ref.Scalar_F64
     window: int
 
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        return Ref.d0_f64(i, slot=slot)
+
+    @classmethod
+    def new(cls, v: Ref.Scalar_F64, window: int):
+        return std("std", v=v, window=window)
+
 
 class std(std_kw, Node.Scalar_F64):
     """
@@ -275,9 +283,7 @@ class std(std_kw, Node.Scalar_F64):
 
     DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, std_kw)
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, window: int):
-        return cls(cls.DEF.name, v=v, window=window)
+    bind = define.bind_from_new(std_kw.new, std_kw.ref)
 
     def __call__(self, event: Event, graph: Graph):
         # TODO: if only one observation, return NAN?
@@ -326,6 +332,22 @@ class std_ew_kw(NamedTuple):
     span: float | None
     alpha: float | None
 
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        return Ref.d0_f64(i, slot=slot)
+
+    @classmethod
+    def new(
+        cls,
+        v: Ref.Scalar_F64,
+        mu: Ref.Scalar_F64,
+        span: float | None=None,
+        alpha: float | None=None,
+    ):
+        return std_ew("std_ew", v=v, mu=mu, **ewm_kwargs(
+            span=span, alpha=alpha
+        ))
+
 
 class std_ew(std_ew_kw, Node.Scalar_F64):
     """
@@ -361,18 +383,7 @@ class std_ew(std_ew_kw, Node.Scalar_F64):
     """
 
     DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, std_ew_kw)
-
-    @classmethod
-    def new(
-        cls,
-        v: Ref.Scalar_F64,
-        mu: Ref.Scalar_F64,
-        span: float | None=None,
-        alpha: float | None=None,
-    ):
-        return cls(cls.DEF.name, v=v, mu=mu, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
+    bind = define.bind_from_new(std_ew_kw.new, std_ew_kw.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
@@ -403,6 +414,14 @@ class rms_kw(NamedTuple):
     #
     v: Ref.Scalar_F64
     window: int
+
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        return Ref.d0_f64(i, slot=slot)
+
+    @classmethod
+    def new(cls, v: Ref.Scalar_F64, window: int):
+        return rms("rms", v=v, window=window)
 
 
 class rms(rms_kw, Node.Scalar_F64):
@@ -435,10 +454,7 @@ class rms(rms_kw, Node.Scalar_F64):
     """
 
     DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, rms_kw)
-
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, window: int):
-        return cls(cls.DEF.name, v=v, window=window)
+    bind = define.bind_from_new(rms_kw.new, rms_kw.ref)
 
     def __call__(self, event: Event, graph: Graph):
 
@@ -490,6 +506,21 @@ class rms_ew_kw(NamedTuple):
     span: float | None
     alpha: float | None
 
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        return Ref.d0_f64(i, slot=slot)
+
+    @classmethod
+    def new(
+        cls,
+        v: Ref.Scalar_F64,
+        span: float | None=None,
+        alpha: float | None=None,
+    ):
+        return rms_ew("rms_ew", v=v, **ewm_kwargs(
+            span=span, alpha=alpha
+        ))
+
 
 class rms_ew(rms_ew_kw, Node.Scalar_F64):
     """
@@ -521,29 +552,28 @@ class rms_ew(rms_ew_kw, Node.Scalar_F64):
     """
 
     DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, rms_ew_kw)
-
-    @classmethod
-    def new(
-        cls,
-        v: Ref.Scalar_F64,
-        span: float | None=None,
-        alpha: float | None=None,
-    ):
-        return cls(cls.DEF.name, v=v, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
+    bind = define.bind_from_new(rms_ew_kw.new, rms_ew_kw.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
         if event.prev is None:
-            return v
+            if v is None:
+                return v
+            return np.square(v)
         rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.prev.ref)
         prev = rf.history(graph).last_before(event.prev.t)
         if prev is None or np.isnan(prev) or v is None:
-            return v
+            if v is None:
+                return v
+            return np.square(v)
         alpha = self.alpha
         if alpha is None:
             raise ValueError(self)
+
+        # TODO: re-fill the nans at plot stage
+
+        if np.isnan(v):
+            return prev
         prev_sq = np.square(prev)
         v_sq = np.square(v)
         return np.sqrt(
