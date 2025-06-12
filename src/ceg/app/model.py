@@ -329,6 +329,9 @@ def rows_to_refs(
 
     return g, refs, es
 
+import plotly
+import plotly.express
+
 def df_to_line_plot(
     df: pl.DataFrame,
     g: ceg.Graph,
@@ -346,10 +349,17 @@ def df_to_line_plot(
     # simple one col polars expr, or can be easily cast as such eg. log(2)
 
     x_label = df.filter(pl.col("x")).get_column("label")
+
     if len(x_label) == 1:
-        st.line_chart(data=data, x = x_label[0])
+        plot = plotly.express.line(
+            data, x=x_label[0], y = [
+                k for k in data.schema.keys() if k not in x_label
+            ]
+        )
+        st.plotly_chart(plot)
     elif not len(x_label):
-        st.line_chart(data)
+        plot = plotly.express.line(data, y = list(data.schema.keys()))
+        st.plotly_chart(plot)
     else:
         raise ValueError(df)
 
