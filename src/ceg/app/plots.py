@@ -1,6 +1,9 @@
 
+import plotly.figure_factory as ff
+import numpy as np
+import streamlit as st
+
 def histogram():
-    import plotly.figure_factory as ff
 
     # Add histogram data
     x1 = np.random.randn(200) - 2
@@ -15,5 +18,5 @@ def histogram():
     # Create distplot with custom bin_size
     fig = ff.create_distplot(
         hist_data, group_labels, bin_size=[.1, .25, .5]
-    
-    st.plotly_chart(fig))
+    )
+    st.plotly_chart(fig)

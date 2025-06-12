@@ -527,10 +527,19 @@ def prepend_argument(
 P = ParamSpec("P")
 PRes = TypeVar("PRes")
 
+class Annotation(NamedTuple):
+    type: str
+
 class define:
 
     fs = fs
     # bind_from_new = HasNew
+
+    Annotation = Annotation
+
+    @staticmethod
+    def annotation(type: str):
+        return Annotation(type)
 
     @staticmethod
     def node(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import ClassVar, NamedTuple, Literal, overload
+from typing import ClassVar, NamedTuple, Literal, overload, Annotated
 
 import os
 import datetime as dt
@@ -417,6 +417,8 @@ def get_daily_bars_ib(
 
 #  ------------------
 
+TBar = Annotated[Bar | None, define.annotation("internal")]
+TField = Annotated[str | int, define.annotation("internal")]
 
 def f_daily_bar(
     self: daily_bar_kw | daily_level_kw,
@@ -456,7 +458,7 @@ class daily_bar_kw(NamedTuple):
     d: core.Ref.Scalar_Date
     product: str | None
     symbol: str | None
-    bar: Bar | None
+    bar: TBar
 
     @classmethod
     def ref(cls, i: int | core.Ref.Any, slot: int | None = None) -> core.Ref.Vector_F64:
@@ -468,7 +470,7 @@ class daily_bar_kw(NamedTuple):
         d: core.Ref.Scalar_Date,
         product: str | None=None,
         symbol: str | None=None,
-        bar: Bar | None=None,
+        bar: TBar=None,
     ):
         bar, product, symbol = new_bar(bar, product, symbol)
         return daily_bar(
@@ -519,10 +521,10 @@ class daily_level_kw(NamedTuple):
     type: str
     #
     d: core.Ref.Scalar_Date
-    bar: Bar | None
+    bar: TBar
     product: str | None
     symbol: str | None
-    field: str | int
+    field: TField
 
     @classmethod
     def ref(cls, i: int | core.Ref.Any, slot: int | None = None) -> core.Ref.Scalar_F64:
@@ -554,8 +556,8 @@ class daily_open_kw(daily_level_kw):
         d: core.Ref.Scalar_Date,
         product: str | None = None,
         symbol: str | None = None,
-        bar: Bar | None = None,
-        field: str | int = "open",
+        bar: TBar = None,
+        field: TField = "open",
     ):
         assert field == "open", (cls, field)
         bar, product, symbol = new_bar(bar, product, symbol)
@@ -608,8 +610,8 @@ class daily_high_kw(daily_level_kw):
         d: core.Ref.Scalar_Date,
         product: str | None = None,
         symbol: str | None = None,
-        bar: Bar | None = None,
-        field: str | int = "high",
+        bar: TBar = None,
+        field: TField = "high",
     ):
         assert field == "high", (cls, field)
         bar, product, symbol = new_bar(bar, product, symbol)
@@ -661,8 +663,8 @@ class daily_low_kw(daily_level_kw):
         d: core.Ref.Scalar_Date,
         product: str | None = None,
         symbol: str | None = None,
-        bar: Bar | None = None,
-        field: str | int = "low",
+        bar: TBar = None,
+        field: TField = "low",
     ):
         assert field == "low", (cls, field)
         bar, product, symbol = new_bar(bar, product, symbol)
@@ -715,8 +717,8 @@ class daily_close_kw(daily_level_kw):
         d: core.Ref.Scalar_Date,
         product: str | None = None,
         symbol: str | None = None,
-        bar: Bar | None = None,
-        field: str | int = "close",
+        bar: TBar = None,
+        field: TField = "close",
     ):
         assert field == "close", (cls, field)
         bar, product, symbol = new_bar(bar, product, symbol)
@@ -774,8 +776,8 @@ class daily_volume_kw(daily_level_kw):
         d: core.Ref.Scalar_Date,
         product: str | None=None,
         symbol: str | None=None,
-        bar: Bar | None=None,
-        field: str | int = "volume",
+        bar: TBar=None,
+        field: TField = "volume",
     ):
         assert field == "volume", (cls, field)
         bar, product, symbol = new_bar(bar, product, symbol)
@@ -827,8 +829,8 @@ class daily_open_interest_kw(daily_level_kw):
         d: core.Ref.Scalar_Date,
         product: str | None = None,
         symbol: str | None = None,
-        bar: Bar | None = None,
-        field: str | int = "open_interest",
+        bar: TBar = None,
+        field: TField = "open_interest",
     ):
         assert field == "open_interest", (cls, field)
         bar, product, symbol = new_bar(bar, product, symbol)

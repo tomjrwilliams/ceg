@@ -1,4 +1,4 @@
-from typing import cast, Iterable, Callable, get_type_hints, get_args, get_origin, Type, NamedTuple, Union, Optional, Any
+from typing import cast, Iterable, Callable, get_type_hints, get_args, get_origin, Type, NamedTuple, Union, Optional, Any, Annotated
 import types
 import datetime as dt
 import math
@@ -43,6 +43,7 @@ class Annot(NamedTuple):
     t: Type | tuple[Type, ...]
     optional: bool
     union: bool
+    annots: tuple[ceg.define.Annotation]
 
     def repr(self):
         if self.union:
@@ -72,16 +73,24 @@ def signatures(
     res = cast(Signatures, frozendict())
     for key, f in universe.items():
         depth = 0
-        annots = {}
+        sig = {}
         if isinstance(f, tuple):
             f, r = f
             hints = get_type_hints(r)
+            hints_extra = get_type_hints(r, include_extras=True)
         else:
             hints = get_type_hints(f)
+            hints_extra = get_type_hints(f, include_extras=True)
         returns = hints.pop("return", None)
         keep = hints.pop("keep", None)
+        annots = cast(tuple[ceg.define.Annotation], ())
         for k, h in hints.items():
+            extra = hints_extra[k]
             origin = get_origin(h)
+            if get_origin(extra) is Annotated:
+                args = get_args(extra)
+                origin = args[0]
+                annots = args[1:]
             if (
                 origin is types.UnionType
                 or origin is Union
@@ -92,21 +101,30 @@ def signatures(
                         a for a in args if a is not type(None)
                     ))
                     if len(args) == 1:
-                        annots[k] = Annot(
-                            args[0], optional=True, union=False
+                        sig[k] = Annot(
+                            args[0],
+                            optional=True,
+                            union=False,
+                            annots=annots
                         )
                     else:
-                        annots[k] = Annot(
+                        sig[k] = Annot(
                             args,
                             optional=True,
                             union=True,
+                            annots=annots
                         )
                 else:
-                    annots[k] = Annot(args, optional=False, union=True)
+                    sig[k] = Annot(
+                        args,
+                        optional=False,
+                        union=True,
+                        annots=annots
+                    )
             else:
-                annots[k] = Annot(h, False, False)
+                sig[k] = Annot(h, False, False, annots)
         res = res.set(key, Signature(
-            cast(frozendict[str, Annot], frozendict(annots)),
+            cast(frozendict[str, Annot], frozendict(sig)),
             depth,
             f
         ))
@@ -120,6 +138,10 @@ def signatures_df(sigs: Signatures) -> pl.DataFrame:
                 f"kw-{i}": f"{k}:{annot.repr()}"
                 for i, (k, annot)
                 in enumerate(sig.annots.items())
+                if not any([
+                    ann.type == "internal"
+                    for ann in annot.annots
+                ])
             }
         }
         for k, sig in sigs.items()
