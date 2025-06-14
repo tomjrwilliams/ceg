@@ -153,6 +153,9 @@ class mean_w(mean_w_kw, Node.Scalar_F64):
 
 #  ------------------
 
+def alpha(span: float):
+    return 2 / (span + 1)
+
 def ewm_kwargs(
     span: float | None,
     alpha: float | None,

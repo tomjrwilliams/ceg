@@ -307,6 +307,27 @@ class Node_D2_F64(NodeInterface):
 #  ------------------
 
 
+class Node_D0_F64_4(NodeInterface):
+
+    def pipe(
+        self,
+        f: Callable[Concatenate[Node_D0_F64_4, F], FRes],
+        *args: F.args,
+        **kwargs: F.kwargs,
+    ) -> FRes:
+        return f(self, *args, **kwargs)
+
+    def ref(
+        self, i: int, slot: int | None = None
+    ) -> Ref.D0_F64_4:
+        return Ref.D0_F64_4.new(i, slot)
+
+    @abc.abstractmethod
+    def __call__(
+        self, event: Event, graph: GraphInterface
+    ) -> tuple[float, float, float, float]: ...
+
+
 class Node_D1_F64_D2_F64(NodeInterface):
 
     def pipe(
@@ -350,6 +371,8 @@ class Node:
     Matrox_F64 = Node_D2_F64
 
     D1_F64_D2_F64 = Node_D1_F64_D2_F64
+
+    D0_F64_4 = Node_D0_F64_4
 
     Null = Node_Null
     null = Node_Null()

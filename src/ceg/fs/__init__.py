@@ -5,5 +5,6 @@ from . import unary
 from . import binary
 from . import agg
 from . import rolling
+from . import risk
 
 # from . import mm

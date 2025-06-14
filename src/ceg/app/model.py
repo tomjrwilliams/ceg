@@ -379,7 +379,7 @@ def df_to_line_plot(
         x_max = data.select(pl.col("date").max()).item()
         
         x_l, x_r = st.slider(
-            "range",
+            f"{x}:",
             min_value=x_min,
             max_value=x_max,
             value=(x_min, x_max)

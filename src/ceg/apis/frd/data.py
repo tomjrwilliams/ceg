@@ -1,15 +1,21 @@
 from typing import NamedTuple, cast
+import os
 import datetime as dt
 import zipfile
 
+import contextlib
 from frozendict import frozendict
+
+from io import BytesIO
+
+from functools import wraps, lru_cache
 
 import polars
 import pathlib
 
-# TZ = US Eastern
+from ..utils import s3
 
-import contextlib
+# TZ = US Eastern
 
 class Folders:
     ETF="etf"
@@ -227,6 +233,14 @@ def read_file(
     end: dt.date | None=None,
 ):
     if freq == "1day":
+        if os.environ.get("DATA_SOURCE_FRD") == "AWS":
+            return read_file_s3(
+                folder,
+                symbol,
+                suffix,
+                snap=snap,
+                freq=freq,
+            )
         with open_file(
             parent=parent,
             folder=folder,
@@ -240,3 +254,59 @@ def read_file(
             )
     else:
         raise ValueError(freq)
+
+def get_bucket():
+    tz_offset = os.environ.get("TIMEZONE_OFFSET", -480)
+    offset = int(tz_offset)
+    if offset < -180 or offset > 180:
+        return "data-frd-sg"
+    return "data-frd-uk"
+
+def write_file_s3(
+    parent: str,
+    folder: str,
+    symbol: str,
+    suffix: str | None = None,
+    snap: str = "full", # full
+    freq: str = "1day", # 1day
+):
+    bucket = get_bucket()
+    key = f"{snap}/{freq}/{folder}/{symbol}/{suffix}"
+    df = read_file(
+        parent=parent,
+        folder=folder,
+        symbol=symbol,
+        suffix=suffix,
+        snap=snap,
+        freq=freq,
+    )
+    return s3.put_object(
+        bucket,
+        key,
+        df.serialize(),
+    )
+
+def cache():
+    if os.environ.get("STREAMLIT") == "true":
+        def st_decorator(f):
+            import streamlit as st
+            return st.cache_data(f)
+        return st_decorator
+    else:
+        def lru_decorator(f):
+            return lru_cache(maxsize=512)(f)
+        return lru_decorator
+
+@cache()
+def read_file_s3(
+    folder: str,
+    symbol: str,
+    suffix: str | None = None,
+    snap: str = "full", # full
+    freq: str = "1day", # 1day
+    #
+):
+    bucket = get_bucket()
+    key = f"{snap}/{freq}/{folder}/{symbol}/{suffix}"
+    bs: bytes = s3.get_object(bucket, key)
+    return polars.DataFrame.deserialize(BytesIO(bs))

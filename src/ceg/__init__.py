@@ -5,6 +5,7 @@ from .fs import *
 
 from . import core
 from . import fs
+from . import apis
 from . import data
 
 # from . import io

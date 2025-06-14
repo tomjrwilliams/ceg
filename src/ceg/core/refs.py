@@ -343,6 +343,91 @@ class Ref_D1_F64_D2_F64(RefKwargs, RefInterface):
         else:
             raise ValueError(self)
 
+class Ref_D0_F64_4(RefKwargs, RefInterface):
+
+    def select(self, last: bool | int) -> Ref_D0_F64_4:
+        return self._select(last)
+
+    @overload
+    def history(
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
+        slot: Literal[0] = 0,
+    ) -> History.D0_F64: ...
+
+    @overload
+    def history(
+        self, 
+        g: GraphInterface, strict: Literal[False],
+        slot: Literal[0] = 0,
+    ) -> History.D0_F64 | None: ...
+
+    @overload
+    def history(
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
+        slot: Literal[1] = 1,
+    ) -> History.D0_F64: ...
+
+    @overload
+    def history(
+        self, g: GraphInterface, strict: Literal[False],
+        slot: Literal[1] = 1,
+    ) -> History.D0_F64 | None: ...
+
+    @overload
+    def history(
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
+        slot: Literal[2] = 2,
+    ) -> History.D0_F64: ...
+
+    @overload
+    def history(
+        self, g: GraphInterface, strict: Literal[False],
+        slot: Literal[2] = 2,
+    ) -> History.D0_F64 | None: ...
+
+    @overload
+    def history(
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
+        slot: Literal[3] = 3,
+    ) -> History.D0_F64: ...
+
+    @overload
+    def history(
+        self, g: GraphInterface, strict: Literal[False],
+        slot: Literal[3] = 3,
+    ) -> History.D0_F64 | None: ...
+
+    def history(
+        self, 
+        g: GraphInterface, strict: bool = True, slot: int | None = None,
+    ) -> History.D0_F64 | None:
+        assert slot is not None, self
+        if slot == 0:
+            return history(
+                g, self.i, History.D0_F64, strict, slot
+            )
+        elif slot == 1:
+            return history(
+                g, self.i, History.D0_F64, strict, slot
+            )
+        elif slot == 2:
+            return history(
+                g, self.i, History.D0_F64, strict, slot
+            )
+        elif slot == 3:
+            return history(
+                g, self.i, History.D0_F64, strict, slot
+            )
+        else:
+            raise ValueError(self)
 
 #  ------------------
 
@@ -366,6 +451,8 @@ class Ref:
     Matrix_F64 = Ref_D2_F64
 
     D1_F64_D2_F64 = Ref_D1_F64_D2_F64
+
+    D0_F64_4 = Ref_D0_F64_4
 
     @staticmethod
     def history(
@@ -411,6 +498,21 @@ class Ref:
                 Last.D2_F64.new(v, required, 1)
             )
         #
+        elif isinstance(ref, Ref_D0_F64_4) and required > 1:
+            return (
+                History.D0_F64.new(v, required, limit),
+                History.D0_F64.new(v, required, limit),
+                History.D0_F64.new(v, required, limit),
+                History.D0_F64.new(v, required, limit),
+            )
+        elif isinstance(ref, Ref_D0_F64_4) and required == 1:
+            return (
+                Last.D0_F64.new(v, required, 1),
+                Last.D0_F64.new(v, required, 1),
+                Last.D0_F64.new(v, required, 1),
+                Last.D0_F64.new(v, required, 1),
+            )
+        #
         raise ValueError(ref)
     
     @classmethod
@@ -442,5 +544,15 @@ class Ref:
         if isinstance(i, Ref.Any):
             return cast(Ref.D0_Date, i)
         return Ref.D0_Date.new(i, slot)
+
+    @classmethod
+    def d0_f64_4(
+        cls,
+        i: int | Ref.Any,
+        slot: int | None = None
+    ) -> Ref_D0_F64_4:
+        if isinstance(i, Ref.Any):
+            return cast(Ref.D0_F64_4, i)
+        return Ref.D0_F64_4.new(i, slot)
 
 #  ------------------

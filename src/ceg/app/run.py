@@ -1,3 +1,4 @@
+import os
 import sys
 sys.path.append("./src")
 
@@ -5,6 +6,11 @@ from typing import Any, cast, Callable
 from functools import wraps
 
 from frozendict import frozendict
+
+import streamlit as st
+
+os.environ["STREAMLIT"] = "true"
+os.environ["TIMEZONE_OFFSET"] = str(st.context.timezone_offset)
 
 import ceg
 import ceg.fs as fs
