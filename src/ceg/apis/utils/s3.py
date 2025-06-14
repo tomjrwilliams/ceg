@@ -2,8 +2,8 @@ import os
 import boto3 # type: ignore
 
 def iter_objects(bucket: str):
-    s3 = boto3.resource('s3', **get_credentials)
-    b = s3.Bucket(bucket)
+    s3 = boto3.resource('s3', **get_credentials())
+    b = s3.Bucket(bucket) # type: ignore
     for obj in b.objects.all():
         yield obj
         # obj.key, etc.
@@ -18,8 +18,6 @@ def put_object(
     bucket: str, 
     key: str, 
     obj: bytes,
-    encryption_key: str | None = None,
-    encryption_algo: str | None = None,
 ):
     s3 = boto3.client('s3', **get_credentials())
     return s3.put_object(
