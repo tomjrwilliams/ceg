@@ -31,6 +31,8 @@ class SuffixMap(NamedTuple):
 
 class Suffix:
     ratio = "ratio"
+    abs = "abs"
+    raw = "raw"
 
 suffix_maps = cast(frozendict[str, SuffixMap], frozendict({
     Folders.ETF: SuffixMap(
@@ -44,9 +46,13 @@ suffix_maps = cast(frozendict[str, SuffixMap], frozendict({
     Folders.FUT: SuffixMap(
         file=frozendict(
             ratio="continuous_ratio_adjusted",
+            abs="continuous_absolute_adjusted",
+            raw="continuous_unadjusted",
         ),
         folder=frozendict(
             ratio="contin_adj_ratio",
+            abs="contin_adj_absolute",
+            raw="contin_UNadj",
         ),
     ),
 }))
@@ -173,6 +179,31 @@ def _read_daily_file(
             .alias("open_interest")
         )
     assert "date_right" not in df.schema, df.schema
+    return df.pipe(filter_start_end, start, end)
+
+def read_daily_file(
+    fp: str | bytes,
+    start: dt.date | None=None,
+    end: dt.date | None=None,
+) -> polars.DataFrame:
+
+    if isinstance(fp, str):
+        with pathlib.Path(fp).open('r') as f:
+            df = _read_daily_file(
+                f=f, start=start, end=end
+            )
+    else:
+        df = _read_daily_file(
+            f=fp, start=start, end=end
+        )
+    
+    return df
+
+def filter_start_end(
+    df: polars.DataFrame,
+    start: dt.date | None=None,
+    end: dt.date | None=None,
+):
     if start is not None:
         df = df.filter(
             polars.col("date") >= start
@@ -196,24 +227,6 @@ def _read_daily_file(
         on="date",
     )
     assert "date_right" not in df.schema, df.schema
-    return df
-
-def read_daily_file(
-    fp: str | bytes,
-    start: dt.date | None=None,
-    end: dt.date | None=None,
-) -> polars.DataFrame:
-
-    if isinstance(fp, str):
-        with pathlib.Path(fp).open('r') as f:
-            df = _read_daily_file(
-                f=f, start=start, end=end
-            )
-    else:
-        df = _read_daily_file(
-            f=fp, start=start, end=end
-        )
-    
     return df
 
 # TODO: wrap the file in a aws caching if flag set
@@ -240,7 +253,7 @@ def read_file(
                 suffix,
                 snap=snap,
                 freq=freq,
-            )
+            ).pipe(filter_start_end, start, end)
         with open_file(
             parent=parent,
             folder=folder,

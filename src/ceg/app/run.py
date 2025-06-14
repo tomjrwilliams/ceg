@@ -15,6 +15,18 @@ import streamlit as st
 os.environ["STREAMLIT"] = "true"
 os.environ["TIMEZONE_OFFSET"] = str(st.context.timezone_offset)
 
+if (
+    os.environ.get("AWS") == "true"
+    and os.environ.get("LOCAL", "true") == "true"
+):
+    os.environ["DATA_SOURCE_FRD"] = "AWS"
+
+    with pathlib.Path("./__local__/aws.json").open('r') as f:
+        creds = json.load(f)
+
+    os.environ["AWS_ACCESS_KEY_ID"] = creds["key_id"]
+    os.environ["AWS_SECRET_ACCESS_KEY"] = creds["key_secret"]
+
 import ceg
 import ceg.fs as fs
 import ceg.data as data
