@@ -78,7 +78,7 @@ class ratio(ratio_kw, Node.Scalar_F64):
         l = self.l.history(graph).last_before(event.t)
         r = self.r.history(graph).last_before(event.t)
         if l is None or np.isnan(l) or r is None or np.isnan(r):
-            return np.NAN
+            return np.nan
         return l / r
 
 
@@ -150,7 +150,7 @@ class pct_diff(pct_diff_kw, Node.Scalar_F64):
         l = self.l.history(graph).last_before(event.t)
         r = self.r.history(graph).last_before(event.t)
         if l is None or np.isnan(l) or r is None or np.isnan(r):
-            return np.NAN
+            return np.nan
 
         return ((l / r) - 1) * (
             1 if self.m is None else self.m
@@ -215,7 +215,7 @@ class subtract(subtract_kw, Node.Scalar_F64):
         l = self.l.history(graph).last_before(event.t)
         r = self.r.history(graph).last_before(event.t)
         if l is None or np.isnan(l) or r is None or np.isnan(r):
-            return np.NAN
+            return np.nan
         return l - r
 
 

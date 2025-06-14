@@ -1,0 +1,1 @@
+pip install polars numpy numba plotly streamlit boto3 frozendict pydantic scipy

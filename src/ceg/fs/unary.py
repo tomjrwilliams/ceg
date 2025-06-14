@@ -80,7 +80,7 @@ class pct_change(pct_change_kw, Node.Scalar_F64):
 
     def __call__(self, event: Event, graph: Graph):
         if event.prev is None:
-            return np.NAN  # or 0?
+            return np.nan  # or 0?
 
         hist = self.v.history(graph)
 
@@ -88,7 +88,7 @@ class pct_change(pct_change_kw, Node.Scalar_F64):
         v1 = hist.last_before(event.prev.t, allow_nan=False)
         
         if v0 is None or v1 is None or np.isnan(v0) or np.isnan(v1):
-            return np.NAN
+            return np.nan
         return (v0 / v1) - 1
 
 

@@ -398,7 +398,7 @@ class Last_D0_F64(History_D0_F64):
         assert self.mut.t <= r, (self, r)
         last_t = self.mut.t
         if last_t < l:
-            return np.NAN
+            return np.nan
         return self.mut.v
 
     def last_t(self) -> float:
@@ -529,7 +529,7 @@ class Last_D0_Date(History_D0_Date):
         assert self.mut.t <= r, (self, r)
         last_t = self.mut.t
         if last_t < l:
-            return np.NAN
+            return np.nan
         return self.mut.v
 
     def last_t(self) -> float:
@@ -659,7 +659,7 @@ class Last_D1_Date(History_D1_Date):
         assert self.mut.t <= r, (self, r)
         last_t = self.mut.t
         if last_t < l:
-            return np.NAN
+            return np.nan
         return self.mut.v
 
     def last_t(self) -> float:
@@ -771,7 +771,7 @@ class Last_D1_F64(History_D1_F64):
         assert self.mut.t <= r, (self, r)
         last_t = self.mut.t
         if last_t < l:
-            return np.NAN
+            return np.nan
         return self.mut.v
 
     def last_t(self) -> float:
@@ -895,7 +895,7 @@ class Last_D2_F64(History_D2_F64):
         assert self.mut.t <= r, (self, r)
         last_t = self.mut.t
         if last_t < l:
-            return np.NAN
+            return np.nan
         return self.mut.v
 
     def last_t(self) -> float:

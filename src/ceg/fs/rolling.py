@@ -289,7 +289,7 @@ class std(std_kw, Node.Scalar_F64):
     bind = define.bind_from_new(std_kw.new, std_kw.ref)
 
     def __call__(self, event: Event, graph: Graph):
-        # TODO: if only one observation, return NAN?
+        # TODO: if only one observation, return nan?
         return np.nanstd(
             self.v.history(graph).last_n_before(
                 self.window, event.t
@@ -1198,7 +1198,7 @@ class cov(cov_kw, Node.Scalar_F64):
             self.window, event.t
         )
 
-        # TODO: if only one observation, return NAN?
+        # TODO: if only one observation, return nan?
         mu_1 = None
         if self.mu_1 is not None:
             mu_1 = self.mu_1.history(graph).last_before(
@@ -1293,7 +1293,7 @@ class corr(corr_kw, Node.Scalar_F64):
         if cov is None or v1 is None or v2 is None:
             return None
         if v1 == 0 or v2 == 0 or np.isnan(v1) or np.isnan(v2) or np.isnan(cov):
-            return np.NAN
+            return np.nan
         return cov / (v1 * v2)
 
 
@@ -1474,7 +1474,7 @@ class pca(pca_kw, Node.D1_F64_D2_F64):
                         np.nanmean(v)
                         if mu is None
                         else (
-                            np.NAN
+                            np.nan
                             if not len(v)
                             else mu.history(
                                 graph
@@ -1497,9 +1497,9 @@ class pca(pca_kw, Node.D1_F64_D2_F64):
 
         if vs.size <= len(mus):
             e = np.array(
-                [np.NAN for _ in range(self.factors)]
+                [np.nan for _ in range(self.factors)]
             )
-            u = np.array([np.NAN for _ in mus])
+            u = np.array([np.nan for _ in mus])
             U = np.hstack(
                 [
                     np.expand_dims(u, 1)

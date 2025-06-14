@@ -72,7 +72,7 @@ def last_before_np(
     exponent: int,
 ):
     if v[0] > t:
-        return np.NAN
+        return np.nan
     return v[:occupied][t[:occupied] <= before][-1]
 
 
@@ -134,12 +134,12 @@ def last_before_naive(
     8.0
     """
     if t[0] > before:
-        return np.NAN
+        return np.nan
     for i in range(occupied):
         ix = occupied - (1 + i)
         if t[ix] <= before:
             return v[ix]
-    return np.NAN
+    return np.nan
 
 
 @nb.jit(fastmath=True)
@@ -225,10 +225,10 @@ def last_before(
     8.0
     """
     if t[0] > before:
-        return np.NAN
+        return np.nan
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
-        return np.NAN
+        return np.nan
     return v[ix]
 
 @nb.jit(fastmath=True)
@@ -240,14 +240,14 @@ def last_before_not_nan(
     exponent: int,
 ):
     if t[0] > before:
-        return np.NAN
+        return np.nan
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
-        return np.NAN
+        return np.nan
     while np.isnan(v[ix]) and ix >= 0:
         ix -= 1
     if ix == -1:
-        return np.NAN
+        return np.nan
     return v[ix]
 
 # TODO: parallel=true?
@@ -325,12 +325,12 @@ def last_between(
     nan
     """
     if t[0] > before:
-        return np.NAN
+        return np.nan
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
-        return np.NAN
+        return np.nan
     if t[ix] < after:
-        return np.NAN
+        return np.nan
     return v[ix]
 
 
@@ -383,7 +383,7 @@ def last_n_before_naive(
     exponent: int,
 ):
     res = np.empty(n, dtype=v.dtype)
-    res[:] = np.NAN
+    res[:] = np.nan
     if t[0] > before:
         return res
     for i in range(occupied):
@@ -450,7 +450,7 @@ def last_n_before(
     [nan, 0.0, 1.1429]
     """
     res = np.empty(n, dtype=v.dtype)
-    res[:] = np.NAN
+    res[:] = np.nan
     if t[0] > before:
         return res
     ix = last_ix_before(t, before, occupied, exponent)
@@ -477,7 +477,7 @@ def last_n_before_np(
     if l == n:
         return res
     nulls = np.empty(n - l)
-    nulls[:] = np.NAN
+    nulls[:] = np.nan
     return np.concatenate((nulls, res))
 
 
@@ -524,7 +524,7 @@ def last_n_between(
     [nan, 1.1429, 2.2857]
     """
     res = np.empty(n, dtype=v.dtype)
-    res[:] = np.NAN
+    res[:] = np.nan
     if t[0] > before:
         return res
     ix = last_ix_before(t, before, occupied, exponent)
@@ -598,7 +598,7 @@ def last_before_nd(
     [4.5714, 5.7143]
     """
     res = np.empty(size, dtype=v.dtype)
-    res[:] = np.NAN
+    res[:] = np.nan
     if t[0] > before:
         return res
     ix = last_ix_before(t, before, occupied, exponent)
@@ -650,7 +650,7 @@ def last_between_nd(
     [nan, nan]
     """
     res = np.empty(size, dtype=v.dtype)
-    res[:] = np.NAN
+    res[:] = np.nan
     if t[0] > before:
         return res
     ix = last_ix_before(t, before, occupied, exponent)
@@ -716,7 +716,7 @@ def last_n_before_nd(
     [2.2857, 3.4286, 4.5714, 5.7143]
     """
     res = np.empty(size * n, dtype=v.dtype)
-    res[:] = np.NAN
+    res[:] = np.nan
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
         return res
@@ -787,7 +787,7 @@ def last_n_between_nd(
     [nan, nan, nan, nan]
     """
     res = np.empty(size * n, dtype=v.dtype)
-    res[:] = np.NAN
+    res[:] = np.nan
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
         return res

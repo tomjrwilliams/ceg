@@ -86,7 +86,7 @@ class vs_x_vec(vs_x_vec_kw, Node.D0_F64):
         vs = np.array(vs)
         all_null = np.all(np.isnan(vs))
         if all_null:
-            return np.NAN
+            return np.nan
         # TODO: have to be careful of zero fill misisng entries?
         return np.dot(vs, vec)
 
@@ -153,7 +153,7 @@ class v_x_vec_i(v_x_vec_i_kw, Node.D0_F64):
         vec = self.vec.history(graph).last_before(event.t)
         all_null = np.all(np.isnan(vec))
         if all_null:
-            return np.NAN
+            return np.nan
         if v is None:
             return None
         elif np.isnan(v):
