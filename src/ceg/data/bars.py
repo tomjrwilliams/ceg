@@ -55,7 +55,7 @@ def env(
 #  ------------------
 
 ADJUST_DEFAULTS = {
-    Products.FUT: frd.data.Suffix.abs
+    Products.FUT: frd.data.Suffix.ratio
 }
 
 class Bar(NamedTuple):
