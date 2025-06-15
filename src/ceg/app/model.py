@@ -410,24 +410,40 @@ class ModelKW(NamedTuple):
     universe: Universe = cast(Universe, frozendict())
     signatures: Signatures = cast(Signatures, frozendict())
     
-    def with_universe(self, universe: Universe):
+    def with_universe(self, universe: pl.DataFrame):
+        return self._replace(
+            dfs=self.dfs + (
+                DataFrame.new(
+                    "universe", data=universe, label="available universe"
+                ),
+            )
+        )
+
+    def with_functions(self, universe: Universe):
         sigs = signatures(universe)
         sig_df = signatures_df(sigs)
         return self._replace(
             universe=universe,
             signatures=sigs,
             dfs=self.dfs + (
-                DataFrame.new("sigs", data=sig_df, label="funcs"),
+                DataFrame.new("sigs", data=sig_df, label="available functions"),
             )
         )
 
     def with_model(
         self, init: pl.DataFrame | list[dict] | None=None,
     ):
+        i_schema = None
+        for i, df in enumerate(self.dfs):
+            if df.name == "sigs":
+                i_schema = i
+        if i_schema is None:
+            raise ValueError(self)
         empty = pl.DataFrame(schema={
             "label": pl.String,
             "i": pl.Boolean,
-            **self.dfs[0].schema, # TODO: or signatures explicitly?
+            **self.dfs[i_schema].schema,
+            # TODO: or signatures explicitly?
         })
         k_last = list(empty.schema.keys())[-1]
         c_last = pl.col(k_last)

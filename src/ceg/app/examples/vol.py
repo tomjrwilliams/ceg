@@ -23,7 +23,8 @@ def lines(
             f"vol: {ident}",
             shared.set("steps", steps)
         )
-        .with_universe(cast(app.model.Universe, frozendict({
+        .with_universe(data.bars.UNIVERSE)
+        .with_functions(cast(app.model.Universe, frozendict({
             "date": fs.dates.daily.loop,
             "pct_chg": fs.unary.pct_change.bind, 
             "std": fs.rolling.std.bind, 
