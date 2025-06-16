@@ -15,7 +15,7 @@ from typing import (
 
 import numpy as np
 
-from .histories import History, Last, V
+from .histories import History, Last, Unbounded, V
 
 #  ------------------
 
@@ -80,7 +80,7 @@ def history(
 
 
 class Scope(NamedTuple):
-    required: int
+    required: bool | int
 
 
 class RefInterface(abc.ABC):
@@ -147,7 +147,7 @@ class RefKwargs(NamedTuple):
 
     def _select(self, last: bool | int):
         return self._replace(
-            scope=Scope(required=int(last))
+            scope=Scope(required=0 if not last else last)
         )
 
 
@@ -458,16 +458,22 @@ class Ref:
     def history(
         ref: Ref.Any,
         v: V,
-        required: int | None,
+        required: bool | int | None,
         limit: int = 4,
     ) -> History.Any | tuple[History.Any, ...]:
         if not required:
             return History.null
+        
         #
-        if isinstance(ref, Ref_D0_F64) and required > 1:
+        if isinstance(ref, Ref_D0_F64) and isinstance(required, bool):
+            return Unbounded.D0_F64.new(v, 32, 1)
+        elif isinstance(ref, Ref_D0_F64) and required > 1:
             return History.D0_F64.new(v, required, limit)
         elif isinstance(ref, Ref_D0_F64) and required == 1:
             return Last.D0_F64.new(v, required, 1)
+
+        elif isinstance(ref, Ref_D0_Date) and isinstance(required, bool):
+            return Unbounded.D0_Date.new(v, 32, 1)
         elif isinstance(ref, Ref_D0_Date) and required > 1:
             return History.D0_Date.new(v, required, limit)
         elif isinstance(ref, Ref_D0_Date) and required == 1:

@@ -332,7 +332,7 @@ def rows_to_refs(
         if not len(kwargs):
             continue
 
-        if "keep" not in kwargs and label in keep:
+        if label in keep:
             kwargs["keep"] = keep[label]
         
         if sig.depth:
@@ -358,9 +358,15 @@ def df_to_line_plot(
     df: pl.DataFrame,
     g: ceg.Graph,
     refs: dict[str, ceg.Ref.Any],
-    steps: int,
     t: float,
+    id: str | None = None,
 ):
+    steps = None
+    for label in df.get_column("label"):
+        ref = refs[label]
+        steps = ref.history(g).mut.occupied
+
+    assert steps is not None, steps
     
     data = pl.DataFrame({
         label: refs[label].history(g).last_n_before(steps, t)
@@ -392,10 +398,10 @@ def df_to_line_plot(
                 k for k in data.schema.keys() if k not in x_label
             ]
         )
-        st.plotly_chart(plot)
+        st.plotly_chart(plot, key = id)
     elif not len(x_label):
         plot = plotly.express.line(data, y = list(data.schema.keys()))
-        st.plotly_chart(plot)
+        st.plotly_chart(plot, key = id)
     else:
         raise ValueError(df)
 
@@ -407,6 +413,8 @@ class ModelKW(NamedTuple):
     dfs: tuple[DataFrame, ...] = ()
     tfs: tuple[Transformation, ...] = ()
 
+    dfs_data: dict[str, pl.DataFrame] = {}
+
     universe: Universe = cast(Universe, frozendict())
     signatures: Signatures = cast(Signatures, frozendict())
     
@@ -414,7 +422,10 @@ class ModelKW(NamedTuple):
         return self._replace(
             dfs=self.dfs + (
                 DataFrame.new(
-                    "universe", data=universe, label="available universe"
+                    self.name, 
+                    "universe", 
+                    data=universe, 
+                    label="available universe"
                 ),
             )
         )
@@ -426,7 +437,12 @@ class ModelKW(NamedTuple):
             universe=universe,
             signatures=sigs,
             dfs=self.dfs + (
-                DataFrame.new("sigs", data=sig_df, label="available functions"),
+                DataFrame.new(
+                    self.name, 
+                    "sigs", 
+                    data=sig_df, 
+                    label="available functions"
+                ),
             )
         )
 
@@ -485,7 +501,7 @@ class ModelKW(NamedTuple):
         )
 
         df = DataFrame.new(
-            "model", data=init, editable=True, label="model"
+            self.name, "model", data=init, editable=True, label="model"
         )
         return self._replace(
             dfs=self.dfs + (df,),
@@ -508,7 +524,7 @@ class ModelKW(NamedTuple):
         elif isinstance(init, list):
             init = pl.DataFrame(init, schema=empty.schema)
         df = DataFrame.new(
-            "plot", data=init, editable=True, label="plot"
+            self.name, "plot", data=init, editable=True, label="plot"
         )
         return self._replace(
             dfs=self.dfs + (df,),
@@ -540,7 +556,6 @@ class RunGraph(Transformation):
         dfs: dict[str, pl.DataFrame],
         shared: frozendict[str, Any],
     ):
-        steps = shared["steps"]
         df_plot = dfs["plot"]
 
         align_label = (pl.col("align") == pl.lit("")) | pl.col("align").is_null()
@@ -558,7 +573,7 @@ class RunGraph(Transformation):
             universe=page.universe,
             sigs=page.signatures,
             keep={
-                **{label: steps for label in keep_labels},
+                **{label: True for label in keep_labels},
                 **{label: 4 for label in align_labels},
             }
         )
@@ -573,7 +588,7 @@ class RunGraph(Transformation):
 
             g, ref = g.bind(
                 ceg.fs.align.scalar_f64.new(ref, ref_align),
-                keep=steps,
+                keep=True,
                 when=ceg.Ready.ref(ref_align)
             )
             
@@ -601,10 +616,6 @@ class AddPlot(Transformation):
 
     # TODO: take plot name and type (or type as a user selection?)
 
-    # TODO: date sliders on plot
-
-    # does that re run the underlying calc each time?
-
     def apply(
         self,
         page: Model,
@@ -614,11 +625,12 @@ class AddPlot(Transformation):
         dfs: dict[str, pl.DataFrame],
         shared: frozendict[str, Any],
     ):
-        steps = shared["steps"]
+
         df_plot = dfs["plot"]
         df_plot.filter(
             pl.col("label").is_not_null()
         )
+
         if not len(refs) or not len(es) or len(df_plot) < 2:
             return g, refs, es, shared
         
@@ -626,8 +638,8 @@ class AddPlot(Transformation):
             df_to_line_plot,
             g,
             refs,
-            steps,
-            t=es[-1].t
+            t=es[-1].t,
+            id=f"{page.name}.plot"
         )
         return g, refs, es, shared
 

@@ -873,7 +873,6 @@ class daily_open_interest(daily_open_interest_kw, core.Node.D0_F64):
     )
     
 
-
 #  ------------------
 
 UNIVERSE = pl.DataFrame([

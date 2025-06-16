@@ -312,6 +312,8 @@ def init_node(
             continue
         elif required.get(p) is None:
             required[p] = sc.required
+        elif sc.required == True:
+            required[p] = sc.required
         elif sc.required > required[p]:
             required[p] = sc.required
 
@@ -359,7 +361,7 @@ def bind(
     node: Node.Any[R, N] | None = None,
     ref: R | Type[R] | None = None,
     when: Guard.Any[N] | None = None,
-    keep: int | None = 1,
+    keep: bool | int | None = 1,
 ) -> tuple[Graph, R]:
     # TODO: node= int to prealloc many ref ?
     # TODO: option to only return graph (eg. if pre alloc ref and want to fold over)?
@@ -447,13 +449,22 @@ def bind(
     else:
         raise ValueError(type(node), type(ref), node, ref)
 
-    if keep is not None and req.get(i, 0) < keep:
+    def lt(old, new):
+        if old is True:
+            return False
+        if new is True:
+            return True
+        return old < new
+
+    if keep is not None and lt(req.get(i, 0), keep):
         req = req | {i: keep}
 
     required = required | {
         p: r
         for p, r in req.items()
-        if p not in required or required.get(p, 0) < r
+        if p not in required
+        or lt(required.get(p, 0), r)
+        or r == True
     }
 
     graph = Graph(
