@@ -49,21 +49,21 @@ pages = (
     )).set("vol", (
         examples.vol.lines("ES"),
         examples.vol.lines("CL"),
-    )).set("minmax", (
-        examples.minmax.lines("ES", start="2014"),
-        examples.minmax.lines("NQ", start="2014"),
-        examples.minmax.lines("RTY", start="2014"),
-        examples.minmax.lines("CL", start="2014"),
-        examples.minmax.lines("NG", start="2014"),
-        examples.minmax.lines("GC", start="2014"),
-        examples.minmax.lines("HG", start="2014"),
-        examples.minmax.lines("C", start="2014"),
-        examples.minmax.lines("G", start="2014"),
-        examples.minmax.lines("US", start="2014"),
-        examples.minmax.lines("TN", start="2014"),
-        examples.minmax.lines("XLF", product="ETF", start="2014"),
-        examples.minmax.lines("XLE", product="ETF", start="2014"),
-    ))
+    # )).set("minmax", (
+    #     examples.minmax.lines("ES", start="2014"),
+    #     examples.minmax.lines("NQ", start="2014"),
+    #     examples.minmax.lines("RTY", start="2014"),
+    #     examples.minmax.lines("CL", start="2014"),
+    #     examples.minmax.lines("NG", start="2014"),
+    #     examples.minmax.lines("GC", start="2014"),
+    #     examples.minmax.lines("HG", start="2014"),
+    #     examples.minmax.lines("C", start="2014"),
+    #     examples.minmax.lines("G", start="2014"),
+    #     examples.minmax.lines("US", start="2014"),
+    #     examples.minmax.lines("TN", start="2014"),
+    #     examples.minmax.lines("XLF", product="ETF", start="2014"),
+    #     examples.minmax.lines("XLE", product="ETF", start="2014"),
+    # ))
 )
 
 # TODO: pnl break:
