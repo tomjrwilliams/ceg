@@ -64,6 +64,7 @@ pages = (
     #     examples.minmax.lines("XLF", product="ETF", start="2014"),
     #     examples.minmax.lines("XLE", product="ETF", start="2014"),
     # ))
+    )
 )
 
 # TODO: pnl break:
