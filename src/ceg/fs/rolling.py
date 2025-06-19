@@ -180,6 +180,21 @@ class mean_ew_kw(NamedTuple):
     span: float | None
     alpha: float | None
 
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        return Ref.d0_f64(i, slot=slot)
+
+    @classmethod
+    def new(
+        cls,
+        v: Ref.Scalar_F64,
+        span: float | None=None,
+        alpha: float | None=None,
+    ):
+        return mean_ew("mean_ew", v=v, **ewm_kwargs(
+            span=span, alpha=alpha
+        ))
+
 
 class mean_ew(mean_ew_kw, Node.Scalar_F64):
     """
@@ -211,26 +226,18 @@ class mean_ew(mean_ew_kw, Node.Scalar_F64):
     """
 
     DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, mean_ew_kw)
-
-    @classmethod
-    def new(
-        cls,
-        v: Ref.Scalar_F64,
-        span: float | None=None,
-        alpha: float | None=None,
-    ):
-        return cls(cls.DEF.name, v=v, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
+    bind = define.bind_from_new(mean_ew_kw.new, mean_ew_kw.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
         if event.prev is None:
             return v
-        rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.prev.ref)
-        prev = rf.history(graph).last_before(event.prev.t)
-        if prev is None or np.isnan(prev) or v is None:
+        rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
+        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False)
+        if prev is None or np.isnan(prev):
             return v
+        elif v is None or np.isnan(v):
+            return prev
         alpha = self.alpha
         if alpha is None:
             raise ValueError(self)
@@ -395,8 +402,8 @@ class std_ew(std_ew_kw, Node.Scalar_F64):
             return v
         if event.prev is None:
             return v - mu
-        rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.prev.ref)
-        prev = rf.history(graph).last_before(event.prev.t)
+        rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
+        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False)
         if prev is None or np.isnan(prev):
             return v
         alpha = self.alpha
@@ -563,9 +570,9 @@ class rms_ew(rms_ew_kw, Node.Scalar_F64):
             if v is None:
                 return v
             return np.square(v)
-        rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.prev.ref)
-        prev = rf.history(graph).last_before(event.prev.t)
-        if prev is None or np.isnan(prev) or v is None:
+        rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
+        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False)
+        if prev is None or np.isnan(prev) or v is None or np.isnan(v):
             if v is None:
                 return v
             return np.square(v)
@@ -671,6 +678,21 @@ class max_ew_kw(NamedTuple):
     mu: Ref.Scalar_F64 | None
     span: float | None
     alpha: float | None
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        return Ref.d0_f64(i, slot=slot)
+
+    @classmethod
+    def new(
+        cls,
+        v: Ref.Scalar_F64,
+        mu: Ref.Scalar_F64 | None = None,
+        span: float | None=None,
+        alpha: float | None=None,
+    ):
+        return max_ew("max_ew", v=v, mu=mu, **ewm_kwargs(
+            span=span, alpha=alpha
+        ))
 
 
 class max_ew(max_ew_kw, Node.Scalar_F64):
@@ -707,26 +729,20 @@ class max_ew(max_ew_kw, Node.Scalar_F64):
     """
 
     DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, max_ew_kw)
-
-    @classmethod
-    def new(
-        cls,
-        v: Ref.Scalar_F64,
-        mu: Ref.Scalar_F64 | None = None,
-        span: float | None=None,
-        alpha: float | None=None,
-    ):
-        return cls(cls.DEF.name, v=v, mu=mu, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
+    bind = define.bind_from_new(
+        max_ew_kw.new, max_ew_kw.ref
+    )
 
     def __call__(self, event: Event, graph: Graph):
+        alpha = self.alpha
         v = self.v.history(graph).last_before(event.t)
         if event.prev is None:
             return v
-        rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.prev.ref)
-        prev = rf.history(graph).last_before(event.prev.t)
-        if prev is None or np.isnan(prev) or v is None:
+        rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
+        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False)
+        if v is None or np.isnan(v):
+            return np.nan
+        if prev is None or np.isnan(prev):
             return v
         alpha = self.alpha
         if alpha is None:
@@ -735,8 +751,8 @@ class max_ew(max_ew_kw, Node.Scalar_F64):
             return v
         if self.mu is None:
             return (1 - alpha) * prev
-        mu = self.mu.history(graph).last_before(event.t)
-        if mu is None:
+        mu = self.mu.history(graph).last_before(event.t, allow_nan=False)
+        if mu is None or np.isnan(mu):
             return (1 - alpha) * prev
         return ((1 - alpha) * prev) + (alpha * mu)
 
@@ -830,6 +846,21 @@ class min_ew_kw(NamedTuple):
     span: float | None
     alpha: float | None
 
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        return Ref.d0_f64(i, slot=slot)
+
+    @classmethod
+    def new(
+        cls,
+        v: Ref.Scalar_F64,
+        mu: Ref.Scalar_F64 | None = None,
+        span: float | None=None,
+        alpha: float | None=None,
+    ):
+        return min_ew("min_ew", v=v, mu=mu, **ewm_kwargs(
+            span=span, alpha=alpha
+        ))
 
 class min_ew(min_ew_kw, Node.Scalar_F64):
     """
@@ -865,26 +896,20 @@ class min_ew(min_ew_kw, Node.Scalar_F64):
     """
 
     DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, min_ew_kw)
-
-    @classmethod
-    def new(
-        cls,
-        v: Ref.Scalar_F64,
-        mu: Ref.Scalar_F64 | None = None,
-        span: float | None=None,
-        alpha: float | None=None,
-    ):
-        return cls(cls.DEF.name, v=v, mu=mu, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
+    bind = define.bind_from_new(
+        min_ew_kw.new, min_ew_kw.ref
+    )
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
         if event.prev is None:
             return v
-        rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.prev.ref)
-        prev = rf.history(graph).last_before(event.prev.t)
-        if prev is None or np.isnan(prev) or v is None:
+        rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
+        # TODO: fix allow nan......
+        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False)
+        if v is None or np.isnan(v):
+            return np.nan
+        if prev is None or np.isnan(prev):
             return v
         alpha = self.alpha
         if alpha is None:
@@ -893,8 +918,8 @@ class min_ew(min_ew_kw, Node.Scalar_F64):
             return v
         if self.mu is None:
             return (1 - alpha) * prev
-        mu = self.mu.history(graph).last_before(event.t)
-        if mu is None:
+        mu = self.mu.history(graph).last_before(event.t, allow_nan=False)
+        if mu is None or np.isnan(mu):
             return (1 - alpha) * prev
         return ((1 - alpha) * prev) + (alpha * mu)
 
@@ -1215,7 +1240,9 @@ class cov(cov_kw, Node.Scalar_F64):
         if mu_2 is None:
             mu_2 = np.nanmean(v2)
 
-        res = np.nanmean((v1 - mu_1) * (v2 - mu_2))
+        res = np.nanmean(
+            (v1 - float(mu_1)) * (v2 - float(mu_2))
+        )
 
         return res
 
@@ -1487,7 +1514,7 @@ class pca(pca_kw, Node.D1_F64_D2_F64):
         )
 
         if self.centre:
-            vs = [v - mu for v, mu in zip(vs, mus)]
+            vs = [v - float(mu) for v, mu in zip(vs, mus)]
 
         vs = np.vstack(
             [np.expand_dims(v, 0) for v in vs]

@@ -2,9 +2,13 @@ from typing import cast, Iterable, Callable, get_type_hints, get_args, get_origi
 import types
 import datetime as dt
 import math
+
+from dataclasses import dataclass
+
 import numpy as np
 import polars as pl
 import streamlit as st
+
 
 from frozendict import frozendict
 
@@ -388,7 +392,8 @@ def df_to_line_plot(
             f"{x}:",
             min_value=x_min,
             max_value=x_max,
-            value=(x_min, x_max)
+            value=(x_min, x_max),
+            key=f"{id}-slider"
         )
 
         plot = plotly.express.line(
@@ -509,7 +514,7 @@ class ModelKW(NamedTuple):
             # TODO: callback
         )
 
-    def with_plot(self, init: pl.DataFrame | list[dict] | None=None):
+    def with_plot(self, init: pl.DataFrame | list[dict] | None=None, name: str = "plot"):
         empty = pl.DataFrame(schema={
             "label": pl.String,
             "x": pl.Boolean,
@@ -524,11 +529,11 @@ class ModelKW(NamedTuple):
         elif isinstance(init, list):
             init = pl.DataFrame(init, schema=empty.schema)
         df = DataFrame.new(
-            self.name, "plot", data=init, editable=True, label="plot"
+            self.name, name, data=init, editable=True, label=name
         )
         return self._replace(
             dfs=self.dfs + (df,),
-            tfs=self.tfs + (AddPlot(),)
+            tfs=self.tfs + (AddPlot(name=name),)
         )
 
 class Model(ModelKW, Dynamic):
@@ -556,7 +561,10 @@ class RunGraph(Transformation):
         dfs: dict[str, pl.DataFrame],
         shared: frozendict[str, Any],
     ):
-        df_plot = dfs["plot"]
+        plots = [tf for tf in page.tfs if isinstance(tf, AddPlot)]
+        df_plot = pl.concat([
+            dfs[tf.name] for tf in plots
+        ])
 
         align_label = (pl.col("align") == pl.lit("")) | pl.col("align").is_null()
 
@@ -611,8 +619,9 @@ class RunGraph(Transformation):
 
         return g, refs, [e], shared
 
-
+@dataclass(frozen=True)
 class AddPlot(Transformation):
+    name: str
 
     # TODO: take plot name and type (or type as a user selection?)
 
@@ -626,7 +635,7 @@ class AddPlot(Transformation):
         shared: frozendict[str, Any],
     ):
 
-        df_plot = dfs["plot"]
+        df_plot = dfs[self.name]
         df_plot.filter(
             pl.col("label").is_not_null()
         )
@@ -639,7 +648,7 @@ class AddPlot(Transformation):
             g,
             refs,
             t=es[-1].t,
-            id=f"{page.name}.plot"
+            id=f"{page.name}.{self.name}"
         )
         return g, refs, es, shared
 

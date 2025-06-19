@@ -63,7 +63,7 @@ def history(
         if not strict and isinstance(h, History.Null):
             return None
         assert isinstance(h, t), dict(
-            h=h, t=t, strict=strict  # type: ignore
+            h=h, t=t, strict=strict, node=g.nodes[i]  # type: ignore
         )
         return h
     assert isinstance(h, tuple), (h, t, slot)
@@ -71,7 +71,7 @@ def history(
     if not strict and isinstance(h_slot, History.Null):
         return None
     assert isinstance(h_slot, t), dict(
-        h=h_slot, t=t, strict=strict  # type: ignore
+        h=h_slot, t=t, strict=strict, node=g.nodes[i]  # type: ignore
     )
     return h_slot
 

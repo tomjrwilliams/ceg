@@ -572,7 +572,8 @@ class define:
     @staticmethod
     def bind_from_new(
         new: Callable[P, Node.Any],
-        ref: Callable[..., R]
+        ref: Callable[..., R],
+        keep: int = 4,
     ) -> Callable[
         Concatenate[Graph, P], 
         tuple[Graph, R]
@@ -584,10 +585,10 @@ class define:
             *args: P.args, 
             **kwargs: P.kwargs,
         ) -> tuple[Graph, R]:
-            keep = kwargs.pop("keep", 1)
+            keep_ = kwargs.pop("keep", keep)
             g, r = g.bind(
                 node=new(*args, **kwargs), 
-                keep=keep # type: ignore
+                keep=keep_ # type: ignore
             )
             return g, ref(r)
         return prepend_argument(

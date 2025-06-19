@@ -24,6 +24,8 @@ class pnl_linear_kw(NamedTuple):
     pos: Ref.Scalar_F64
     px: Ref.Scalar_F64
 
+    scale: Ref.Scalar_F64 | None
+
     # TODO: just make this Ref.ref_f64 - dont need to implement for every type?
 
     @classmethod
@@ -31,8 +33,8 @@ class pnl_linear_kw(NamedTuple):
         return Ref.d0_f64(i, slot=slot)
 
     @classmethod
-    def new(cls, pos: Ref.Scalar_F64, px: Ref.Scalar_F64):
-        return pnl_linear("pnl_linear", pos = pos, px=px)
+    def new(cls, pos: Ref.Scalar_F64, px: Ref.Scalar_F64, scale: Ref.Scalar_F64 | None = None):
+        return pnl_linear("pnl_linear", pos = pos.select(4), px=px.select(4), scale=scale if scale is None else scale.select(4))
 
 
 class pnl_linear(pnl_linear_kw, Node.Scalar_F64):
@@ -71,20 +73,28 @@ class pnl_linear(pnl_linear_kw, Node.Scalar_F64):
     def __call__(self, event: Event, graph: Graph):
 
         if event.prev is None:
-            return None
+            return np.nan
 
         px_hist = self.px.history(graph)
         pos_hist = self.pos.history(graph)
 
-        pos_prev = pos_hist.last_before(event.prev.t)
+        scale_prev = np.nan
+        if self.scale is not None:
+            scale_hist = self.scale.history(graph)
+            scale_prev = scale_hist.last_before(event.prev.t, allow_nan=False)
+
+        if scale_prev is None or np.isnan(scale_prev):
+            scale_prev = 1
+
+        pos_prev = pos_hist.last_before(event.prev.t, allow_nan=False)
         
         px_curr = px_hist.last_before(event.t)
-        px_prev = px_hist.last_before(event.prev.t)
+        px_prev = px_hist.last_before(event.prev.t, allow_nan=False)
 
         if pos_prev is None or px_curr is None or px_prev is None:
-            return None
+            return np.nan
         
         rx = px_curr - px_prev
-        return rx * pos_prev
+        return rx * (pos_prev / scale_prev)
 
 #  ------------------

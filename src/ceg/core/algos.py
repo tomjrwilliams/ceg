@@ -76,7 +76,7 @@ def last_before_np(
     return v[:occupied][t[:occupied] <= before][-1]
 
 
-@nb.jit(fastmath=True)
+@nb.jit()
 def last_before_naive(
     v: np.ndarray,
     t: np.ndarray,
@@ -86,7 +86,7 @@ def last_before_naive(
 ):
     """
     >>> EXPON = 3
-    >>> round = lambda v: np.round(v, 4)
+    >>> round = lambda v: np.round(v, 4).tolist()
     >>> last_before = last_before_naive
     >>> vs = np.linspace(0, 2**EXPON, 2**EXPON)
     >>> assert vs.shape == (8,)
@@ -142,7 +142,7 @@ def last_before_naive(
     return np.nan
 
 
-@nb.jit(fastmath=True)
+@nb.jit()
 def last_ix_before(
     t: np.ndarray,
     before: float,
@@ -168,7 +168,7 @@ def last_ix_before(
     return ix
 
 
-@nb.jit(fastmath=True)
+@nb.jit()
 def last_before(
     v: np.ndarray,
     t: np.ndarray,
@@ -178,7 +178,7 @@ def last_before(
 ):
     """
     >>> EXPON = 3
-    >>> round = lambda v: np.round(v, 4)
+    >>> round = lambda v: np.round(v, 4).tolist()
     >>> vs = np.linspace(0, 2**EXPON, 2**EXPON)
     >>> assert vs.shape == (8,)
     >>> list(round(vs))
@@ -231,7 +231,7 @@ def last_before(
         return np.nan
     return v[ix]
 
-@nb.jit(fastmath=True)
+@nb.jit()
 def last_before_not_nan(
     v: np.ndarray,
     t: np.ndarray,
@@ -239,12 +239,45 @@ def last_before_not_nan(
     occupied: int,
     exponent: int,
 ):
+    """
+    >>> EXPON = 3
+    >>> round = lambda v: np.round(v, 4).tolist()
+    >>> vs = np.linspace(0, 2**EXPON, 2**EXPON)
+    >>> ts = np.array(vs.tolist())
+    >>> assert vs.shape == (8,)
+    >>> vs[1] = np.nan
+    >>> vs[4] = np.nan
+    >>> list(round(vs))
+    [0.0, nan, 2.2857, 3.4286, nan, 5.7143, 6.8571, 8.0]
+    >>> round(
+    ...     last_before(
+    ...         vs,
+    ...         vs,
+    ...         4,
+    ...         occupied=8,
+    ...         exponent=EXPON,
+    ...     )
+    ... )
+    nan
+    >>> round(
+    ...     last_before_not_nan(
+    ...         vs,
+    ...         vs,
+    ...         4,
+    ...         occupied=8,
+    ...         exponent=EXPON,
+    ...     )
+    ... )
+    3.4286
+    """
     if t[0] > before:
         return np.nan
     ix = last_ix_before(t, before, occupied, exponent)
+    # print(ix)
     if ix == -1:
         return np.nan
-    while np.isnan(v[ix]) and ix >= 0:
+    while (v[ix] == np.nan or np.isnan(v[ix])) and ix >= 0:
+        # print(ix)
         ix -= 1
     if ix == -1:
         return np.nan
@@ -252,7 +285,7 @@ def last_before_not_nan(
 
 # TODO: parallel=true?
 
-@nb.jit(fastmath=True)
+@nb.jit()
 def last_between(
     v: np.ndarray,
     t: np.ndarray,
@@ -263,7 +296,7 @@ def last_between(
 ):
     """
     >>> EXPON = 3
-    >>> round = lambda v: np.round(v, 4)
+    >>> round = lambda v: np.round(v, 4).tolist()
     >>> vs = np.linspace(0, 2**EXPON, 2**EXPON)
     >>> assert vs.shape == (8,)
     >>> list(round(vs))
@@ -373,7 +406,7 @@ def last_before_equiv():
 #  ------------------
 
 
-@nb.jit(fastmath=True)
+@nb.jit()
 def last_n_before_naive(
     v: np.ndarray,
     t: np.ndarray,
@@ -399,7 +432,7 @@ def last_n_before_naive(
 
 
 
-@nb.jit(fastmath=True)
+@nb.jit()
 def last_n_before(
     v: np.ndarray,
     t: np.ndarray,
@@ -410,7 +443,7 @@ def last_n_before(
 ):
     """
     >>> EXPON = 3
-    >>> round = lambda v: list(np.round(v, 4))
+    >>> round = lambda v: list(np.round(v, 4).tolist())
     >>> vs = np.linspace(0, 2**EXPON, 2**EXPON)
     >>> assert vs.shape == (8,)
     >>> round(vs)
@@ -481,7 +514,7 @@ def last_n_before_np(
     return np.concatenate((nulls, res))
 
 
-@nb.jit(fastmath=True)
+@nb.jit()
 def last_n_between(
     v: np.ndarray,
     t: np.ndarray,
@@ -493,7 +526,7 @@ def last_n_between(
 ):
     """
     >>> EXPON = 3
-    >>> round = lambda v: list(np.round(v, 4))
+    >>> round = lambda v: list(np.round(v, 4).tolist())
     >>> vs = np.linspace(0, 2**EXPON, 2**EXPON)
     >>> assert vs.shape == (8,)
     >>> round(vs)
@@ -547,7 +580,7 @@ def last_n_between(
 #  ------------------
 
 
-@nb.jit(fastmath=True)
+@nb.jit()
 def last_before_nd(
     v: np.ndarray,
     t: np.ndarray,
@@ -558,7 +591,7 @@ def last_before_nd(
 ):
     """
     >>> EXPON = 3
-    >>> round = lambda v: list(np.round(v, 4))
+    >>> round = lambda v: list(np.round(v, 4).tolist())
     >>> vs = np.linspace(0, 2**EXPON, 2**EXPON)
     >>> assert vs.shape == (8,)
     >>> round(vs)
@@ -607,7 +640,7 @@ def last_before_nd(
     return v[ix * size : (ix + 1) * size]
 
 
-@nb.jit(fastmath=True)
+@nb.jit()
 def last_between_nd(
     v: np.ndarray,
     t: np.ndarray,
@@ -619,7 +652,7 @@ def last_between_nd(
 ):
     """
     >>> EXPON = 3
-    >>> round = lambda v: list(np.round(v, 4))
+    >>> round = lambda v: list(np.round(v, 4).tolist())
     >>> vs = np.linspace(0, 2**EXPON, 2**EXPON)
     >>> assert vs.shape == (8,)
     >>> round(vs)
@@ -661,7 +694,7 @@ def last_between_nd(
     return v[ix * size : (ix + 1) * size]
 
 
-@nb.jit(fastmath=True)
+@nb.jit()
 def last_n_before_nd(
     v: np.ndarray,
     t: np.ndarray,
@@ -673,7 +706,7 @@ def last_n_before_nd(
 ):  # TODO: write the test with n, size variables (clearer)
     """
     >>> EXPON = 3
-    >>> round = lambda v: list(np.round(v, 4))
+    >>> round = lambda v: list(np.round(v, 4).tolist())
     >>> vs = np.linspace(0, 2**EXPON, 2**EXPON)
     >>> assert vs.shape == (8,)
     >>> round(vs)
@@ -728,7 +761,7 @@ def last_n_before_nd(
     return res
 
 
-@nb.jit(fastmath=True)
+@nb.jit()
 def last_n_between_nd(
     v: np.ndarray,
     t: np.ndarray,
@@ -741,7 +774,7 @@ def last_n_between_nd(
 ):
     """
     >>> EXPON = 3
-    >>> round = lambda v: list(np.round(v, 4))
+    >>> round = lambda v: list(np.round(v, 4).tolist())
     >>> vs = np.linspace(0, 2**EXPON, 2**EXPON)
     >>> assert vs.shape == (8,)
     >>> round(vs)
