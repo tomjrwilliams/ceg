@@ -20,6 +20,7 @@ import ceg
 #  ------------------
 
 TYPES = {
+    "str": str,
     "bool": bool,
     "int": int,
     "float": float,
@@ -358,6 +359,15 @@ def rows_to_refs(
 import plotly
 import plotly.express
 
+def nan_map(e: pl.Expr, v: pl.Expr):
+    return pl.when(e.is_null()).then(None).otherwise(v)
+
+EXPR_MAP: dict[str, Callable[[pl.Expr], pl.Expr]] = {
+    "cumsum": lambda e: e.fill_nan(None).pipe(
+        nan_map, e.fill_nan(0).fill_null(0).cum_sum()
+    )
+}
+
 def df_to_line_plot(
     df: pl.DataFrame,
     g: ceg.Graph,
@@ -373,9 +383,29 @@ def df_to_line_plot(
     assert steps is not None, steps
     
     data = pl.DataFrame({
-        label: refs[label].history(g).last_n_before(steps, t)
-        for label in df.get_column("label")
+        label: (
+            refs[label].history(g)
+            # , **(
+            #     {} if slot is None else dict(slot=slot)
+            # ))
+            .last_n_before(steps, t)
+        )
+        for label, slot in zip(
+            df.get_column("label"),
+            df.get_column("slot")
+        )
     })
+
+    df_exprs = df.filter(
+        pl.col("expr").is_not_null()
+    )
+
+    exprs = {
+        label: EXPR_MAP[e](pl.col(label)) for label, e in zip(
+            df_exprs.get_column("label"),
+            df_exprs.get_column("expr"),
+        )
+    }
 
     # TODO: optionally take transform col 
     # simple one col polars expr, or can be easily cast as such eg. log(2)
@@ -385,21 +415,26 @@ def df_to_line_plot(
     if len(x_label) == 1:
         x = x_label[0]
 
-        x_min = data.select(pl.col("date").min()).item()
-        x_max = data.select(pl.col("date").max()).item()
+        x_min = data.select(pl.col(x).min()).item()
+        x_max = data.select(pl.col(x).max()).item()
         
-        x_l, x_r = st.slider(
-            f"{x}:",
-            min_value=x_min,
-            max_value=x_max,
-            value=(x_min, x_max),
-            key=f"{id}-slider"
-        )
+        slider_key = f"date-slider"
+
+        if slider_key not in st.session_state:
+            x_l, x_r = st.slider(
+                f"{x}:",
+                min_value=x_min,
+                max_value=x_max,
+                value=(x_min, x_max),
+                key=slider_key
+            )
+        else:
+            x_l, x_r = st.session_state[slider_key]
 
         plot = plotly.express.line(
             data.filter(
-                (pl.col("date") >= x_l) & (pl.col("date") <= x_r)
-            ), x=x, y = [
+                (pl.col(x) >= x_l) & (pl.col(x) <= x_r)
+            ).with_columns(**exprs), x=x, y = [
                 k for k in data.schema.keys() if k not in x_label
             ]
         )
@@ -521,6 +556,8 @@ class ModelKW(NamedTuple):
             "y": pl.Boolean,
             "y2": pl.Boolean,
             "align": pl.String,
+            "expr": pl.String,
+            "slot": pl.Int32,
         })
         if init is None:
             init = empty
@@ -588,11 +625,16 @@ class RunGraph(Transformation):
 
         aligned = {}
 
-        for label, align in zip(
-            df_align.get_column("label"), df_align.get_column("align")
+        for label, align, slot in zip(
+            df_align.get_column("label"),
+            df_align.get_column("align"),
+            df_align.get_column("slot"),
         ):
             ref = cast(ceg.Ref.Scalar_F64, refs[label])
             ref_align = refs[align]
+
+            if slot is not None:
+                ref = ref._replace(slot=slot)
 
             g, ref = g.bind(
                 ceg.fs.align.scalar_f64.new(ref, ref_align),

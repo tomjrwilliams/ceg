@@ -11,11 +11,20 @@ import ceg.app as app
 def lines(
     symbol: str,
     product: str = "FUT",
-    start: str = "2024",
+    start: str = "2014",
     end: str = "2025",
     steps: int = 365,
     shared: app.Shared = cast(app.Shared, frozendict()),
-    span: list[int] = [8, 16, 32, 64, 128, 256, 512],
+    span: list[int] = [
+        # 4,
+        8, 
+        # 16, 
+        32, 
+        # 64,
+        128, 
+        # 256, 
+        512
+    ],
     span_mu: list[int] | None = None,
 ):
     ident = f"{product}-{symbol}"
@@ -43,6 +52,7 @@ def lines(
             "low": data.bars.daily_low.bind,
             "close": data.bars.daily_close.bind,
             "norm": fs.norm.norm_range_pct.bind,
+            "pos": fs.risk.pos_linear.bind,
             "pnl": fs.risk.pnl_linear.bind,
             "cum": fs.unary.cum_sum.bind,
         })))
@@ -105,36 +115,52 @@ def lines(
                 b=f"b:float=2.0",
             ),
             dict(
-                label=f"{ident}-pnl-d-{sp}",
-                func="pnl",
-                pos=f"pos:ref={ident}-sig-{sp}",
-                px=f"px:ref={ident}-C",
-                scale=f"scale:ref={ident}-C-vol"
+                label=f"{ident}-pos-{sp}",
+                func="pos",
+                signal=f"signal:ref={ident}-sig-{sp}",
+                scale=f"scale:ref={ident}-C-vol",
+                d=f"d:ref=date",
+                # delta=f"delta:float=0.5",
+                lower=f"lower:float=-0.5",
+                upper=f"upper:float=0.5",
+                freq=f"freq:str=D15",
             ),
             dict(
                 label=f"{ident}-pnl-{sp}",
-                func="cum",
-                v=f"v:ref={ident}-pnl-d-{sp}",
+                func="pnl",
+                pos=f"pos:ref={ident}-pos-{sp}",
+                px=f"px:ref={ident}-C",
             )
         ] for sp in span], []))
         .with_plot(init=[
             dict(label="date", x=True),
         ] + [
-        #     dict(label=f"{ident}-C", y=True, align=f"{ident}-C"),
             dict(label=f"{ident}-H-max-{sp}", y=True, align=f"{ident}-H")
             for sp in span
-        #     dict(label=f"{ident}-L-min", y=True, align=f"{ident}-L"),
+        ] + [
+            dict(label=f"{ident}-L-min-{sp}", y=True, align=f"{ident}-H")
+            for sp in span
         ])
         .with_plot(init=[
             dict(label="date", x=True),
         ] + [
-            dict(label=f"{ident}-sig-{sp}", y=True, align=f"{ident}-C")
-            for sp in span
-        ], name = "signal")
+            dict(
+                label=f"{ident}-C-vol", y=True, 
+                align=f"{ident}-C")
+        ], name = "vol")
         .with_plot(init=[
             dict(label="date", x=True),
         ] + [
-            dict(label=f"{ident}-pnl-{sp}", y=True, align=f"{ident}-C")
+            dict(
+                label=f"{ident}-pos-{sp}", y=True, 
+                slot= 0, # type: ignore
+                align=f"{ident}-C")
+            for sp in span
+        ], name = "pos")
+        .with_plot(init=[
+            dict(label="date", x=True),
+        ] + [
+            dict(label=f"{ident}-pnl-{sp}", y=True, align=f"{ident}-C", expr = "cumsum")
             for sp in span
         ], name = "pnl")
     )

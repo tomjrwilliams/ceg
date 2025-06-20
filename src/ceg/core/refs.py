@@ -66,6 +66,7 @@ def history(
             h=h, t=t, strict=strict, node=g.nodes[i]  # type: ignore
         )
         return h
+    slot = int(slot)
     assert isinstance(h, tuple), (h, t, slot)
     h_slot = h[slot]
     if not strict and isinstance(h_slot, History.Null):
@@ -343,6 +344,75 @@ class Ref_D1_F64_D2_F64(RefKwargs, RefInterface):
         else:
             raise ValueError(self)
 
+class Ref_D0_F64_3(RefKwargs, RefInterface):
+
+    def select(self, last: bool | int) -> Ref_D0_F64_3:
+        return self._select(last)
+
+    @overload
+    def history(
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
+        slot: Literal[0] = 0,
+    ) -> History.D0_F64: ...
+
+    @overload
+    def history(
+        self, 
+        g: GraphInterface, strict: Literal[False],
+        slot: Literal[0] = 0,
+    ) -> History.D0_F64 | None: ...
+
+    @overload
+    def history(
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
+        slot: Literal[1] = 1,
+    ) -> History.D0_F64: ...
+
+    @overload
+    def history(
+        self, g: GraphInterface, strict: Literal[False],
+        slot: Literal[1] = 1,
+    ) -> History.D0_F64 | None: ...
+
+    @overload
+    def history(
+        self,
+        g: GraphInterface,
+        strict: Literal[True] = True,
+        slot: Literal[2] = 2,
+    ) -> History.D0_F64: ...
+
+    @overload
+    def history(
+        self, g: GraphInterface, strict: Literal[False],
+        slot: Literal[2] = 2,
+    ) -> History.D0_F64 | None: ...
+
+    def history(
+        self, 
+        g: GraphInterface, strict: bool = True, slot: int | None = None,
+    ) -> History.D0_F64 | None:
+        slot = self.slot if slot is None else slot
+        assert slot is not None, self
+        if slot == 0:
+            return history(
+                g, self.i, History.D0_F64, strict, slot
+            )
+        elif slot == 1:
+            return history(
+                g, self.i, History.D0_F64, strict, slot
+            )
+        elif slot == 2:
+            return history(
+                g, self.i, History.D0_F64, strict, slot
+            )
+        else:
+            raise ValueError(self)
+
 class Ref_D0_F64_4(RefKwargs, RefInterface):
 
     def select(self, last: bool | int) -> Ref_D0_F64_4:
@@ -409,6 +479,7 @@ class Ref_D0_F64_4(RefKwargs, RefInterface):
         self, 
         g: GraphInterface, strict: bool = True, slot: int | None = None,
     ) -> History.D0_F64 | None:
+        slot = self.slot if slot is None else slot
         assert slot is not None, self
         if slot == 0:
             return history(
@@ -452,6 +523,7 @@ class Ref:
 
     D1_F64_D2_F64 = Ref_D1_F64_D2_F64
 
+    D0_F64_3 = Ref_D0_F64_3
     D0_F64_4 = Ref_D0_F64_4
 
     @staticmethod
@@ -504,19 +576,35 @@ class Ref:
                 Last.D2_F64.new(v, required, 1)
             )
         #
-        elif isinstance(ref, Ref_D0_F64_4) and required > 1:
+        elif isinstance(ref, Ref_D0_F64_3) and required > 1:
+            assert isinstance(v, tuple), v
             return (
-                History.D0_F64.new(v, required, limit),
-                History.D0_F64.new(v, required, limit),
-                History.D0_F64.new(v, required, limit),
-                History.D0_F64.new(v, required, limit),
+                History.D0_F64.new(v[0], required, limit),
+                History.D0_F64.new(v[1], required, limit),
+                History.D0_F64.new(v[2], required, limit),
+            )
+        elif isinstance(ref, Ref_D0_F64_3) and required == 1:
+            assert isinstance(v, tuple), v
+            return (
+                Last.D0_F64.new(v[0], required, 1),
+                Last.D0_F64.new(v[1], required, 1),
+                Last.D0_F64.new(v[2], required, 1),
+            )
+        elif isinstance(ref, Ref_D0_F64_4) and required > 1:
+            assert isinstance(v, tuple), v
+            return (
+                History.D0_F64.new(v[0], required, limit),
+                History.D0_F64.new(v[1], required, limit),
+                History.D0_F64.new(v[2], required, limit),
+                History.D0_F64.new(v[3], required, limit),
             )
         elif isinstance(ref, Ref_D0_F64_4) and required == 1:
+            assert isinstance(v, tuple), v
             return (
-                Last.D0_F64.new(v, required, 1),
-                Last.D0_F64.new(v, required, 1),
-                Last.D0_F64.new(v, required, 1),
-                Last.D0_F64.new(v, required, 1),
+                Last.D0_F64.new(v[0], required, 1),
+                Last.D0_F64.new(v[1], required, 1),
+                Last.D0_F64.new(v[2], required, 1),
+                Last.D0_F64.new(v[3], required, 1),
             )
         #
         raise ValueError(ref)
@@ -560,5 +648,15 @@ class Ref:
         if isinstance(i, Ref.Any):
             return cast(Ref.D0_F64_4, i)
         return Ref.D0_F64_4.new(i, slot)
+
+    @classmethod
+    def d0_f64_3(
+        cls,
+        i: int | Ref.Any,
+        slot: int | None = None
+    ) -> Ref_D0_F64_3:
+        if isinstance(i, Ref.Any):
+            return cast(Ref.D0_F64_3, i)
+        return Ref.D0_F64_3.new(i, slot)
 
 #  ------------------

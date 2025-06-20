@@ -306,6 +306,25 @@ class Node_D2_F64(NodeInterface):
 
 #  ------------------
 
+class Node_D0_F64_3(NodeInterface):
+
+    def pipe(
+        self,
+        f: Callable[Concatenate[Node_D0_F64_3, F], FRes],
+        *args: F.args,
+        **kwargs: F.kwargs,
+    ) -> FRes:
+        return f(self, *args, **kwargs)
+
+    def ref(
+        self, i: int, slot: int | None = None
+    ) -> Ref.D0_F64_3:
+        return Ref.D0_F64_3.new(i, slot)
+
+    @abc.abstractmethod
+    def __call__(
+        self, event: Event, graph: GraphInterface
+    ) -> tuple[float, float, float]: ...
 
 class Node_D0_F64_4(NodeInterface):
 
@@ -326,6 +345,7 @@ class Node_D0_F64_4(NodeInterface):
     def __call__(
         self, event: Event, graph: GraphInterface
     ) -> tuple[float, float, float, float]: ...
+
 
 
 class Node_D1_F64_D2_F64(NodeInterface):
@@ -368,11 +388,12 @@ class Node:
     Vector_F64 = Node_D1_F64
 
     D2_F64 = Node_D2_F64
-    Matrox_F64 = Node_D2_F64
+    Matrix_F64 = Node_D2_F64
 
     D1_F64_D2_F64 = Node_D1_F64_D2_F64
 
     D0_F64_4 = Node_D0_F64_4
+    D0_F64_3 = Node_D0_F64_3
 
     Null = Node_Null
     null = Node_Null()

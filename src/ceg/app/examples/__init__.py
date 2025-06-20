@@ -1,3 +1,3 @@
 from . import bars
 from . import vol
-from . import minmax
+from . import range_spectrum

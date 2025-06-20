@@ -13,6 +13,7 @@ from ..core import (
     define,
     steps,
     batches,
+    ByDate,
 )
 
 #  ------------------
@@ -1488,32 +1489,32 @@ class pca(pca_kw, Node.D1_F64_D2_F64):
 
         # TODO: assert aligned?
 
-        mus = (
-            [None for _ in vs]
-            if self.mus is None
-            else self.mus
-        )
-        assert len(mus) == len(vs), dict(mus=mus, vs=vs)
-        mus = list(
-            map(
-                lambda v_mu: (
-                    lambda v, mu: (
-                        np.nanmean(v)
-                        if mu is None
-                        else (
-                            np.nan
-                            if not len(v)
-                            else mu.history(
-                                graph
-                            ).last_before(event.t)
-                        )
-                    )
-                )(*v_mu),
-                zip(vs, mus),
-            )
-        )
-
         if self.centre:
+            mus = (
+                [None for _ in vs]
+                if self.mus is None
+                else self.mus
+            )
+            assert len(mus) == len(vs), dict(mus=mus, vs=vs)
+            mus = list(
+                map(
+                    lambda v_mu: (
+                        lambda v, mu: (
+                            np.nanmean(v)
+                            if mu is None
+                            else (
+                                np.nan
+                                if not len(v)
+                                else mu.history(
+                                    graph
+                                ).last_before(event.t)
+                            )
+                        )
+                    )(*v_mu),
+                    zip(vs, mus),
+                )
+            )
+
             vs = [v - float(mu) for v, mu in zip(vs, mus)]
 
         vs = np.vstack(
@@ -1522,7 +1523,7 @@ class pca(pca_kw, Node.D1_F64_D2_F64):
 
         vs = vs[~np.any(np.isnan(vs), axis=1)].T
 
-        if vs.size <= len(mus):
+        if vs.shape[1] < vs.shape[0]:
             e = np.array(
                 [np.nan for _ in range(self.factors)]
             )
@@ -1572,7 +1573,191 @@ class pca(pca_kw, Node.D1_F64_D2_F64):
 
         return e, U
 
-# TODO: separate method returning also V
+class pca_v_kw(NamedTuple):
+    type: str
+    #
+    vs: Ref.Vector_F64
+    window: int
+    factors: int
+    mus: tuple[Ref.Scalar_F64, ...] | None
+    signs: tuple[int | None] | None
+    centre: bool
+
+class pca_v(pca_v_kw, Node.D1_F64_D2_F64):
+    """
+    >>> g = Graph.new()
+    >>> from . import rand
+    >>> _ = rand.rng(seed=0, reset=True)
+    >>> when = Loop.every(1)
+    >>> g, r0 = g.bind(
+    ...     rand.gaussian.new(), when=when, keep=3
+    ... )
+    >>> g, r1 = g.bind(
+    ...     rand.gaussian.new(), when=when, keep=3
+    ... )
+    >>> with g.implicit() as (bind, done):
+    ...     r2 = bind(
+    ...         pca.new(
+    ...             (r0, r1), window=3, factors=1
+    ...         )
+    ...     )
+    ...     g = done()
+    ...
+    >>> es = [Event.zero(r0), Event.zero(r1)]
+    >>> for g, es, t in batches(
+    ...     g, *es, n=5, g=3, iter=True
+    ... )():
+    ...     v0 = round(
+    ...         r0.history(g).last_before(t), 2
+    ...     )
+    ...     v1 = round(
+    ...         r1.history(g).last_before(t), 2
+    ...     )
+    ...     eig = r2.history(g, slot=0).last_before(t)[0]
+    ...     vec = r2.history(g, slot=1).last_before(t)[:, 0]
+    ...     print(v0, v1, np.round(eig, 2), np.round(vec, 2))
+    0.13 -0.13 nan [nan nan]
+    0.64 0.1 0.66 [0.99 0.12]
+    -0.54 0.36 0.86 [-0.97  0.24]
+    1.3 0.95 1.74 [-0.87 -0.49]
+    -0.7 -1.27 2.12 [-0.69 -0.72]
+    """
+
+    DEF: ClassVar[Defn] = define.node(Node.D1_F64_D2_F64, pca_v_kw)
+
+    @classmethod
+    def month_end(
+        cls, 
+        g: Graph, 
+        vs: Ref.Vector_F64,
+        d: Ref.Scalar_Date,
+        window: int,
+        factors: int,
+        mus: tuple[Ref.Scalar_F64, ...] | None = None,
+        signs: tuple[int | None] | None = None,
+        centre: bool = False,
+    ):
+        n = cls.new(
+            vs=vs.select(window),
+            window=window,
+            factors=factors,
+            mus=mus,
+            signs=signs,
+            centre=centre,
+        )
+        return g.bind(
+            n,
+            #  when=ByDate.month_end(d)
+        )
+
+    @classmethod
+    def new(
+        cls,
+        vs: Ref.Vector_F64,
+        window: int,
+        factors: int,
+        mus: tuple[Ref.Scalar_F64, ...] | None = None,
+        signs: tuple[int | None] | None = None,
+        centre: bool = False,
+    ):
+        return cls(
+            cls.DEF.name,
+            vs=vs,
+            window=window,
+            factors=factors,
+            mus=mus,
+            signs=signs,
+            centre=centre,
+        )
+
+    def __call__(self, event: Event, graph: Graph):
+        vs_i = self.vs.history(graph).last_n_before(
+            self.window, event.t
+        )
+        vs = tuple([
+            vs_i[:,i]
+            for i in range(vs_i.shape[1])
+        ])
+
+        # TODO: assert aligned?
+
+        if self.centre:
+            mus = (
+                [None for _ in vs]
+                if self.mus is None
+                else self.mus
+            )
+            assert len(mus) == len(vs), dict(mus=mus, vs=vs)
+            mus = list(
+                map(
+                    lambda v_mu: (
+                        lambda v, mu: (
+                            np.nanmean(v)
+                            if mu is None
+                            else (
+                                np.nan
+                                if not len(v)
+                                else mu.history(
+                                    graph
+                                ).last_before(event.t)
+                            )
+                        )
+                    )(*v_mu),
+                    zip(vs, mus),
+                )
+            )
+
+            vs = [v - float(mu) for v, mu in zip(vs, mus)]
+
+        vs = np.vstack(
+            [np.expand_dims(v, 0) for v in vs]
+        ).T
+
+        vs = vs[~np.any(np.isnan(vs), axis=1)].T
+
+        if vs.shape[1] < vs.shape[0]:
+            e = np.array(
+                [np.nan for _ in range(self.factors)]
+            )
+            u = np.array([np.nan for _ in range(vs_i.shape[1])])
+            U = np.hstack(
+                [
+                    np.expand_dims(u, 1)
+                    for _ in range(self.factors)
+                ]
+            )
+            return e, U
+
+        # (window, n variables)
+
+        U, e, _ = np.linalg.svd(vs, full_matrices=False)
+
+        signs = self.signs
+        if signs is None:
+            signs = [1 for _ in range(self.factors)]
+
+        for i, s in enumerate(signs):
+            # TODO: numba?
+            if s is None:
+                continue
+            elif s < 0:
+                if U[-1, i] < 0:
+                    continue
+            elif s > 0:
+                if U[-1, i] > 0:
+                    continue
+            U[:, i] *= -1
+
+        if self.factors is not None:
+            U = U[:, : self.factors]
+            e = e[: self.factors]
+            # Vt = Vt[:, :self.keep]
+        
+        # cols of U = unit PCs
+        # S = np.diag(s)
+        # Mhat = np.dot(U, np.dot(S, V.T))
+
+        return e, U
 
 #  ------------------
 

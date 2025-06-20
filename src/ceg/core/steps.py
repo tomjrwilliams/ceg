@@ -100,18 +100,21 @@ def step(graph: Graph, *events: Event) -> GraphEvent:
     res = node(event, graph)
     hist = data[ref.i]
 
-    if isinstance(hist, History.Null):
-        hist = Ref.history(ref, res, required.get(ref.i))
-        data = set_tuple(data, ref.i, hist, History.null)
-        graph = graph._replace(data=data)
+    try:
+        if isinstance(hist, History.Null):
+            hist = Ref.history(ref, res, required.get(ref.i))
+            data = set_tuple(data, ref.i, hist, History.null)
+            graph = graph._replace(data=data)
 
-    if not isinstance(res, tuple):
-        assert isinstance(hist, History.Any), hist
-        hist.append(res, t)
-    else:
-        assert isinstance(hist, tuple), hist
-        for v, h in zip(res, hist):
-            h.append(v, t)
+        if not isinstance(res, tuple):
+            assert isinstance(hist, History.Any), hist
+            hist.append(res, t)
+        else:
+            assert isinstance(hist, tuple), hist
+            for v, h in zip(res, hist):
+                h.append(v, t)
+    except:
+        raise ValueError(node)
 
     dstream = graph.dstream
     guards = graph.guards

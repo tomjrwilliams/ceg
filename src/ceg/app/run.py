@@ -34,6 +34,15 @@ import ceg.app as app
 
 import ceg.app.examples as examples
 
+# TODO:
+# alternatively, have a flag that we default to false
+# for allow_none
+# where if we return none, we dont append
+# if we do allow, we cast to nan and append
+
+# so the default is that we allow nan, but not none
+# and up to func to return the relevant one
+
 SYMBOLS = ['A6', 'AD', 'ALI', 'B6', 'BFX', 'BR', 'BTC', 'BZ', 'B', 'CB', 'CC', 'CL', 'CNH', 'CSC', 'CT', 'C', 'DC', 'DX', 'E1', 'E6', 'E7', 'EBM', 'ED', 'ER', 'ESG', 'ES', 'EW', 'FBON', 'FBTP', 'FBTS', 'FCE', 'FDAX', 'FDIV', 'FDXM', 'FDXS', 'FESX', 'FEU3', 'FGBL', 'FGBM', 'FGBS', 'FGBX', 'FOAT', 'FSMX', 'FTDX', 'FTI', 'FTUK', 'FVSA', 'FXXP', 'GC', 'GF', 'GSCI', 'G', 'HE', 'HG', 'HH', 'HO', 'HRC', 'J1', 'J7', 'KC', 'KRW', 'LBS', 'LE', 'L', 'M2K', 'MAX', 'MBT', 'MCL', 'MES', 'MET', 'MFC', 'MFS', 'MGC', 'MME', 'MNQ', 'MP', 'MURA', 'N6', 'NG', 'NIY', 'NKD', 'NOK', 'NQ', 'OJ', 'PA', 'PL', 'PRK', 'PSI', 'QG', 'RB', 'RM', 'RP', 'RS', 'RTY', 'SB', 'SEK', 'SIL', 'SIR', 'SI', 'SO3', 'SR1', 'SR3', 'T6', 'TN', 'UB', 'US', 'VXM', 'VX', 'XAE', 'XAF', 'XAI', 'XC', 'YM', 'ZC', 'ZF', 'ZL', 'ZM', 'ZN', 'ZO', 'ZQ', 'ZRPA', 'ZR', 'ZS', 'ZTWA', 'ZT', 'ZW']
 
 shared: app.Shared = cast(app.Shared, frozendict())
@@ -42,34 +51,52 @@ pages: frozendict[
     str, tuple[app.nav.Page, ...]
 ] = frozendict() # type: ignore
 
+if os.environ.get("AWS") == "true":
+    universe = [
+        dict(symbol="ES", product="FUT"),
+        dict(symbol="CL", product="FUT"),
+    ]
+else:
+    universe = [
+        dict(symbol="ES", product="FUT"),
+        dict(symbol="NQ", product="FUT"),
+        dict(symbol="RTY", product="FUT"),
+        dict(symbol="CL", product="FUT"),
+        dict(symbol="NG", product="FUT"),
+        dict(symbol="GC", product="FUT"),
+        dict(symbol="HG", product="FUT"),
+        dict(symbol="C", product="FUT"),
+        dict(symbol="G", product="FUT"),
+        dict(symbol="US", product="FUT"),
+        dict(symbol="TN", product="FUT"),
+        dict(symbol="XLF", product="ETF"),
+        dict(symbol="XLE", product="ETF"),
+    ]
+
 pages = (
-    pages.set("bars", (
-        examples.bars.lines("ES"),
-        examples.bars.lines("CL"),
-    )).set("vol", (
-        examples.vol.lines("ES"),
-        examples.vol.lines("CL"),
-    ))
-    # )).set("minmax", (
-    #     examples.minmax.lines("ES", start="2014"),
-    #     examples.minmax.lines("NQ", start="2014"),
-    #     examples.minmax.lines("RTY", start="2014"),
-    #     examples.minmax.lines("CL", start="2014"),
-    #     examples.minmax.lines("NG", start="2014"),
-    #     examples.minmax.lines("GC", start="2014"),
-    #     examples.minmax.lines("HG", start="2014"),
-    #     examples.minmax.lines("C", start="2014"),
-    #     examples.minmax.lines("G", start="2014"),
-    #     examples.minmax.lines("US", start="2014"),
-    #     examples.minmax.lines("TN", start="2014"),
-    #     examples.minmax.lines("XLF", product="ETF", start="2014"),
-    #     examples.minmax.lines("XLE", product="ETF", start="2014"),
-    # ))
+    pages.set("bars", tuple([
+        examples.bars.lines(**product_symbol)
+        for product_symbol in universe
+    ])).set("vol", tuple([
+        examples.vol.lines(**product_symbol)
+        for product_symbol in universe
+    ])).set("range-spectrum", tuple([
+        examples.range_spectrum.trend.lines(**product_symbol)
+        for product_symbol in universe
+    ])).set("range-decomp", tuple([
+        examples.range_spectrum.decomp.lines(**product_symbol)
+        for product_symbol in universe
+    ]))
 )
 
-# TODO: pnl break:
-# FUT-G
-# ETF-XLF
+# TODO: try plot each element of the vectors on a single time series?
+# given how many bar charts it would be
+# to see if the loadngs flip
+# stabilistaion as a set of samples to vote
+
+# TODO: pnl break, range_spectrum
+# FUT-G/
+# ETF-XLF/
 
 app.nav.page(pages, page_config=dict(
     page_title="ceg",

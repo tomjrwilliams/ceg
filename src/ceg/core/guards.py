@@ -355,7 +355,10 @@ class ByDateKW(NamedTuple):
     ):
         if not len(params):
             return self
-        return self._replace(last=max(*params.keys))
+        try:
+            return self._replace(last=max(params.keys()))
+        except:
+            raise ValueError(params)
 
 
 class WeekStart(ByDateKW, GuardInterface[N]):
@@ -379,14 +382,15 @@ class MonthEnd(ByDateKW, GuardInterface[N]):
         node: N,
         graph: GraphInterface,
     ) -> Event | None:
-        if (
-            self.last is not None
-            and self.last != event.ref.i
-        ):
+        # if (
+        #     self.last is not None
+        #     # and self.last != event.ref.i
+        # ):
             # TODO: only fire on the last param (?) so we know all are ready? only works if all fire on all t?
-            return None
+            # return None
         d = self.date.history(graph).last_before(event.t)
         assert isinstance(d, dt.date), d
+        print(d)
         if (d + dt.timedelta(days=1)).day == 1:
             # if all_series(
             #     graph, params.keys(), lambda e: e.t.last == event.t
@@ -450,7 +454,7 @@ class ByValueKW(NamedTuple):
     ):
         if not len(params):
             return self
-        return self._replace(last=max(*params.keys))
+        return self._replace(last=max(params.keys()))
 
 
 class SignChange(ByValueKW, GuardInterface[N]):
@@ -520,6 +524,10 @@ class Loop:
 
 class ByDate:
     MonthEnd = MonthEnd
+
+    @classmethod
+    def month_end(cls, d: Ref.Scalar_Date):
+        return MonthEnd.new(d)
 
 
 class ByValue:

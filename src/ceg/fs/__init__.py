@@ -7,5 +7,5 @@ from . import norm
 from . import agg
 from . import rolling
 from . import risk
-
-# from . import mm
+from . import arrays
+from . import mm

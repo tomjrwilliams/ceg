@@ -285,7 +285,7 @@ def append_nd(
     ts: np.ndarray,
     t: float,
     v: np.ndarray,
-    truncate: bool = False,
+    truncate: bool = True,
 ) -> int:
     if truncate and occupied == limit * required:
         sl = slice((limit - 1) * required, limit * required)
@@ -306,6 +306,8 @@ def append_nd(
     ts[occupied] = t
     vs[occupied * size : (occupied + 1) * size] = v
     occupied += 1
+    if not truncate:
+        return occupied, ts, vs
     return occupied
 
 
@@ -789,14 +791,16 @@ class History_D1_Date(History_1D):
 
     def append(self, v: np.ndarray, t: float):
         v = v.astype("datetime64[s]").astype(np.int64)
-        self.mut.occupied = append_d0(
+        self.mut.occupied = append_nd(
             self.mut.occupied,
             self.required,
             self.limit,
+            self.size,
             self.values,
             self.times,
             t,
             v.reshape((self.size,)),
+            truncate=True,
         )
 
     def last_n_before(self, n: int, t: float):
@@ -808,7 +812,7 @@ class History_D1_Date(History_1D):
             t,
             self.mut.occupied,
             self.exponent,
-        ).reshape(self.shape).astype("datetime64[s]")
+        ).reshape((n,) + self.shape).astype("datetime64[s]")
 
     def last_n_between(self, n: int, l: float, r: float):
         return algos.last_n_between_nd(
@@ -820,7 +824,7 @@ class History_D1_Date(History_1D):
             r,
             self.mut.occupied,
             self.exponent,
-        ).reshape(self.shape).astype("datetime64[s]")
+        ).reshape((n,) + self.shape).astype("datetime64[s]")
 
     def last_before(self, t: float):
         return algos.last_before_nd(
@@ -911,14 +915,16 @@ class History_D1_F64(History_1D):
         return np.float64
 
     def append(self, v: np.ndarray, t: float):
-        self.mut.occupied = append_d0(
+        self.mut.occupied = append_nd(
             self.mut.occupied,
             self.required,
             self.limit,
+            self.size,
             self.values,
             self.times,
             t,
             v.reshape((self.size,)),
+            truncate=True,
         )
 
     def last_n_before(self, n: int, t: float):
@@ -930,7 +936,7 @@ class History_D1_F64(History_1D):
             t,
             self.mut.occupied,
             self.exponent,
-        ).reshape(self.shape)
+        ).reshape((n,) + self.shape)
 
     def last_n_between(self, n: int, l: float, r: float):
         return algos.last_n_between_nd(
@@ -942,7 +948,7 @@ class History_D1_F64(History_1D):
             r,
             self.mut.occupied,
             self.exponent,
-        ).reshape(self.shape)
+        ).reshape((n,) + self.shape)
 
     def last_before(self, t: float):
         return algos.last_before_nd(
@@ -1045,7 +1051,7 @@ class History_D2_F64(History_2D):
             t,
             self.mut.occupied,
             self.exponent,
-        ).reshape(self.shape)
+        ).reshape((n,) + self.shape)
 
     def last_n_between(self, n: int, l: float, r: float):
         return algos.last_n_between_nd(
@@ -1057,7 +1063,7 @@ class History_D2_F64(History_2D):
             r,
             self.mut.occupied,
             self.exponent,
-        ).reshape(self.shape)
+        ).reshape((n,) + self.shape)
 
     def last_before(self, t: float):
         return algos.last_before_nd(
