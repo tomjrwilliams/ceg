@@ -182,6 +182,7 @@ class norm_range_pct_vec(norm_range_pct_vec_kw, Node.Vector_F64):
         l = int(len(v)/2)
         mid = (v[l-1] + v[l]) / 2
         range = v[0] - v[-1]
-        res = (v - mid) / range
+        # res = (v - mid) / range
+        res = (v - mid) / mid
         # print(res)
         return res
