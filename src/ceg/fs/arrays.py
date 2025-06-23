@@ -177,3 +177,38 @@ class v_args_to_vec(v_args_to_vec_kw, Node.D1_F64):
 # etc. stack vecs, index out entries
 
 #  ------------------
+
+class mat_tup_to_v_kw(NamedTuple):
+    type: str
+    vec: Ref.D1_F64_D2_F64
+    i0:int
+    i1: int
+    slot: int
+
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        return Ref.d0_f64(i, slot=slot)
+
+    @classmethod
+    def new(
+        cls,
+        vec: Ref.D1_F64_D2_F64,
+        i0: int,
+        i1: int,
+        slot: int=1,
+    ):
+        return mat_tup_to_v("mat_tup_to_v", vec, i0, i1, slot)
+
+class mat_tup_to_v(mat_tup_to_v_kw, Node.D1_F64):
+
+    DEF: ClassVar[Defn] = define.node(Node.D1_F64, mat_tup_to_v_kw)
+    bind = define.bind_from_new(mat_tup_to_v_kw.new, mat_tup_to_v_kw.ref)
+
+    def __call__(self, event: Event, graph: Graph):
+        v = self.vec.history(
+            graph,
+            slot=1
+        ).last_before(event.t)
+        if v is None:
+            return None
+        return v[self.i0][self.i1]

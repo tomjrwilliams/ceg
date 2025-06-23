@@ -35,7 +35,12 @@ def lines(
     }
     if span_mu is None:
         span_mu = span
-    return (
+    labels_spectrum = [
+        f"H-max-{sp}" for sp in reversed(span)
+    ] + [
+        f"L-min-{sp}" for sp in span
+    ]
+    page = (
         app.model.Model.new(
             f"minmax-pca: {ident}",
             shared.set("steps", steps)
@@ -53,13 +58,19 @@ def lines(
             "low": data.bars.daily_low.bind,
             "close": data.bars.daily_close.bind,
             "norm": fs.norm.norm_range_pct.bind,
-            "norm_vec": fs.norm.norm_range_pct_vec.bind,
+            # "norm_mid_pct": fs.norm.norm_mid_pct_vec.bind,
+            "norm_mid": (
+                fs.norm.norm_mid_vec.bind
+                if symbol == "CL"
+                else fs.norm.norm_mid_pct_vec.bind
+            ),
             "pos": fs.risk.pos_linear.bind,
             "pnl": fs.risk.pnl_linear.bind,
             "cum": fs.unary.cum_sum.bind,
             "stack": fs.arrays.v_args_to_vec.bind,
             "pca": fs.rolling.pca_v.month_end,
             "dot": fs.mm.vec_x_mat_i.bind,
+            "loading": fs.arrays.mat_tup_to_v.bind,
         })))
         .with_model(init=[
             dict(
@@ -115,7 +126,7 @@ def lines(
                 func="stack",
                 **{
                     f"v{i}": f"v{i}:ref={ident}-H-max-{sp}"
-                    for i, sp in enumerate(span)
+                    for i, sp in enumerate(reversed(span))
                 },
                 **{
                     f"v{i+len(span)}": f"v{i+len(span)}:ref={ident}-L-min-{sp}"
@@ -124,7 +135,7 @@ def lines(
             ),
             dict(
                 label=f"{ident}-vec-unit",
-                func="norm_vec",
+                func="norm_mid",
                 vec=f"vec:ref={ident}-vec",
             ),
             dict(
@@ -148,24 +159,29 @@ def lines(
                 slot=f"slot:int=1",
                 f=f"f:int={fac}"
             )
-            # dict(
-            #     label=f"{ident}-pos",
-            #     func="pos",
-            #     signal=f"signal:ref={ident}-sig",
-            #     scale=f"scale:ref={ident}-C-vol",
-            #     d=f"d:ref=date",
-            #     # delta=f"delta:float=0.5",
-            #     lower=f"lower:float=-0.5",
-            #     upper=f"upper:float=0.5",
-            #     freq=f"freq:str=D15",
-            # ),
-            # dict(
-            #     label=f"{ident}-pnl-",
-            #     func="pnl",
-            #     pos=f"pos:ref={ident}-pos",
-            #     px=f"px:ref={ident}-C",
-            # )
             for fac in factors
+        ] + [
+            dict(
+                label=f"{ident}-f{fac}-{l}",
+                func="loading",
+                vec=f"vec:ref={ident}-pca",
+                i0=f"i0:int={i0}",
+                i1=f"i1:int={fac}",
+                slot=f"slot:int=1",
+            )
+            for fac in factors
+            for i0, l in enumerate(labels_spectrum)
+        ])
+    )
+    page = (
+        page.with_plot(init=[
+            dict(label="date", x=True),
+        ] + [
+            dict(label=f"{ident}-H-max-{sp}", y=True, align=f"{ident}-H")
+            for sp in reversed(span)
+        ] + [
+            dict(label=f"{ident}-L-min-{sp}", y=True, align=f"{ident}-H")
+            for sp in span
         ])
         .with_plot(init=[
             dict(label="date", x=True),
@@ -175,4 +191,31 @@ def lines(
         ], name = "factors")
     )
 
+    for fac in factors:
+        page = page.with_plot(init = [
+            dict(label="date", x=True),
+        ] + [
+            dict(
+                label=f"{ident}-f{fac}-{l}",
+                y=True,
+                align=f"{ident}-C"
+            ) for i0, l in enumerate(labels_spectrum)
+        ], name = f"f{fac}")
+
+    return page
+
 # TODO: histogram
+
+# TODO: compare to just constant weights
+
+# signal in the compression / spread of the pc1?
+# signal in the weight sum of the pos vs negative ocmponents - more skew up or down (ie. that's the "base" you're "relative" to)
+
+
+# interesting idea to do a rolling regression against teh backward factor path
+# so you get updated poss exponentail weights each time, given the seed pca path
+
+# is there a way to add an orthogonality contsraints?
+# or is a linalg solution if multi variate, orthogonal?
+
+# is the weight in weighted reg on the features or the observations?
