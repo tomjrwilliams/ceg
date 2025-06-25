@@ -53,7 +53,7 @@ pages: frozendict[
     str, tuple[app.nav.Page, ...]
 ] = frozendict() # type: ignore
 
-if os.environ.get("AWS") == "true":
+if os.environ.get("LOCAL", "true") == "false":
     universe = [
         dict(symbol="ES", product="FUT"),
         dict(symbol="CL", product="FUT"),
