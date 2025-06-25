@@ -32,7 +32,9 @@ import ceg.fs as fs
 import ceg.data as data
 import ceg.app as app
 
-import ceg.app.examples as examples
+from ceg.app.markets import bars
+from ceg.app.markets import vol
+from ceg.app.markets import range_spectrum
 
 # TODO:
 # alternatively, have a flag that we default to false
@@ -75,16 +77,16 @@ else:
 
 pages = (
     pages.set("bars", tuple([
-        examples.bars.lines(**product_symbol)
+        bars.lines(**product_symbol)
         for product_symbol in universe
     ])).set("vol", tuple([
-        examples.vol.lines(**product_symbol)
+        vol.lines(**product_symbol)
         for product_symbol in universe
     ])).set("range-spectrum", tuple([
-        examples.range_spectrum.trend.lines(**product_symbol)
+        range_spectrum.trend.lines(**product_symbol)
         for product_symbol in universe
     ])).set("range-decomp", tuple([
-        examples.range_spectrum.decomp.lines(**product_symbol)
+        range_spectrum.decomp.lines(**product_symbol)
         for product_symbol in universe
     ]))
 )
