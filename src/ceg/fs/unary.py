@@ -26,6 +26,70 @@ logger = logging.Logger(__file__)
 # various activations (sigmoid, rev_sigmoid, relu, etc.)
 
 
+class abs_kw(NamedTuple):
+    type: str
+    #
+    v: Ref.Scalar_F64
+
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        return Ref.d0_f64(i, slot=slot)
+
+    @classmethod
+    def new(cls, v: Ref.Scalar_F64):
+        return abs("abs", v=v)
+
+
+class abs(abs_kw, Node.Scalar_F64):
+    """
+    >>> g = Graph.new()
+    >>> from . import rand
+    >>> _ = rand.rng(seed=0, reset=True)
+    >>> g, r0 = rand.gaussian.walk(
+    ...     g, mean=1, keep=2
+    ... )
+    >>> with g.implicit() as (bind, done):
+    ...     r1 = bind(abs.new(r0))
+    ...     g = done()
+    ...
+    >>> for g, es, t in batches(
+    ...     g, Event.zero(r0), n=5, g=2, iter=True
+    ... )():
+    ...     v0 = round(
+    ...         r0.history(g).last_before(t), 2
+    ...     )
+    ...     v1 = round(
+    ...         r1.history(g).last_before(t), 2
+    ...     )
+    ...     print(v0, v1)
+    1.13 nan
+    1.99 0.77
+    3.63 0.82
+    4.74 0.3
+    5.2 0.1
+    """
+
+    DEF: ClassVar[Defn] = define.node(
+        Node.Scalar_F64, abs_kw
+    )
+    bind = define.bind_from_new(abs_kw.new, abs_kw.ref)
+
+    # @classmethod
+    # def bind(cls, g: Graph, v: Ref.Scalar_F64, keep: int = 4):
+    #     n = cls.new(v.select(keep))
+    #     return g.bind(n, when=Ready.ref_not_nan(v))
+
+    def __call__(self, event: Event, graph: Graph):
+
+        hist = self.v.history(graph)
+
+        v0 = hist.last_before(event.t)
+        if v0 is None:
+            return v0
+
+        return v0 * np.sign(v0)
+
+
 class abs_change_kw(NamedTuple):
     type: str
     #

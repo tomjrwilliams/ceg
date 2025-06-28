@@ -20,10 +20,12 @@ from ..core import (
 class pos_linear_kw(NamedTuple):
     type: str
     #
-    signal: Ref.Scalar_F64
     scale: Ref.Scalar_F64
+    signal: Ref.Scalar_F64 | None
 
     d: Ref.Scalar_Date
+
+    const: float | None
 
     lower: float | None
     upper: float | None
@@ -38,8 +40,8 @@ class pos_linear_kw(NamedTuple):
         return Ref.d0_f64_3(i, slot=slot)
 
     @classmethod
-    def new(cls, signal: Ref.Scalar_F64, scale: Ref.Scalar_F64, d: Ref.Scalar_Date, upper: float | None = None, lower: float | None = None, delta: float | None = None, freq: str | None = None):
-        return pos_linear("pos_linear", signal=signal, scale=scale, d=d, upper = upper, lower = lower, delta=delta, freq=freq)
+    def new(cls, scale: Ref.Scalar_F64, d: Ref.Scalar_Date, signal: Ref.Scalar_F64 | None=None, upper: float | None = None, lower: float | None = None, delta: float | None = None, freq: str | None = None, const: float | None = None):
+        return pos_linear("pos_linear", signal=signal, scale=scale, d=d, upper = upper, lower = lower, delta=delta, freq=freq, const=const)
 
 
 class pos_linear(pos_linear_kw, Node.D0_F64_3):
@@ -80,11 +82,16 @@ class pos_linear(pos_linear_kw, Node.D0_F64_3):
         if event.prev is None:
             return np.nan, np.nan, np.nan
 
-        sig_hist = self.signal.history(graph)
+        if self.signal is not None:
+            sig_hist = self.signal.history(graph)
+            v_sig = sig_hist.last_before(event.t)
+        else:
+            assert self.const is not None, self
+            v_sig = self.const
+
         scl_hist = self.scale.history(graph)
         d_hist = self.d.history(graph)
 
-        v_sig = sig_hist.last_before(event.t)
         v_scl = scl_hist.last_before(event.t)
 
         d = d_hist.last_before(event.t)
@@ -120,7 +127,7 @@ class pos_linear(pos_linear_kw, Node.D0_F64_3):
         new_scl = None
         
         if self.freq is None:
-            pass
+            new_scl = scl_hist.last_before(event.t, allow_nan=False)
         elif self.freq == "M":
             if d.month != d_prev.month:
                 new_scl = scl_hist.last_before(event.t, allow_nan=False)

@@ -39,7 +39,7 @@ def lines(
         .with_model(init=[
             dict(
                 label="date",
-                i=True,# type: ignore
+                I=True,# type: ignore
                 func="date",
                 start=start,
                 end=end,

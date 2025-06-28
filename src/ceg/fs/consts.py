@@ -25,6 +25,14 @@ class const_float_kw(NamedTuple):
     v: float
     rf: Ref.Scalar_F64 | None
 
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        return Ref.d0_f64(i, slot=slot)
+
+    @classmethod
+    def new(cls, v: float, rf: Ref.Scalar_F64 | None = None):
+        return const_float("const_float", v=v, rf=rf)
+
 
 class const_float(const_float_kw, Node.D0_F64):
     """
@@ -56,7 +64,7 @@ class const_float(const_float_kw, Node.D0_F64):
         keep: int = 1,
         sign: float = 1.,
     ):
-        return cls.every(g, sign, step=step, keep=keep)
+        return cls.bind(g, sign, step=step, keep=keep)
 
     @classmethod
     def zero_every(
@@ -65,10 +73,10 @@ class const_float(const_float_kw, Node.D0_F64):
         step=1.0,
         keep: int = 1,
     ):
-        return cls.every(g, 0., step=step, keep=keep)
+        return cls.bind(g, 0., step=step, keep=keep)
 
     @classmethod
-    def every(
+    def bind(
         cls,
         g: Graph,
         v: float,
@@ -80,10 +88,6 @@ class const_float(const_float_kw, Node.D0_F64):
             v=v, rf=r.select(last=keep)
         ).pipe(g.bind, r, Loop.every(step), keep=keep)
         return g, cast(Ref.Scalar_F64, r)
-
-    @classmethod
-    def new(cls, v: float, rf: Ref.Scalar_F64 | None = None):
-        return cls(cls.DEF.name, v=v, rf=rf)
 
     def __call__(self, event: Event, graph: Graph):
         return self.v

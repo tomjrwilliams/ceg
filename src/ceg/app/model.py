@@ -292,7 +292,7 @@ def rows_to_refs(
     >>> sigs = signatures(universe)
     >>> df = pl.DataFrame({
     ...     "label": ["date", "ES"],
-    ...     "i": [True, False],
+    ...     "I": [True, False],
     ...     "func": ["days", "close"],
     ...     "kw-0": ["start=2024", "d:ref=date"],
     ...     "kw-1": ["end=2025", "product=FUT"],
@@ -321,7 +321,7 @@ def rows_to_refs(
         if empty_row(row, "label", "func"):
             continue
 
-        init = row.pop("i")
+        init = row.pop("I")
 
         func_name = row["func"]
         if func_name not in universe:
@@ -362,11 +362,20 @@ import plotly.express
 def nan_map(e: pl.Expr, v: pl.Expr):
     return pl.when(e.is_null()).then(None).otherwise(v)
 
-EXPR_MAP: dict[str, Callable[[pl.Expr], pl.Expr]] = {
-    "cumsum": lambda e: e.fill_nan(None).pipe(
+def cumsum(e, trim: int| str | None = None, LEN: int | None = None):
+    if trim:
+        e = pl.when(pl.int_range(0, LEN) < int(trim)).then(None).otherwise(e)
+    return e.fill_nan(None).pipe(
         nan_map, e.fill_nan(0).fill_null(0).cum_sum()
     )
+
+EXPR_MAP: dict[str, Callable[[pl.Expr], pl.Expr]] = {
+    "cumsum": cumsum
 }
+def expr_params(e):
+    if ":" not in e:
+        return {}
+    return dict((kv.split("=") for kv in e.split(":")[1].split(",")))
 
 def df_to_line_plot(
     df: pl.DataFrame,
@@ -401,7 +410,9 @@ def df_to_line_plot(
     )
 
     exprs = {
-        label: EXPR_MAP[e](pl.col(label)) for label, e in zip(
+        label: EXPR_MAP[
+            e.split(":")[0]
+        ](pl.col(label), **expr_params(e), LEN=len(data)) for label, e in zip(
             df_exprs.get_column("label"),
             df_exprs.get_column("expr"),
         )
@@ -495,9 +506,12 @@ class ModelKW(NamedTuple):
                 i_schema = i
         if i_schema is None:
             raise ValueError(self)
+
+        # TODO: make all the meta keys upper case so no conflicts
+
         empty = pl.DataFrame(schema={
             "label": pl.String,
-            "i": pl.Boolean,
+            "I": pl.Boolean,
             **self.dfs[i_schema].schema,
             # TODO: or signatures explicitly?
         })
@@ -519,12 +533,12 @@ class ModelKW(NamedTuple):
             init = pl.DataFrame([
                 {
                     "label": r["label"],
-                    "i": r.get("i", None),
+                    "I": r.get("I", None),
                     "func": r["func"],
                     **{
                         f"kw-{i}": v
                         for i, v in enumerate(list(r.values())[(
-                            2 if "i" not in r else 3
+                            2 if "I" not in r else 3
                         ):])
                     }
                 }

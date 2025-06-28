@@ -39,7 +39,7 @@ def exp_weights(n: int, span: float):
     a = 2 / (span + 1)
     decay = 1 - a
     weights = 1 * (decay ** np.arange(n))
-    return weights / sum(weights)
+    return np.divide(weights, sum(weights))
 
 def compare_pc(vs, factors):
     # n_obs, n_features

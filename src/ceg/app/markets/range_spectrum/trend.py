@@ -36,7 +36,7 @@ def lines(
         span_mu = span
     return (
         app.model.Model.new(
-            f"minmax: {ident}",
+            f"range: {ident}",
             shared.set("steps", steps)
         )
         .with_universe(data.bars.UNIVERSE)
@@ -59,7 +59,7 @@ def lines(
         .with_model(init=[
             dict(
                 label="date",
-                i=True,# type: ignore
+                I=True,# type: ignore
                 func="date",
                 start=start,
                 end=end,
