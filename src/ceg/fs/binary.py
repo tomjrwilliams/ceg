@@ -96,6 +96,14 @@ class ratio_kw(NamedTuple):
     #
     l: Ref.Scalar_F64
     r: Ref.Scalar_F64
+    
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        return Ref.d0_f64(i, slot=slot)
+
+    @classmethod
+    def new(cls, l: Ref.Scalar_F64, r: Ref.Scalar_F64):
+        return ratio("ratio", l=l, r=r)
 
 
 class ratio(ratio_kw, Node.Scalar_F64):
@@ -137,15 +145,12 @@ class ratio(ratio_kw, Node.Scalar_F64):
     """
 
     DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, ratio_kw)
-
-    @classmethod
-    def new(cls, l: Ref.Scalar_F64, r: Ref.Scalar_F64):
-        return cls(cls.DEF.name, l=l, r=r)
+    bind = define.bind_from_new(ratio_kw.new, ratio_kw.ref)
 
     def __call__(self, event: Event, graph: Graph):
         l = self.l.history(graph).last_before(event.t)
         r = self.r.history(graph).last_before(event.t)
-        if l is None or np.isnan(l) or r is None or np.isnan(r):
+        if l is None or np.isnan(l) or r is None or np.isnan(r) or round(r, 5) == 0:
             return np.nan
         return l / r
 

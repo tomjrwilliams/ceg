@@ -22,13 +22,13 @@ def lines(
         32, 
         64,
         128, 
-        # 256, 
-        # 512
+        256, 
+        512,
     ],
     span_mu: list[int] | None = None,
-    relative: bool = False,
     truncate: float | None = None,
-    drifts: bool = False,
+    norm: bool = True,
+    relative: bool | str = False,
 ):
     consts = {"long": 1, "short": -1}
     factors = [0, 1, 2][:1]
@@ -98,6 +98,40 @@ def lines(
         s["label"].replace(f"{ident}-", "") for s in spreads
     ]
 
+    spread_high_suffixes = [
+        s["label"].replace(f"{ident}-", "") for s in spread_high
+    ]
+    spread_low_suffixes = [
+        s["label"].replace(f"{ident}-", "") for s in spread_low
+    ]
+
+    spread_sums = [
+        dict(
+            label=f"{ident}-{l0}-{l1}",
+            func="add",
+            l=f"l:ref={ident}-{l0}",
+            r=f"r:ref={ident}-{l1}",
+        )
+        for l0, l1 in zip(
+            reversed(spread_low_suffixes),
+            spread_high_suffixes, 
+        )
+    ]
+    rms_span = 512
+    spread_sum_rms = [
+        dict(
+            label=f"{ident}-{l0}-{l1}-rms",
+            func="rms_ew",
+            v=f"v:ref={ident}-{l0}-{l1}",
+            span=f"span:float={rms_span}",
+        )
+        for l0, l1 in zip(
+            reversed(spread_low_suffixes),
+            spread_high_suffixes, 
+        )
+    ]
+    # 256 512 first
+
     if truncate:
         spread_labels = [spread["label"] for spread in spreads]
         truncate_span = 1024
@@ -155,29 +189,52 @@ def lines(
         s["label"].replace(f"{ident}-", "") for s in spread_low
     ]
 
-    spread_sums = [
-        dict(
-            label=f"{ident}-{l0}-{l1}",
-            func="add",
-            l=f"l:ref={ident}-{l0}",
-            r=f"r:ref={ident}-{l1}",
-        )
-        for l0, l1 in zip(
-            reversed(spread_low_suffixes),
-            spread_high_suffixes, 
-        )
-    ]
-
-    # spreads = spreads + spread_sums
+    spreads = (
+        spreads 
+        + spread_sums
+        + spread_sum_rms
+    )
+    
+    if norm:
+        spreads_normed = [
+            dict(
+                label=f"{ident}-{spread}-norm",
+                func="ratio",
+                l=f"l:ref={ident}-{spread}",
+                r=f"r:ref={rms['label']}",
+            )
+            for spread, rms in zip(
+                spread_high_suffixes,
+                spread_sum_rms,
+            )
+        ] + [
+            dict(
+                label=f"{ident}-{spread}-norm",
+                func="ratio",
+                l=f"l:ref={ident}-{spread}",
+                r=f"r:ref={rms['label']}",
+            )
+            for spread, rms in zip(
+                spread_low_suffixes,
+                reversed(spread_sum_rms),
+            )
+        ]
+        spread_suffixes = [
+            s["label"].replace(f"{ident}-", "") for s in spreads_normed
+        ]
+    
+        spreads = spreads + spreads_normed
     # spread_suffixes = spread_suffixes + [
     #     s["label"].replace(f"{ident}-", "") for s in spread_sums
     # ]
 
     name = f"range-spread"
     if relative:
-        name += f"-rel"
+        name += f"-{relative}"
     if truncate:
         name += f"-trunc({truncate})"
+    if norm:
+        name += f"-norm"
     name += f": {ident}"
 
     page = (
@@ -192,6 +249,7 @@ def lines(
             "spread_vec": fs.binary.subtract_vec_i.bind,
             "add": fs.binary.add.bind,
             "abs": fs.unary.abs.bind,
+            "ratio": fs.binary.ratio.bind,
             "truncate": fs.binary.truncate.bind,
             "const": fs.consts.const_float.bind,
             "pct_chg": fs.unary.pct_change.bind,  
@@ -203,12 +261,13 @@ def lines(
             "high": data.bars.daily_high.bind,
             "low": data.bars.daily_low.bind,
             "close": data.bars.daily_close.bind,
-            "norm": fs.norm.norm_range_pct.bind,
-            # "norm_mid_pct": fs.norm.norm_mid_pct_vec.bind,
+            # "norm": fs.norm.norm_range_pct.bind,
             "norm_mid": (
-                fs.norm.norm_mid_vec.bind
-                if not drifts
+                fs.norm.norm_mid_inner_vec.bind
+                if relative == "mid-inner"
                 else fs.norm.norm_mid_pct_vec.bind
+                if relative == "mid-pct"
+                else fs.norm.norm_mid_vec.bind
             ),
             "sum_mat": fs.agg.sum_mat_i.bind,
             "mean_vec": fs.agg.mean_vec.bind,
@@ -370,10 +429,21 @@ def lines(
                 label=f"{ident}-{spread}-pnl",
                 y=True,
                 align=f"{ident}-C",
-                expr="cumsum:trim=30"
+                expr="cumsum:trim=210"
             )
             for spread in spread_suffixes
         ], name = "pnl")
+        .with_plot(init = [
+            dict(label="date", x=True)
+        ] + [
+            dict(
+                label=spread_sum["label"],
+                y=True,
+                align=f"{ident}-C",
+                expr="identity:trim=210"
+            )
+            for spread_sum in spread_sum_rms
+        ], name = "scaling")
     )
 
     page = (
@@ -381,7 +451,10 @@ def lines(
         .with_plot(init=[
             dict(label="date", x=True),
         ] + [
-            dict(label=f"{ident}-{spread}", y=True, align=f"{ident}-C")
+            dict(
+                label=f"{ident}-{spread}", y=True, align=f"{ident}-C",
+                expr="identity:trim=210"
+            )
             for spread in spread_suffixes
         ], name = "signal")
         .with_plot(init=[
@@ -391,7 +464,8 @@ def lines(
                 label=f"{ident}-{spread}-pos", 
                 slot= 0, # type: ignore
                 y=True, 
-                align=f"{ident}-C"
+                align=f"{ident}-C",
+                expr="identity:trim=210"
             )
             for spread in spread_suffixes
         ], name = "pos")

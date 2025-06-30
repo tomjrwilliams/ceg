@@ -369,8 +369,14 @@ def cumsum(e, trim: int| str | None = None, LEN: int | None = None):
         nan_map, e.fill_nan(0).fill_null(0).cum_sum()
     )
 
+def identity(e, trim: int| str | None = None, LEN: int | None = None):
+    if trim:
+        e = pl.when(pl.int_range(0, LEN) < int(trim)).then(None).otherwise(e)
+    return e.fill_nan(None)
+
 EXPR_MAP: dict[str, Callable[[pl.Expr], pl.Expr]] = {
-    "cumsum": cumsum
+    "cumsum": cumsum,
+    "identity": identity,
 }
 def expr_params(e):
     if ":" not in e:
@@ -633,7 +639,7 @@ class RunGraph(Transformation):
             sigs=page.signatures,
             keep={
                 **{label: True for label in keep_labels},
-                **{label: 4 for label in align_labels},
+                **{label: 8 for label in align_labels},
             }
         )
 

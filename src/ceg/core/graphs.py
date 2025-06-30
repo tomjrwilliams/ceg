@@ -573,7 +573,7 @@ class define:
     def bind_from_new(
         new: Callable[P, Node.Any],
         ref: Callable[..., R],
-        keep: int = 4,
+        keep: int = 8,
     ) -> Callable[
         Concatenate[Graph, P], 
         tuple[Graph, R]

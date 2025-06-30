@@ -516,6 +516,7 @@ class rms_ew_kw(NamedTuple):
     v: Ref.Scalar_F64
     span: float | None
     alpha: float | None
+    b: float
 
     @classmethod
     def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
@@ -527,8 +528,9 @@ class rms_ew_kw(NamedTuple):
         v: Ref.Scalar_F64,
         span: float | None=None,
         alpha: float | None=None,
+        b: float = 1.,
     ):
-        return rms_ew("rms_ew", v=v, **ewm_kwargs(
+        return rms_ew("rms_ew", v=v, b=b, **ewm_kwargs(
             span=span, alpha=alpha
         ))
 
@@ -570,13 +572,13 @@ class rms_ew(rms_ew_kw, Node.Scalar_F64):
         if event.prev is None:
             if v is None:
                 return v
-            return np.square(v)
+            return np.abs(v) * self.b
         rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
         prev = rf.history(graph).last_before(event.prev.t, allow_nan=False)
         if prev is None or np.isnan(prev) or v is None or np.isnan(v):
             if v is None:
                 return v
-            return np.square(v)
+            return np.abs(v) * self.b
         alpha = self.alpha
         if alpha is None:
             raise ValueError(self)
@@ -585,11 +587,12 @@ class rms_ew(rms_ew_kw, Node.Scalar_F64):
 
         if np.isnan(v):
             return prev
-        prev_sq = np.square(prev)
+        prev_sq = np.square(prev / self.b)
         v_sq = np.square(v)
+        
         return np.sqrt(
             ((1 - alpha) * prev_sq) + (alpha * v_sq)
-        )
+        ) * self.b
 
 #  ------------------
 

@@ -90,6 +90,12 @@ class v_args_to_vec_kw(NamedTuple):
     v7: Ref.Scalar_F64 | None = None
     v8: Ref.Scalar_F64 | None = None
     v9: Ref.Scalar_F64 | None = None
+    v10: Ref.Scalar_F64 | None = None
+    v11: Ref.Scalar_F64 | None = None
+    v12: Ref.Scalar_F64 | None = None
+    v13: Ref.Scalar_F64 | None = None
+    v14: Ref.Scalar_F64 | None = None
+    v15: Ref.Scalar_F64 | None = None
 
     @classmethod
     def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Vector_F64:
@@ -108,8 +114,14 @@ class v_args_to_vec_kw(NamedTuple):
         v7: Ref.Scalar_F64 | None = None,
         v8: Ref.Scalar_F64 | None = None,
         v9: Ref.Scalar_F64 | None = None,
+        v10: Ref.Scalar_F64 | None = None,
+        v11: Ref.Scalar_F64 | None = None,
+        v12: Ref.Scalar_F64 | None = None,
+        v13: Ref.Scalar_F64 | None = None,
+        v14: Ref.Scalar_F64 | None = None,
+        v15: Ref.Scalar_F64 | None = None,
     ):
-        return v_args_to_vec("v_args_to_vec", v0, v1, v2, v3, v4, v5, v6, v7, v8, v9)
+        return v_args_to_vec("v_args_to_vec", v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15)
 
 class v_args_to_vec(v_args_to_vec_kw, Node.D1_F64):
     """
@@ -161,6 +173,7 @@ class v_args_to_vec(v_args_to_vec_kw, Node.D1_F64):
             self.v7,
             self.v8,
             self.v9,
+            self.v10, self.v11, self.v12, self.v13, self.v14, self.v15
         ]
         vs = [v for v in vs if v is not None]
         return np.array(list(
