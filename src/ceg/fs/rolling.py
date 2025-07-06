@@ -9,24 +9,19 @@ from ..core import (
     Ref,
     Event,
     Loop,
-    Defn,
+    dataclass,
     define,
     steps,
     batches,
     ByDate,
 )
+from ..num.pca import *
 
 #  ------------------
 
 
-class sum_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    window: int
-
-
-class sum(sum_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class sum(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -55,11 +50,14 @@ class sum(sum_kw, Node.Scalar_F64):
     5.2 13.58
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, sum_kw)
+    type: str
+    #
+    v: Ref.Scalar_F64
+    window: int
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, window: int):
-        return cls(cls.DEF.name, v=v, window=window)
+        return cls("sum", v=v, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return np.nansum(
@@ -71,14 +69,9 @@ class sum(sum_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class mean_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    window: int
 
-
-class mean(mean_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class mean(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -107,7 +100,10 @@ class mean(mean_kw, Node.Scalar_F64):
     5.2 4.53
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, mean_kw)
+    type: str
+    #
+    v: Ref.Scalar_F64
+    window: int
 
     @classmethod
     def new(
@@ -115,7 +111,7 @@ class mean(mean_kw, Node.Scalar_F64):
         v: Ref.Scalar_F64,
         window: int,
     ):
-        return cls(cls.DEF.name, v=v, window=window)
+        return cls("mean", v=v, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return np.nanmean(
@@ -128,15 +124,12 @@ class mean(mean_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class mean_w_kw(NamedTuple):
+@dataclass(frozen=True)
+class mean_w(Node.Scalar_F64):
+
     type: str
     #
     v: Ref.Scalar_F64
-
-
-class mean_w(mean_w_kw, Node.Scalar_F64):
-
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, mean_w_kw)
 
     @classmethod
     def new(
@@ -144,7 +137,7 @@ class mean_w(mean_w_kw, Node.Scalar_F64):
         v: Ref.Scalar_F64,
     ):
         return cls(
-            cls.DEF.name,
+            "mean_w",
             v=v,
         )
 
@@ -174,30 +167,8 @@ def ewm_kwargs(
         raise ValueError(kw)
     return dict(span=span, alpha=alpha)
 
-class mean_ew_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    span: float | None
-    alpha: float | None
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(
-        cls,
-        v: Ref.Scalar_F64,
-        span: float | None=None,
-        alpha: float | None=None,
-    ):
-        return mean_ew("mean_ew", v=v, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
-
-
-class mean_ew(mean_ew_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class mean_ew(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -225,9 +196,23 @@ class mean_ew(mean_ew_kw, Node.Scalar_F64):
     4.74 3.3
     5.2 4.06
     """
+    type: str
+    #
+    v: Ref.Scalar_F64
+    span: float | None
+    alpha: float | None
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, mean_ew_kw)
-    bind = define.bind_from_new(mean_ew_kw.new, mean_ew_kw.ref)
+    @classmethod
+    def new(
+        cls,
+        v: Ref.Scalar_F64,
+        span: float | None=None,
+        alpha: float | None=None,
+    ):
+        return mean_ew("mean_ew", v=v, **ewm_kwargs(
+            span=span, alpha=alpha
+        ))
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
@@ -248,22 +233,10 @@ class mean_ew(mean_ew_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class std_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    window: int
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, window: int):
-        return std("std", v=v, window=window)
 
 
-class std(std_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class std(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -292,9 +265,16 @@ class std(std_kw, Node.Scalar_F64):
     5.2 0.66
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, std_kw)
+    type: str
+    #
+    v: Ref.Scalar_F64
+    window: int
 
-    bind = define.bind_from_new(std_kw.new, std_kw.ref)
+    @classmethod
+    def new(cls, v: Ref.Scalar_F64, window: int):
+        return std("std", v=v, window=window)
+
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         # TODO: if only one observation, return nan?
@@ -308,15 +288,12 @@ class std(std_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class std_w_kw(NamedTuple):
+
+@dataclass(frozen=True)
+class std_w(Node.Scalar_F64):
     type: str
     #
     v: Ref.Scalar_F64
-
-
-class std_w(std_w_kw, Node.Scalar_F64):
-
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, std_w_kw)
 
     @classmethod
     def new(
@@ -324,7 +301,7 @@ class std_w(std_w_kw, Node.Scalar_F64):
         v: Ref.Scalar_F64,
     ):
         return cls(
-            cls.DEF.name,
+            "std_w",
             v=v,
         )
 
@@ -335,32 +312,9 @@ class std_w(std_w_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class std_ew_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    mu: Ref.Scalar_F64
-    span: float | None
-    alpha: float | None
 
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(
-        cls,
-        v: Ref.Scalar_F64,
-        mu: Ref.Scalar_F64,
-        span: float | None=None,
-        alpha: float | None=None,
-    ):
-        return std_ew("std_ew", v=v, mu=mu, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
-
-
-class std_ew(std_ew_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class std_ew(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -393,8 +347,25 @@ class std_ew(std_ew_kw, Node.Scalar_F64):
     5.2 4.06 1.13
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, std_ew_kw)
-    bind = define.bind_from_new(std_ew_kw.new, std_ew_kw.ref)
+    type: str
+    #
+    v: Ref.Scalar_F64
+    mu: Ref.Scalar_F64
+    span: float | None
+    alpha: float | None
+
+    @classmethod
+    def new(
+        cls,
+        v: Ref.Scalar_F64,
+        mu: Ref.Scalar_F64,
+        span: float | None=None,
+        alpha: float | None=None,
+    ):
+        return std_ew("std_ew", v=v, mu=mu, **ewm_kwargs(
+            span=span, alpha=alpha
+        ))
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
@@ -420,22 +391,8 @@ class std_ew(std_ew_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class rms_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    window: int
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, window: int):
-        return rms("rms", v=v, window=window)
-
-
-class rms(rms_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class rms(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -464,8 +421,16 @@ class rms(rms_kw, Node.Scalar_F64):
     5.2 4.57
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, rms_kw)
-    bind = define.bind_from_new(rms_kw.new, rms_kw.ref)
+    type: str
+    #
+    v: Ref.Scalar_F64
+    window: int
+
+    @classmethod
+    def new(cls, v: Ref.Scalar_F64, window: int):
+        return rms("rms", v=v, window=window)
+
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
 
@@ -483,15 +448,12 @@ class rms(rms_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class rms_w_kw(NamedTuple):
+@dataclass(frozen=True)
+class rms_w(Node.Scalar_F64):
+
     type: str
     #
     v: Ref.Scalar_F64
-
-
-class rms_w(rms_w_kw, Node.Scalar_F64):
-
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, rms_w_kw)
 
     @classmethod
     def new(
@@ -499,7 +461,7 @@ class rms_w(rms_w_kw, Node.Scalar_F64):
         v: Ref.Scalar_F64,
     ):
         return cls(
-            cls.DEF.name,
+            "rms_w",
             v=v,
         )
 
@@ -510,32 +472,8 @@ class rms_w(rms_w_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class rms_ew_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    span: float | None
-    alpha: float | None
-    b: float
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(
-        cls,
-        v: Ref.Scalar_F64,
-        span: float | None=None,
-        alpha: float | None=None,
-        b: float = 1.,
-    ):
-        return rms_ew("rms_ew", v=v, b=b, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
-
-
-class rms_ew(rms_ew_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class rms_ew(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -563,9 +501,26 @@ class rms_ew(rms_ew_kw, Node.Scalar_F64):
     4.74 3.61
     5.2 4.32
     """
+    type: str
+    #
+    v: Ref.Scalar_F64
+    span: float | None
+    alpha: float | None
+    b: float
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, rms_ew_kw)
-    bind = define.bind_from_new(rms_ew_kw.new, rms_ew_kw.ref)
+    @classmethod
+    def new(
+        cls,
+        v: Ref.Scalar_F64,
+        span: float | None=None,
+        alpha: float | None=None,
+        b: float = 1.,
+    ):
+        return rms_ew("rms_ew", v=v, b=b, **ewm_kwargs(
+            span=span, alpha=alpha
+        ))
+
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
@@ -597,14 +552,10 @@ class rms_ew(rms_ew_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class max_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    window: int
 
 
-class max(max_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class max( Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -632,12 +583,14 @@ class max(max_kw, Node.Scalar_F64):
     1.54 1.54
     1.2 1.54
     """
-
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, max_kw)
+    type: str
+    #
+    v: Ref.Scalar_F64
+    window: int
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, window: int):
-        return cls(cls.DEF.name, v=v, window=window)
+        return cls("max", v=v, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return np.nanmax(self.v.history(graph).last_n_before(
@@ -648,15 +601,13 @@ class max(max_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class max_w_kw(NamedTuple):
+
+@dataclass(frozen=True)
+class max_w(Node.Scalar_F64):
+
     type: str
     #
     v: Ref.Scalar_F64
-
-
-class max_w(rms_w_kw, Node.Scalar_F64):
-
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, max_w_kw)
 
     @classmethod
     def new(
@@ -664,7 +615,7 @@ class max_w(rms_w_kw, Node.Scalar_F64):
         v: Ref.Scalar_F64,
     ):
         return cls(
-            cls.DEF.name,
+            "max_w",
             v=v,
         )
 
@@ -675,31 +626,9 @@ class max_w(rms_w_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class max_ew_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    mu: Ref.Scalar_F64 | None
-    span: float | None
-    alpha: float | None
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
 
-    @classmethod
-    def new(
-        cls,
-        v: Ref.Scalar_F64,
-        mu: Ref.Scalar_F64 | None = None,
-        span: float | None=None,
-        alpha: float | None=None,
-    ):
-        return max_ew("max_ew", v=v, mu=mu, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
-
-
-class max_ew(max_ew_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class max_ew(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -732,9 +661,27 @@ class max_ew(max_ew_kw, Node.Scalar_F64):
     1.2 1.1 1.37
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, max_ew_kw)
+    type: str
+    #
+    v: Ref.Scalar_F64
+    mu: Ref.Scalar_F64 | None
+    span: float | None
+    alpha: float | None
+
+    @classmethod
+    def new(
+        cls,
+        v: Ref.Scalar_F64,
+        mu: Ref.Scalar_F64 | None = None,
+        span: float | None=None,
+        alpha: float | None=None,
+    ):
+        return max_ew("max_ew", v=v, mu=mu, **ewm_kwargs(
+            span=span, alpha=alpha
+        ))
+
     bind = define.bind_from_new(
-        max_ew_kw.new, max_ew_kw.ref
+        new, Node.Scalar_F64.ref
     )
 
     def __call__(self, event: Event, graph: Graph):
@@ -763,14 +710,10 @@ class max_ew(max_ew_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class min_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    window: int
 
 
-class min(min_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class min(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -799,11 +742,14 @@ class min(min_kw, Node.Scalar_F64):
     -0.8 -0.8
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, min_kw)
+    type: str
+    #
+    v: Ref.Scalar_F64
+    window: int
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, window: int):
-        return cls(cls.DEF.name, v=v, window=window)
+        return cls("min", v=v, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return np.nanmin(
@@ -815,15 +761,12 @@ class min(min_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class min_w_kw(NamedTuple):
+
+@dataclass(frozen=True)
+class min_w(Node.Scalar_F64):
     type: str
     #
     v: Ref.Scalar_F64
-
-
-class min_w(min_w_kw, Node.Scalar_F64):
-
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, min_w_kw)
 
     @classmethod
     def new(
@@ -831,7 +774,7 @@ class min_w(min_w_kw, Node.Scalar_F64):
         v: Ref.Scalar_F64,
     ):
         return cls(
-            cls.DEF.name,
+            "min_w",
             v=v,
         )
 
@@ -842,31 +785,9 @@ class min_w(min_w_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class min_ew_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    mu: Ref.Scalar_F64 | None
-    span: float | None
-    alpha: float | None
 
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(
-        cls,
-        v: Ref.Scalar_F64,
-        mu: Ref.Scalar_F64 | None = None,
-        span: float | None=None,
-        alpha: float | None=None,
-    ):
-        return min_ew("min_ew", v=v, mu=mu, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
-
-class min_ew(min_ew_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class min_ew(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -899,9 +820,26 @@ class min_ew(min_ew_kw, Node.Scalar_F64):
     -0.8 -0.37 -0.8
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, min_ew_kw)
+    type: str
+    #
+    v: Ref.Scalar_F64
+    mu: Ref.Scalar_F64 | None
+    span: float | None
+    alpha: float | None
+
+    @classmethod
+    def new(
+        cls,
+        v: Ref.Scalar_F64,
+        mu: Ref.Scalar_F64 | None = None,
+        span: float | None=None,
+        alpha: float | None=None,
+    ):
+        return cls("min_ew", v=v, mu=mu, **ewm_kwargs(
+            span=span, alpha=alpha
+        ))
     bind = define.bind_from_new(
-        min_ew_kw.new, min_ew_kw.ref
+        new, Node.Scalar_F64.ref
     )
 
     def __call__(self, event: Event, graph: Graph):
@@ -940,14 +878,10 @@ class min_ew(min_ew_kw, Node.Scalar_F64):
 
 #  ------------------
 
-class skew_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    window: int
 
 
-class skew(skew_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class skew(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -976,11 +910,14 @@ class skew(skew_kw, Node.Scalar_F64):
     -0.8 -0.67
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, skew_kw)
+    type: str
+    #
+    v: Ref.Scalar_F64
+    window: int
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, window: int):
-        return cls(cls.DEF.name, v=v, window=window)
+        return cls("skew", v=v, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return scipy.stats.skew(
@@ -989,14 +926,8 @@ class skew(skew_kw, Node.Scalar_F64):
             )
         )
 
-class kurtosis_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    window: int
-
-
-class kurtosis(kurtosis_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class kurtosis(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -1025,11 +956,14 @@ class kurtosis(kurtosis_kw, Node.Scalar_F64):
     -0.8 -1.5
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, kurtosis_kw)
+    type: str
+    #
+    v: Ref.Scalar_F64
+    window: int
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, window: int):
-        return cls(cls.DEF.name, v=v, window=window)
+        return cls("kurtosis", v=v, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return scipy.stats.kurtosis(
@@ -1040,15 +974,9 @@ class kurtosis(kurtosis_kw, Node.Scalar_F64):
 
 #  ------------------
 
-class quantile_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    q: float
-    window: int
 
-
-class quantile(quantile_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class quantile(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -1077,11 +1005,15 @@ class quantile(quantile_kw, Node.Scalar_F64):
     -0.8 -0.06
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, quantile_kw)
+    type: str
+    #
+    v: Ref.Scalar_F64
+    q: float
+    window: int
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, q: float, window: int):
-        return cls(cls.DEF.name, v=v,q=q, window=window)
+        return cls("quantile", v=v,q=q, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return np.nanquantile(
@@ -1094,15 +1026,13 @@ class quantile(quantile_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class quantile_w_kw(NamedTuple):
+
+@dataclass(frozen=True)
+class quantile_w(Node.Scalar_F64):
+
     type: str
     #
     v: Ref.Scalar_F64
-
-
-class quantile_w(min_w_kw, Node.Scalar_F64):
-
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, quantile_w_kw)
 
     @classmethod
     def new(
@@ -1110,7 +1040,7 @@ class quantile_w(min_w_kw, Node.Scalar_F64):
         v: Ref.Scalar_F64,
     ):
         return cls(
-            cls.DEF.name,
+            "quantile_w",
             v=v,
         )
 
@@ -1121,17 +1051,14 @@ class quantile_w(min_w_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class quantile_ew_kw(NamedTuple):
+
+@dataclass(frozen=True)
+class quantile_ew(Node.Scalar_F64):
     type: str
     #
     v: Ref.Scalar_F64
     span: float | None
     alpha: float | None
-
-
-class quantile_ew(quantile_ew_kw, Node.Scalar_F64):
-
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, quantile_ew_kw)
 
     @classmethod
     def new(
@@ -1140,7 +1067,7 @@ class quantile_ew(quantile_ew_kw, Node.Scalar_F64):
         span: float | None=None,
         alpha: float | None=None,
     ):
-        return cls(cls.DEF.name, v=v, **ewm_kwargs(
+        return cls("quantile_ew", v=v, **ewm_kwargs(
             span=span, alpha=alpha
         ))
 
@@ -1152,17 +1079,9 @@ class quantile_ew(quantile_ew_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class cov_kw(NamedTuple):
-    type: str
-    #
-    v1: Ref.Scalar_F64
-    v2: Ref.Scalar_F64
-    window: int
-    mu_1: Ref.Scalar_F64 | None
-    mu_2: Ref.Scalar_F64 | None
 
-
-class cov(cov_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class cov(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -1199,7 +1118,13 @@ class cov(cov_kw, Node.Scalar_F64):
     -0.7 -1.27 0.64
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, cov_kw)
+    type: str
+    #
+    v1: Ref.Scalar_F64
+    v2: Ref.Scalar_F64
+    window: int
+    mu_1: Ref.Scalar_F64 | None
+    mu_2: Ref.Scalar_F64 | None
 
     @classmethod
     def new(
@@ -1211,7 +1136,7 @@ class cov(cov_kw, Node.Scalar_F64):
         mu_2: Ref.Scalar_F64 | None = None,
     ):
         return cls(
-            cls.DEF.name,
+            "cov",
             v1=v1,
             v2=v2,
             window=window,
@@ -1250,18 +1175,14 @@ class cov(cov_kw, Node.Scalar_F64):
 
         return res
 
+# TODO: cov ew
+
 #  ------------------
 
 
-class corr_kw(NamedTuple):
-    type: str
-    #
-    cov: Ref.Scalar_F64
-    v1: Ref.Scalar_F64 # vol
-    v2: Ref.Scalar_F64 # vol
 
-
-class corr(corr_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class corr( Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -1301,7 +1222,11 @@ class corr(corr_kw, Node.Scalar_F64):
     5.83 5.02 0.97
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, corr_kw)
+    type: str
+    #
+    cov: Ref.Scalar_F64
+    v1: Ref.Scalar_F64 # vol
+    v2: Ref.Scalar_F64 # vol
 
     @classmethod
     def new(
@@ -1311,7 +1236,7 @@ class corr(corr_kw, Node.Scalar_F64):
         v2: Ref.Scalar_F64,
     ):
         return cls(
-            cls.DEF.name,
+            "corr",
             cov=cov,
             v1=v1,
             v2=v2,
@@ -1327,6 +1252,8 @@ class corr(corr_kw, Node.Scalar_F64):
             return np.nan
         return cov / (v1 * v2)
 
+# /TODO: corr ew
+
 
 class beta_kw(NamedTuple):
     type: str
@@ -1336,7 +1263,8 @@ class beta_kw(NamedTuple):
     v2: Ref.Scalar_F64 # vol
 
 
-class beta(beta_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class beta(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -1377,7 +1305,11 @@ class beta(beta_kw, Node.Scalar_F64):
     5.83 5.02 1.31
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, beta_kw)
+    type: str
+    #
+    corr: Ref.Scalar_F64
+    v1: Ref.Scalar_F64 # vol
+    v2: Ref.Scalar_F64 # vol
 
     @classmethod
     def new(
@@ -1387,7 +1319,7 @@ class beta(beta_kw, Node.Scalar_F64):
         v2: Ref.Scalar_F64,
     ):
         return cls(
-            cls.DEF.name,
+            "beta",
             corr=corr,
             v1=v1,
             v2=v2,
@@ -1402,23 +1334,16 @@ class beta(beta_kw, Node.Scalar_F64):
         # v1 = stock, v2 = market
         return (corr * v1) / v2
 
+# TODO; beta  ew
+
 # TODO: spearman
 
 #  ------------------
 
 
-class pca_kw(NamedTuple):
-    type: str
-    #
-    vs: tuple[Ref.Scalar_F64, ...]
-    window: int
-    factors: int
-    mus: tuple[Ref.Scalar_F64, ...] | None
-    signs: tuple[int | None] | None
-    centre: bool
 
-
-class pca(pca_kw, Node.D1_F64_D2_F64):
+@dataclass(frozen=True)
+class pca(Node.D1_F64_D2_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -1458,7 +1383,14 @@ class pca(pca_kw, Node.D1_F64_D2_F64):
     -0.7 -1.27 2.12 [-0.69 -0.72]
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.D1_F64_D2_F64, pca_kw)
+    type: str
+    #
+    vs: tuple[Ref.Scalar_F64, ...]
+    window: int
+    factors: int
+    mus: tuple[Ref.Scalar_F64, ...] | None
+    signs: tuple[int | None] | None
+    centre: bool
 
     @classmethod
     def new(
@@ -1471,7 +1403,7 @@ class pca(pca_kw, Node.D1_F64_D2_F64):
         centre: bool = False,
     ):
         return cls(
-            cls.DEF.name,
+            "pca",
             vs=vs,
             window=window,
             factors=factors,
@@ -1481,112 +1413,33 @@ class pca(pca_kw, Node.D1_F64_D2_F64):
         )
 
     def __call__(self, event: Event, graph: Graph):
-        vs = tuple(
-            map(
-                lambda v: v.history(graph).last_n_before(
-                    self.window, event.t
-                ),
-                self.vs,
+        vs = [
+            v.history(graph).last_n_before(
+                self.window, event.t
             )
-        )
-
-        # TODO: assert aligned?
-
-        if self.centre:
-            mus = (
-                [None for _ in vs]
-                if self.mus is None
-                else self.mus
-            )
-            assert len(mus) == len(vs), dict(mus=mus, vs=vs)
-            mus = list(
-                map(
-                    lambda v_mu: (
-                        lambda v, mu: (
-                            np.nanmean(v)
-                            if mu is None
-                            else (
-                                np.nan
-                                if not len(v)
-                                else mu.history(
-                                    graph
-                                ).last_before(event.t)
-                            )
-                        )
-                    )(*v_mu),
-                    zip(vs, mus),
-                )
-            )
-
-            vs = [v - float(mu) for v, mu in zip(vs, mus)]
-
-        vs = np.vstack(
-            [np.expand_dims(v, 0) for v in vs]
-        ).T
-
-        vs = vs[~np.any(np.isnan(vs), axis=1)].T
-
-        if vs.shape[1] < vs.shape[0]:
-            e = np.array(
-                [np.nan for _ in range(self.factors)]
-            )
-            u = np.array([np.nan for _ in mus])
-            U = np.hstack(
-                [
-                    np.expand_dims(u, 1)
-                    for _ in range(self.factors)
-                ]
-            )
-            return e, U
-
-        # (window, n variables)
-
-        U, e, _ = np.linalg.svd(vs, full_matrices=False)
-
-        if self.signs is not None:
-            for i, s in enumerate(self.signs):
-                # TODO: numba?
-                if s is None:
-                    continue
-                elif s == 0:
-                    raise ValueError(
-                        dict(
-                            message="signs start from 1 for symmetry",
-                            self=self,  # type: ignore (wants dicts to be the same type)
-                        )
-                    )
-                elif s < 0:
-                    s = -1 * (s + 1)
-                    if U[s, i] < 0:
-                        continue
-                else:
-                    s -= 1
-                    if U[s, i] > 0:
-                        continue
-                U[:, s] *= -1
-
-        if self.factors is not None:
-            U = U[:, : self.factors]
-            e = e[: self.factors]
-            # Vt = Vt[:, :self.keep]
+            for v in self.vs
+        ]
+        if self.mus is not None:
+            mus = [
+                mu.history(graph).last_before(event.t)
+                for mu in self.mus
+            ]
+        else:
+            mus = None
         
-        # cols of U = unit PCs
-        # S = np.diag(s)
-        # Mhat = np.dot(U, np.dot(S, V.T))
+        e, U = svd_pca(
+            vs,
+            mus=mus,
+            centre=self.centre,
+            signs=self.signs,
+            keep=self.factors
+        )
 
         return e, U
 
-class pca_v_kw(NamedTuple):
-    type: str
-    #
-    vs: Ref.Vector_F64
-    window: int
-    factors: int
-    mus: tuple[Ref.Scalar_F64, ...] | None
-    signs: tuple[int | None] | None
-    centre: bool
 
-class pca_v(pca_v_kw, Node.D1_F64_D2_F64):
+@dataclass(frozen=True)
+class pca_v(Node.D1_F64_D2_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -1626,7 +1479,14 @@ class pca_v(pca_v_kw, Node.D1_F64_D2_F64):
     -0.7 -1.27 2.12 [-0.69 -0.72]
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.D1_F64_D2_F64, pca_v_kw)
+    type: str
+    #
+    vs: Ref.Vector_F64
+    window: int
+    factors: int
+    mus: tuple[Ref.Scalar_F64, ...] | None
+    signs: tuple[int | None] | None
+    centre: bool
 
     @classmethod
     def month_end(
@@ -1664,7 +1524,7 @@ class pca_v(pca_v_kw, Node.D1_F64_D2_F64):
         centre: bool = False,
     ):
         return cls(
-            cls.DEF.name,
+            "pca_v",
             vs=vs,
             window=window,
             factors=factors,
@@ -1674,113 +1534,26 @@ class pca_v(pca_v_kw, Node.D1_F64_D2_F64):
         )
 
     def __call__(self, event: Event, graph: Graph):
-        vs_i = self.vs.history(graph).last_n_before(
+        vs = self.vs.history(graph).last_n_before(
             self.window, event.t
         )
-        vs = tuple([
-            vs_i[:,i]
-            for i in range(vs_i.shape[1])
-        ])
-
-        # TODO: assert aligned?
-
-        if self.centre:
-            mus = (
-                [None for _ in vs]
-                if self.mus is None
-                else self.mus
-            )
-            assert len(mus) == len(vs), dict(mus=mus, vs=vs)
-            mus = list(
-                map(
-                    lambda v_mu: (
-                        lambda v, mu: (
-                            np.nanmean(v)
-                            if mu is None
-                            else (
-                                np.nan
-                                if not len(v)
-                                else mu.history(
-                                    graph
-                                ).last_before(event.t)
-                            )
-                        )
-                    )(*v_mu),
-                    zip(vs, mus),
-                )
-            )
-
-            vs = [v - float(mu) for v, mu in zip(vs, mus)]
-
-        vs = np.vstack(
-            [np.expand_dims(v, 0) for v in vs]
-        ).T
-
-        vs = vs[~np.any(np.isnan(vs), axis=1)].T
-
-        if vs.shape[1] < vs.shape[0]:
-            e = np.array(
-                [np.nan for _ in range(self.factors)]
-            )
-            u = np.array([np.nan for _ in range(vs_i.shape[1])])
-            U = np.hstack(
-                [
-                    np.expand_dims(u, 1)
-                    for _ in range(self.factors)
-                ]
-            )
-            return e, U
-
-        # (window, n variables)
-
-        U, e, _ = np.linalg.svd(vs, full_matrices=False)
-
-        signs = self.signs
-        if signs is None:
-            signs = [1 for _ in range(self.factors)]
-
-        for i, s in enumerate(signs):
-            # TODO: numba?
-            if s is None:
-                continue
-            elif s < 0:
-                if U[-1, i] < 0:
-                    continue
-            elif s > 0:
-                if U[-1, i] > 0:
-                    continue
-            U[:, i] *= -1
-
-        if self.factors is not None:
-            U = U[:, : self.factors]
-            e = e[: self.factors]
-            # Vt = Vt[:, :self.keep]
         
-        # cols of U = unit PCs
-        # S = np.diag(s)
-        # Mhat = np.dot(U, np.dot(S, V.T))
+        if self.mus is not None:
+            mus = [
+                mu.history(graph).last_before(event.t)
+                for mu in self.mus
+            ]
+        else:
+            mus = None
+        
+        e, U = svd_pca(
+            vs,
+            mus=mus,
+            centre=self.centre,
+            signs=self.signs,
+            keep=self.factors
+        )
 
         return e, U
-
-#  ------------------
-
-# singular value decomposition factorises your data matrix such that:
-#
-#   M = U*S*V.T     (where '*' is matrix multiplication)
-#
-# * U and V are the singular matrices, containing orthogonal vectors of
-#   unit length in their rows and columns respectively.
-#
-# * S is a diagonal matrix containing the singular values of M - these
-#   values squared divided by the number of observations will give the
-#   variance explained by each PC.
-#
-# * if M is considered to be an (observations, features) matrix, the PCs
-#   themselves would correspond to the rows of S^(1/2)*V.T. if M is
-#   (features, observations) then the PCs would be the columns of
-#   U*S^(1/2).
-#
-# * since U and V both contain orthonormal vectors, U*V.T is equivalent
-#   to a whitened version of M.
 
 #  ------------------

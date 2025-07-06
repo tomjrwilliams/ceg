@@ -14,7 +14,7 @@ from ..core import (
     Ref,
     Event,
     Loop,
-    Defn,
+    dataclass,
     define,
     steps,
     batches,
@@ -22,24 +22,8 @@ from ..core import (
 
 #  ------------------
 
-
-class truncate_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    bound: Ref.Scalar_F64
-
-    b: float
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, bound: Ref.Scalar_F64, b: float = 1.):
-        return truncate("truncate", v=v, bound=bound, b=b)
-
-class truncate(truncate_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class truncate(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -70,16 +54,22 @@ class truncate(truncate_kw, Node.Scalar_F64):
     ...         r2.history(g).last_before(t), 2
     ...     )
     ...     print(v0, v1, v2)
-    0.13 -0.13 -0.95
-    0.64 0.1 6.11
-    -0.54 0.36 -1.48
-    1.3 0.95 1.38
-    -0.7 -1.27 0.56
+    0.13 -0.13 0.13
+    0.64 0.1 0.64
+    -0.54 0.36 -0.54
+    1.3 0.95 1.3
+    -0.7 -1.27 -0.7
     """
+    type: str
+    v: Ref.Scalar_F64
+    bound: Ref.Scalar_F64
+    b: float
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, truncate_kw)
-    bind = define.bind_from_new(truncate_kw.new, truncate_kw.ref)
+    @classmethod
+    def new(cls, v: Ref.Scalar_F64, bound: Ref.Scalar_F64, b: float = 1.):
+        return cls("truncate", v=v, bound=bound, b=b)
 
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         l = self.v.history(graph).last_before(event.t)
@@ -91,22 +81,9 @@ class truncate(truncate_kw, Node.Scalar_F64):
             return 0
         return l
 
-class ratio_kw(NamedTuple):
-    type: str
-    #
-    l: Ref.Scalar_F64
-    r: Ref.Scalar_F64
-    
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
 
-    @classmethod
-    def new(cls, l: Ref.Scalar_F64, r: Ref.Scalar_F64):
-        return ratio("ratio", l=l, r=r)
-
-
-class ratio(ratio_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class ratio(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -143,9 +120,15 @@ class ratio(ratio_kw, Node.Scalar_F64):
     1.3 0.95 1.38
     -0.7 -1.27 0.56
     """
+    type: str
+    l: Ref.Scalar_F64
+    r: Ref.Scalar_F64
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, ratio_kw)
-    bind = define.bind_from_new(ratio_kw.new, ratio_kw.ref)
+    @classmethod
+    def new(cls, l: Ref.Scalar_F64, r: Ref.Scalar_F64):
+        return ratio("ratio", l=l, r=r)
+
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         l = self.l.history(graph).last_before(event.t)
@@ -158,16 +141,9 @@ class ratio(ratio_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class pct_diff_kw(NamedTuple):
-    type: str
-    #
-    l: Ref.Scalar_F64
-    r: Ref.Scalar_F64
-    shift: tuple[int | None, ...] | None
-    m: float | None = None
 
-
-class pct_diff(pct_diff_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class pct_diff(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -204,10 +180,11 @@ class pct_diff(pct_diff_kw, Node.Scalar_F64):
     1.3 0.95 0.38
     -0.7 -1.27 -0.44
     """
-
-    DEF: ClassVar[Defn] = define.node(
-        Node.Scalar_F64, pct_diff_kw
-    )
+    type: str
+    l: Ref.Scalar_F64
+    r: Ref.Scalar_F64
+    shift: tuple[int | None, ...] | None
+    m: float | None = None
 
     @classmethod
     def new(
@@ -217,7 +194,9 @@ class pct_diff(pct_diff_kw, Node.Scalar_F64):
         shift: tuple[int | None, ...] | None = None,
         m: float | None = None,
     ):
-        return cls(cls.DEF.name, l=l, r=r, shift=shift, m=m)
+        return cls("pct_diff", l=l, r=r, shift=shift, m=m)
+
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         l = self.l.history(graph).last_before(event.t)
@@ -233,26 +212,8 @@ class pct_diff(pct_diff_kw, Node.Scalar_F64):
 #  ------------------
 
 
-class subtract_kw(NamedTuple):
-    type: str
-    #
-    l: Ref.Scalar_F64
-    r: Ref.Scalar_F64
-
-    a: float
-    b: float
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(cls, l: Ref.Scalar_F64, r: Ref.Scalar_F64, a: float = 0., b: float = 1.):
-        return subtract("subtract", l=l, r=r, a=a,b=b)
-
-
-
-class subtract(subtract_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class subtract(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -289,9 +250,19 @@ class subtract(subtract_kw, Node.Scalar_F64):
     1.3 0.95 0.36
     -0.7 -1.27 0.56
     """
+    type: str
+    #
+    l: Ref.Scalar_F64
+    r: Ref.Scalar_F64
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, ratio_kw)
-    bind = define.bind_from_new(subtract_kw.new, subtract_kw.ref)
+    a: float
+    b: float
+
+    @classmethod
+    def new(cls, l: Ref.Scalar_F64, r: Ref.Scalar_F64, a: float = 0., b: float = 1.):
+        return subtract("subtract", l=l, r=r, a=a,b=b)
+
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         l = self.l.history(graph).last_before(event.t)
@@ -303,26 +274,10 @@ class subtract(subtract_kw, Node.Scalar_F64):
 
 diff = subtract
 
-class add_kw(NamedTuple):
-    type: str
-    #
-    l: Ref.Scalar_F64
-    r: Ref.Scalar_F64
-
-    a: float
-    b: float
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(cls, l: Ref.Scalar_F64, r: Ref.Scalar_F64, a: float = 0., b: float = 1.):
-        return add("add", l=l, r=r, a=a,b=b)
 
 
-
-class add(add_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class add(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -353,15 +308,25 @@ class add(add_kw, Node.Scalar_F64):
     ...         r2.history(g).last_before(t), 2
     ...     )
     ...     print(v0, v1, v2)
-    0.13 -0.13 0.26
-    0.64 0.1 0.54
-    -0.54 0.36 -0.9
-    1.3 0.95 0.36
-    -0.7 -1.27 0.56
+    0.13 -0.13 -0.01
+    0.64 0.1 0.75
+    -0.54 0.36 -0.17
+    1.3 0.95 2.25
+    -0.7 -1.27 -1.97
     """
+    type: str
+    #
+    l: Ref.Scalar_F64
+    r: Ref.Scalar_F64
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, ratio_kw)
-    bind = define.bind_from_new(add_kw.new, add_kw.ref)
+    a: float
+    b: float
+
+    @classmethod
+    def new(cls, l: Ref.Scalar_F64, r: Ref.Scalar_F64, a: float = 0., b: float = 1.):
+        return add("add", l=l, r=r, a=a,b=b)
+
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         l = self.l.history(graph).last_before(event.t)
@@ -372,29 +337,8 @@ class add(add_kw, Node.Scalar_F64):
 
 
 
-class subtract_vec_i_kw(NamedTuple):
-    type: str
-    #
-    l: Ref.Vector_F64
-    r: Ref.Vector_F64
-
-    il: int
-    ir: int
-
-    a: float
-    b: float
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(cls, l: Ref.Vector_F64, r: Ref.Vector_F64, il: int, ir: int, a: float = 0., b: float = 1.):
-        return subtract_vec_i("subtract_vec_i", l=l, r=r, il=il, ir=ir, a=a,b=b)
-
-
-
-class subtract_vec_i(subtract_vec_i_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class subtract_vec_i(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -431,9 +375,22 @@ class subtract_vec_i(subtract_vec_i_kw, Node.Scalar_F64):
     1.3 0.95 0.36
     -0.7 -1.27 0.56
     """
+    type: str
+    #
+    l: Ref.Vector_F64
+    r: Ref.Vector_F64
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, ratio_kw)
-    bind = define.bind_from_new(subtract_vec_i_kw.new, subtract_vec_i_kw.ref)
+    il: int
+    ir: int
+
+    a: float
+    b: float
+
+    @classmethod
+    def new(cls, l: Ref.Vector_F64, r: Ref.Vector_F64, il: int, ir: int, a: float = 0., b: float = 1.):
+        return subtract_vec_i("subtract_vec_i", l=l, r=r, il=il, ir=ir, a=a,b=b)
+
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         l = self.l.history(graph).last_before(event.t)
@@ -441,6 +398,3 @@ class subtract_vec_i(subtract_vec_i_kw, Node.Scalar_F64):
         # if l is None or np.isnan(l) or r is None or np.isnan(r):
         #     return np.nan
         return self.a + ((l[self.il] - r[self.ir]) * self.b)
-
-
-diff = subtract

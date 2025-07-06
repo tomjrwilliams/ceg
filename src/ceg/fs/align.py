@@ -9,7 +9,7 @@ from ..core import (
     Ref,
     Event,
     Ready,
-    Defn,
+    dataclass,
     define,
     steps,
     batches,batch_until
@@ -18,13 +18,9 @@ from ..core import (
 #  ------------------
 
 
-class align_d0_date_kw(NamedTuple):
-    v: Ref.Scalar_Date
-    to: Ref.Any
-    tx: float
 
-
-class align_d0_date(align_d0_date_kw, Node.D0_Date):
+@dataclass(frozen=True)
+class align_d0_date(Node.D0_Date):
     """
     >>> g = Graph.new()
     >>> from . import dates
@@ -39,7 +35,7 @@ class align_d0_date(align_d0_date_kw, Node.D0_Date):
     ...     g = done()
     ...
     >>> es = map(Event.zero, (r0, r1, r2))
-    >>> day = lambda d: "N" if d is None else d.day
+    >>> day = lambda d: d.day if isinstance(d, dt.date) else "N"
     >>> for g, es, _ in batch_until(
     ...     g, lambda _, e: e.ref.i == 0, *es, n=5, next=True, iter=True
     ... )():
@@ -57,14 +53,13 @@ class align_d0_date(align_d0_date_kw, Node.D0_Date):
     4.0 5 5 5 4 N
     """
 
-
-    DEF: ClassVar[Defn] = define.node(
-        Node.Scalar_Date, align_d0_date_kw
-    )
+    v: Ref.Scalar_Date
+    to: Ref.Any
+    tx: float
 
     @classmethod
     def new(cls, v: Ref.Scalar_Date, to: Ref.Any, tx=10e-6):
-        return cls(v=v, to=to, tx=tx)
+        return cls("align_d0_date", v=v, to=to, tx=tx)
 
     def __call__(self, event: Event, graph: Graph):
         if event.prev is None:
@@ -72,17 +67,13 @@ class align_d0_date(align_d0_date_kw, Node.D0_Date):
                 event.t
             )
         return self.v.history(graph).last_between(
-            event.prev.t + self.tx, event.t
+            event.prev.t + self.tx, event.t, strict=False
         )
 
 
-class align_d0_f64_kw(NamedTuple):
-    v: Ref.Scalar_F64
-    to: Ref.Any
-    tx: float
 
-
-class align_d0_f64(align_d0_f64_kw, Node.D0_F64):
+@dataclass(frozen=True)
+class align_d0_f64(Node.D0_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -113,13 +104,13 @@ class align_d0_f64(align_d0_f64_kw, Node.D0_F64):
     4.0 0.27 -1.37 nan 1.32 1.32
     """
 
-    DEF: ClassVar[Defn] = define.node(
-        Node.Scalar_F64, align_d0_f64_kw
-    )
+    v: Ref.Scalar_F64
+    to: Ref.Any
+    tx: float
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, to: Ref.Any, tx=10e-6):
-        return cls(v=v, to=to, tx=tx)
+        return cls("align_d0_f64", v=v, to=to, tx=tx)
 
     def __call__(self, event: Event, graph: Graph):
         if event.prev is None:
@@ -130,30 +121,26 @@ class align_d0_f64(align_d0_f64_kw, Node.D0_F64):
             except:
                 return np.nan
         return self.v.history(graph).last_between(
-            event.prev.t + self.tx, event.t
+            event.prev.t + self.tx, event.t, strict=False
         )
 
 
 #  ------------------
 
 
-class lag_d0_f64_kw(NamedTuple):
+
+
+# NOTE: probably used after align
+@dataclass(frozen=True)
+class lag_d0_f64(Node.Scalar_F64):
     type: str
     #
     v: Ref.Scalar_F64
     w: int
 
-
-# NOTE: probably used after align
-class lag_d0_f64(lag_d0_f64_kw, Node.Scalar_F64):
-
-    DEF: ClassVar[Defn] = define.node(
-        Node.Scalar_F64, lag_d0_f64_kw
-    )
-
     @classmethod
     def new(cls, v: Ref.Scalar_F64, w: int):
-        return cls(cls.DEF.name, v=v, w=w)
+        return cls("lag_d0_f64", v=v, w=w)
 
     def __call__(self, event: Event, graph: Graph):
         return self.v.history(graph).last_n_before(
@@ -161,23 +148,19 @@ class lag_d0_f64(lag_d0_f64_kw, Node.Scalar_F64):
         )[0]
 
 
-class lag_d0_date_kw(NamedTuple):
+
+
+# NOTE: probably used after align
+@dataclass(frozen=True)
+class lag_d0_date(Node.Scalar_Date):
     type: str
     #
     v: Ref.Scalar_Date
     w: int
 
-
-# NOTE: probably used after align
-class lag_d0_date(lag_d0_date_kw, Node.Scalar_Date):
-
-    DEF: ClassVar[Defn] = define.node(
-        Node.Scalar_Date, lag_d0_date_kw
-    )
-
     @classmethod
     def new(cls, v: Ref.Scalar_Date, w: int):
-        return cls(cls.DEF.name, v=v, w=w)
+        return cls("lag_d0_date", v=v, w=w)
 
     def __call__(self, event: Event, graph: Graph):
         return self.v.history(graph).last_n_before(

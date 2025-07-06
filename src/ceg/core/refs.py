@@ -4,6 +4,7 @@ import datetime as dt
 
 import abc
 from typing import (
+    Any,
     NamedTuple,
     Protocol,
     Type,
@@ -15,6 +16,7 @@ from typing import (
 
 import numpy as np
 
+from .types import dataclass, replace
 from .histories import History, Last, Unbounded, V
 
 #  ------------------
@@ -79,11 +81,11 @@ def history(
 
 #  ------------------
 
-
-class Scope(NamedTuple):
+@dataclass(frozen=True)
+class Scope:
     required: bool | int
 
-
+@dataclass(frozen=True)
 class RefInterface(abc.ABC):
     i: int
     slot: int | None
@@ -93,6 +95,11 @@ class RefInterface(abc.ABC):
         if not isinstance(other, RefInterface):
             return False
         return self.i == other.i
+
+    def __lt__(self, other: Any):
+        if isinstance(other, RefInterface):
+            return self.i < other.i
+        raise ValueError((self, other))
 
     @abc.abstractmethod
     @overload
@@ -114,30 +121,6 @@ class RefInterface(abc.ABC):
     ) -> History.Any | None: ...
 
     @classmethod
-    @abc.abstractclassmethod
-    def new(
-        cls: Type[R],
-        i: int,
-        slot: int | None = None,
-        scope: Scope | None = None,
-    ) -> R: ...
-
-    @abc.abstractmethod
-    def select(self, last: bool | int) -> RefInterface: ...
-
-
-class RefKwargs(NamedTuple):
-    """
-    NamedTuple direct subclasses can only have a single parent (NamedTuple)\n
-    however, we *can* subclass a *subclass* of NamedTuple (but the fields are fixed by the parent)\n
-    hence, here we define a NamedTuple interface that we can inherit from\n
-    """
-
-    i: int
-    slot: int | None
-    scope: Scope | None
-
-    @classmethod
     def new(
         cls,
         i: int,
@@ -147,17 +130,20 @@ class RefKwargs(NamedTuple):
         return cls(i, slot, scope)
 
     def _select(self, last: bool | int):
-        return self._replace(
-            scope=Scope(required=0 if not last else last)
+        return replace(
+            self, scope=Scope(required=0 if not last else last)
         )
 
+    @abc.abstractmethod
+    def select(self, last: bool | int) -> RefInterface: ...
 
 R = TypeVar("R", bound=RefInterface)
 
 #  ------------------
 
 
-class Ref_D0_Date(RefKwargs, RefInterface):
+@dataclass(frozen=True)
+class Ref_D0_Date(RefInterface):
 
     def select(self, last: bool | int) -> Ref_D0_Date:
         return self._select(last)
@@ -181,11 +167,12 @@ class Ref_D0_Date(RefKwargs, RefInterface):
             g, self.i, History.D0_Date, strict, self.slot
         )
 
-    def last_before(self, g: GraphInterface, t: float) -> dt.date | None:
+    def last_before(self, g: GraphInterface, t: float):
         return self.history(g).last_before(t)
 
 
-class Ref_D0_F64(RefKwargs, RefInterface):
+@dataclass(frozen=True)
+class Ref_D0_F64(RefInterface):
 
     def select(self, last: bool | int) -> Ref_D0_F64:
         return self._select(last)
@@ -216,7 +203,8 @@ class Ref_D0_F64(RefKwargs, RefInterface):
 #  ------------------
 
 
-class Ref_D1_Date(RefKwargs, RefInterface):
+@dataclass(frozen=True)
+class Ref_D1_Date(RefInterface):
 
     def select(self, last: bool | int) -> Ref_D1_Date:
         return self._select(last)
@@ -241,7 +229,8 @@ class Ref_D1_Date(RefKwargs, RefInterface):
         )
 
 
-class Ref_D1_F64(RefKwargs, RefInterface):
+@dataclass(frozen=True)
+class Ref_D1_F64(RefInterface):
 
     def select(self, last: bool | int) -> Ref_D1_F64:
         return self._select(last)
@@ -269,7 +258,8 @@ class Ref_D1_F64(RefKwargs, RefInterface):
 #  ------------------
 
 
-class Ref_D2_F64(RefKwargs, RefInterface):
+@dataclass(frozen=True)
+class Ref_D2_F64(RefInterface):
 
     def select(self, last: bool | int) -> Ref_D2_F64:
         return self._select(last)
@@ -295,7 +285,8 @@ class Ref_D2_F64(RefKwargs, RefInterface):
 #  ------------------
 
 
-class Ref_D1_F64_D2_F64(RefKwargs, RefInterface):
+@dataclass(frozen=True)
+class Ref_D1_F64_D2_F64(RefInterface):
 
     def select(self, last: bool | int) -> Ref_D1_F64_D2_F64:
         return self._select(last)
@@ -344,7 +335,8 @@ class Ref_D1_F64_D2_F64(RefKwargs, RefInterface):
         else:
             raise ValueError(self)
 
-class Ref_D0_F64_3(RefKwargs, RefInterface):
+@dataclass(frozen=True)
+class Ref_D0_F64_3(RefInterface):
 
     def select(self, last: bool | int) -> Ref_D0_F64_3:
         return self._select(last)
@@ -413,7 +405,8 @@ class Ref_D0_F64_3(RefKwargs, RefInterface):
         else:
             raise ValueError(self)
 
-class Ref_D0_F64_4(RefKwargs, RefInterface):
+@dataclass(frozen=True)
+class Ref_D0_F64_4(RefInterface):
 
     def select(self, last: bool | int) -> Ref_D0_F64_4:
         return self._select(last)
@@ -630,6 +623,16 @@ class Ref:
         return Ref.D1_F64.new(i, slot)
 
     @classmethod
+    def d2_f64(
+        cls,
+        i: int | Ref.Any,
+        slot: int | None = None
+    ) -> Ref_D2_F64:
+        if isinstance(i, Ref.Any):
+            return cast(Ref.D2_F64, i)
+        return Ref.D2_F64.new(i, slot)
+
+    @classmethod
     def d0_date(
         cls,
         i: int | Ref.Any,
@@ -638,6 +641,16 @@ class Ref:
         if isinstance(i, Ref.Any):
             return cast(Ref.D0_Date, i)
         return Ref.D0_Date.new(i, slot)
+
+    @classmethod
+    def d1_date(
+        cls,
+        i: int | Ref.Any,
+        slot: int | None = None
+    ) -> Ref_D1_Date:
+        if isinstance(i, Ref.Any):
+            return cast(Ref.D1_Date, i)
+        return Ref.D1_Date.new(i, slot)
 
     @classmethod
     def d0_f64_4(
@@ -658,5 +671,15 @@ class Ref:
         if isinstance(i, Ref.Any):
             return cast(Ref.D0_F64_3, i)
         return Ref.D0_F64_3.new(i, slot)
+
+    @classmethod
+    def d1_f64_d2_f64(
+        cls,
+        i: int | Ref.Any,
+        slot: int | None = None
+    ) -> Ref_D1_F64_D2_F64:
+        if isinstance(i, Ref.Any):
+            return cast(Ref.D1_F64_D2_F64, i)
+        return Ref.D1_F64_D2_F64.new(i, slot)
 
 #  ------------------

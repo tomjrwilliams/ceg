@@ -35,7 +35,6 @@ from .refs import Ref, Scope, Data, R
 from .nodes import (
     N,
     Node,
-    Defn,
     Event,
     yield_params,
     yield_param_keys,
@@ -79,24 +78,11 @@ DStream = frozendict[int, tuple[int, ...]]
 State = frozendict[Key, Value]
 
 
-class GraphKW(NamedTuple):
-
-    queue: list[Event]  # heapify
-    nodes: TNodes
-    guards: TGuards
-    index: frozendict[Node.Any, int]
-    ustream: UStream  # params
-    dstream: DStream  # dependents
-    required: frozendict[int, int]
-    data: Data
-    state: State
-
-
 F = ParamSpec("F")
 FRes = TypeVar("FRes")
 
 
-class Graph(GraphKW):
+class Graph(NamedTuple):
     """
     queue: list
     nodes: tuple
@@ -108,6 +94,15 @@ class Graph(GraphKW):
     data: Data
     state: State
     """
+    queue: list[Event]  # heapify
+    nodes: TNodes
+    guards: TGuards
+    index: frozendict[Node.Any, int]
+    ustream: UStream  # params
+    dstream: DStream  # dependents
+    required: frozendict[int, int]
+    data: Data
+    state: State
 
     def pipe(
         self,
@@ -142,7 +137,7 @@ class Graph(GraphKW):
 
     def bind(
         self,
-        node: Node.Any[R, N] | None = None,
+        node: Node.Any[R] | None = None,
         ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
         keep: int | None = 1,
@@ -180,7 +175,7 @@ class MutableBind(Protocol):
 
     def __call__(
         self,
-        node: Node.Any[R, N] | None = None,
+        node: Node.Any[R] | None = None,
         ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
         keep: int | None = 1,
@@ -191,7 +186,7 @@ class ImplicitBind(Protocol):
 
     def __call__(
         self,
-        node: Node.Any[R, N] | None = None,
+        node: Node.Any[R] | None = None,
         ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
         keep: int | None = 1,
@@ -240,7 +235,7 @@ def graph_context(
     DONE: bool = False
 
     def bind(
-        node: Node.Any[R, N] | None = None,
+        node: Node.Any[R] | None = None,
         ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
         keep: int | None = 1,
@@ -289,7 +284,7 @@ def graph_context(
 
 
 def init_node(
-    node: Node.Any[R, N],
+    node: Node.Any[R],
     ref: R,
     nodes: TNodes,
     guards: TGuards,
@@ -358,7 +353,7 @@ def init_node(
 
 def bind(
     graph: Graph,
-    node: Node.Any[R, N] | None = None,
+    node: Node.Any[R] | None = None,
     ref: R | Type[R] | None = None,
     when: Guard.Any[N] | None = None,
     keep: bool | int | None = 1,
@@ -493,25 +488,6 @@ class fs:
 
 Fs = TypeVar("Fs", bound=fs)
 
-# class HasNew(Generic[O, P, R, Fs]):
-# class HasNew(Generic[O, P, R]):
-
-#     # def __call__(self, NAME: str, *args: P.args, **kwargs: P.kwargs) -> O: ...
-
-#     # @classmethod
-#     # def fs(cls) -> Type[Fs]: ...
-
-#     @classmethod
-#     def ref(cls, i: int | Ref.Any, slot: int | None = None) -> R: ...
-
-#     @classmethod
-#     def new(cls, *args: P.args, **kwargs: P.kwargs) -> O: ...
-
-#     @classmethod
-#     def bind(cls, g: Graph, *args: P.args, **kwargs: P.kwargs) -> tuple[Graph, R]:
-#         g, r = g.bind(node=cls.new(*args, **kwargs))
-#         return g, cls.ref(r)
-
 def prepend_argument(
     f,
     f_wrapped: Callable[P, PRes],
@@ -554,22 +530,6 @@ class define:
         return Annotation(type)
 
     @staticmethod
-    def node(
-        t: Type[NodeInterface],
-        t_kw: Type[NamedTuple],
-    ):
-        params = tuple(yield_param_keys(t_kw))
-
-        assert t_kw.__name__[-3:].lower() == "_kw", t_kw
-        name = t_kw.__name__[:-3]
-
-        return Defn(
-            name=name,
-            params=params,  # the keys
-            # dims, oritentation, etc. (from t)
-        )
-
-    @staticmethod
     def bind_from_new(
         new: Callable[P, Node.Any],
         ref: Callable[..., R],
@@ -578,6 +538,8 @@ class define:
         Concatenate[Graph, P], 
         tuple[Graph, R]
     ]:
+        if isinstance(new, classmethod):
+            new = new.__func__
         @wraps(new)
         def bind(
             # cls,

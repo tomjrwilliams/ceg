@@ -9,7 +9,7 @@ from ..core import (
     Ref,
     Event,
     Loop,
-    Defn,
+    dataclass,
     define,
     steps,
     batches,
@@ -26,28 +26,14 @@ logger = logging.Logger(__file__)
 # various activations (sigmoid, rev_sigmoid, relu, etc.)
 
 
-class abs_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
 
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64):
-        return abs("abs", v=v)
-
-
-class abs(abs_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class abs(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
-    ...     g, mean=1, keep=2
-    ... )
+    >>> g, r0 = rand.gaussian.walk(g, keep=2)
     >>> with g.implicit() as (bind, done):
     ...     r1 = bind(abs.new(r0))
     ...     g = done()
@@ -62,17 +48,22 @@ class abs(abs_kw, Node.Scalar_F64):
     ...         r1.history(g).last_before(t), 2
     ...     )
     ...     print(v0, v1)
-    1.13 nan
-    1.99 0.77
-    3.63 0.82
-    4.74 0.3
-    5.2 0.1
+    0.13 0.13
+    -0.01 0.01
+    0.63 0.63
+    0.74 0.74
+    0.2 0.2
     """
 
-    DEF: ClassVar[Defn] = define.node(
-        Node.Scalar_F64, abs_kw
-    )
-    bind = define.bind_from_new(abs_kw.new, abs_kw.ref)
+    type: str
+    #
+    v: Ref.Scalar_F64
+
+    @classmethod
+    def new(cls, v: Ref.Scalar_F64):
+        return abs("abs", v=v)
+
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     # @classmethod
     # def bind(cls, g: Graph, v: Ref.Scalar_F64, keep: int = 4):
@@ -89,29 +80,13 @@ class abs(abs_kw, Node.Scalar_F64):
 
         return v0 * np.sign(v0)
 
-
-class abs_change_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64):
-        return abs_change("abs_change", v=v)
-
-
-class abs_change(abs_change_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class abs_change(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
-    ...     g, mean=1, keep=2
-    ... )
+    >>> g, r0 = rand.gaussian.walk(g)
     >>> with g.implicit() as (bind, done):
     ...     r1 = bind(abs_change.new(r0))
     ...     g = done()
@@ -126,17 +101,20 @@ class abs_change(abs_change_kw, Node.Scalar_F64):
     ...         r1.history(g).last_before(t), 2
     ...     )
     ...     print(v0, v1)
-    1.13 nan
-    1.99 0.77
-    3.63 0.82
-    4.74 0.3
-    5.2 0.1
+    0.13 nan
+    -0.01 -0.13
+    0.63 0.64
+    0.74 0.1
+    0.2 -0.54
     """
+    type: str
+    #
+    v: Ref.Scalar_F64
 
-    DEF: ClassVar[Defn] = define.node(
-        Node.Scalar_F64, abs_change_kw
-    )
-    bind = define.bind_from_new(abs_change_kw.new, abs_change_kw.ref)
+    @classmethod
+    def new(cls, v: Ref.Scalar_F64):
+        return abs_change("abs_change", v=v)
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     # @classmethod
     # def bind(cls, g: Graph, v: Ref.Scalar_F64, keep: int = 4):
@@ -157,21 +135,9 @@ class abs_change(abs_change_kw, Node.Scalar_F64):
             
         return v0 - v1
 
-class pct_change_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
 
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64):
-        return pct_change("pct_change", v=v)
-
-
-class pct_change(pct_change_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class pct_change(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -199,11 +165,14 @@ class pct_change(pct_change_kw, Node.Scalar_F64):
     4.74 0.3
     5.2 0.1
     """
+    type: str
+    #
+    v: Ref.Scalar_F64
 
-    DEF: ClassVar[Defn] = define.node(
-        Node.Scalar_F64, pct_change_kw
-    )
-    bind = define.bind_from_new(pct_change_kw.new, pct_change_kw.ref)
+    @classmethod
+    def new(cls, v: Ref.Scalar_F64):
+        return pct_change("pct_change", v=v)
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     # @classmethod
     # def bind(cls, g: Graph, v: Ref.Scalar_F64, keep: int = 4):
@@ -225,13 +194,9 @@ class pct_change(pct_change_kw, Node.Scalar_F64):
 
 
 
-class sqrt_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
 
-
-class sqrt(sqrt_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class sqrt(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -258,11 +223,13 @@ class sqrt(sqrt_kw, Node.Scalar_F64):
     0.2 0.45
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, sqrt_kw)
+    type: str
+    #
+    v: Ref.Scalar_F64
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64):
-        return cls(cls.DEF.name, v=v)
+        return cls("sqrt", v=v)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
@@ -273,13 +240,8 @@ class sqrt(sqrt_kw, Node.Scalar_F64):
         return np.sqrt(v)
 
 
-class sq_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-
-
-class sq(sq_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class sq(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -305,12 +267,13 @@ class sq(sq_kw, Node.Scalar_F64):
     0.74 0.55
     0.2 0.04
     """
-
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, sq_kw)
+    type: str
+    #
+    v: Ref.Scalar_F64
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64):
-        return cls(cls.DEF.name, v=v)
+        return cls("sq", v=v)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
@@ -321,21 +284,9 @@ class sq(sq_kw, Node.Scalar_F64):
         return np.square(v)
 
 
-class cum_sum_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
 
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64):
-        return cum_sum("cum_sum", v=v.select(4))
-
-
-class cum_sum(cum_sum_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class cum_sum(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -365,11 +316,14 @@ class cum_sum(cum_sum_kw, Node.Scalar_F64):
     0.1 0.74
     -0.54 0.2
     """
+    type: str
+    #
+    v: Ref.Scalar_F64
+    @classmethod
+    def new(cls, v: Ref.Scalar_F64):
+        return cum_sum("cum_sum", v=v.select(4))
 
-    DEF: ClassVar[Defn] = define.node(
-        Node.Scalar_F64, cum_sum_kw
-    )
-    bind = define.bind_from_new(cum_sum_kw.new, cum_sum_kw.ref)
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         hist = self.v.history(graph)
@@ -385,14 +339,9 @@ class cum_sum(cum_sum_kw, Node.Scalar_F64):
         return prev + v
 
 
-class cum_prod_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.Scalar_F64
-    a: float
 
-
-class cum_prod(cum_prod_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class cum_prod(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -423,15 +372,15 @@ class cum_prod(cum_prod_kw, Node.Scalar_F64):
     0.1 1.77
     -0.54 0.82
     """
-
-    DEF: ClassVar[Defn] = define.node(
-        Node.Scalar_F64, cum_prod_kw
-    )
+    type: str
+    #
+    v: Ref.Scalar_F64
+    a: float
 
     @classmethod
     def new(cls, v: Ref.Scalar_F64, a: float = 0.0):
         # NOTE: eg. a = 1 to compound pct rx
-        return cls(cls.DEF.name, v=v, a=a)
+        return cls("cum_prod", v=v, a=a)
 
     def __call__(self, event: Event, graph: Graph):
         hist = self.v.history(graph)

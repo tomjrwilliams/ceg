@@ -18,6 +18,7 @@ import datetime as dt
 from frozendict import frozendict
 import numpy as np
 
+from .types import dataclass, replace
 from .refs import Ref, R, GraphInterface
 from .nodes import Event, Node, N
 
@@ -30,11 +31,9 @@ logger = logging.Logger(__file__)
 class GuardMutable:
     prev: Event | None = None
 
-
+@dataclass(frozen=True)
 class GuardInterface(abc.ABC, Generic[N]):
-
-    @abc.abstractproperty
-    def mut(self) -> GuardMutable: ...
+    mut: GuardMutable
 
     @property
     def prev(self):
@@ -87,18 +86,12 @@ G = TypeVar("G", bound=GuardInterface)
 #  ------------------
 
 
-class AnyN(NamedTuple):
-    pass
-
-
-class ReadyAllKW(NamedTuple):
+@dataclass(frozen=True)
+class ReadyAll(GuardInterface[N]):
     mut: GuardMutable
     params: tuple[int, ...]
     ts: list[float]
     queue: list[tuple[float, int]]
-
-
-class ReadyAll(ReadyAllKW, GuardInterface[N]):
 
     @classmethod
     def new(cls) -> ReadyAll:
@@ -113,7 +106,7 @@ class ReadyAll(ReadyAllKW, GuardInterface[N]):
         queue = []
         heapify(ts)
         heapify(queue)
-        return self._replace(
+        return replace(self, 
             params=tuple(params.keys()),
             ts=ts,
             queue=queue,
@@ -145,12 +138,10 @@ class ReadyAll(ReadyAllKW, GuardInterface[N]):
             return self.set_prev(Event.new(t, ref), event)
         return None
 
-class ReadyRefKW(NamedTuple):
+@dataclass(frozen=True)
+class ReadyRef(GuardInterface[N]):
     mut: GuardMutable
     ref: Ref.Any
-
-
-class ReadyRef(ReadyRefKW, GuardInterface[N]):
 
     @classmethod
     def new(cls, ref: Ref.Any) -> ReadyAll:
@@ -176,12 +167,10 @@ class ReadyRef(ReadyRefKW, GuardInterface[N]):
             ), event)
         return None
 
-class NotNaNRefKW(NamedTuple):
+@dataclass(frozen=True)
+class NotNaNRef(GuardInterface[N]):
     mut: GuardMutable
     ref: Ref.Any
-
-
-class NotNaNRef(NotNaNRefKW, GuardInterface[N]):
 
     @classmethod
     def new(cls, ref: Ref.Any) -> ReadyAll:
@@ -214,12 +203,11 @@ class NotNaNRef(NotNaNRefKW, GuardInterface[N]):
 
 #  ------------------
 
-class LoopConstKw(NamedTuple):
+
+@dataclass(frozen=True)
+class LoopConst(GuardInterface[N]):
     mut: GuardMutable
     step: float
-
-
-class LoopConst(LoopConstKw, GuardInterface[N]):
 
     @classmethod
     def new(cls, step: float) -> LoopConst:
@@ -247,15 +235,12 @@ class LoopConst(LoopConstKw, GuardInterface[N]):
             event,
         )
 
-
-class LoopUntilDateKw(NamedTuple):
+@dataclass(frozen=True)
+class LoopUntilDate(GuardInterface[N]):
     mut: GuardMutable
     step: float
     until: dt.date
     date: Ref.Scalar_Date
-
-
-class LoopUntilDate(LoopUntilDateKw, GuardInterface[N]):
 
     @classmethod
     def new(
@@ -295,16 +280,13 @@ class LoopUntilDate(LoopUntilDateKw, GuardInterface[N]):
         )
 
 
-class LoopRandKw(NamedTuple):
+rng = np.random.default_rng(66642666)
+
+@dataclass(frozen=True)
+class LoopRand(GuardInterface[N]):
     mut: GuardMutable
     dist: str
     params: tuple[float, ...]
-
-
-rng = np.random.default_rng(66642666)
-
-
-class LoopRand(LoopRandKw, GuardInterface[N]):
 
     @classmethod
     def new(
@@ -338,8 +320,8 @@ class LoopRand(LoopRandKw, GuardInterface[N]):
 
 #  ------------------
 
-
-class ByDateKW(NamedTuple):
+@dataclass(frozen=True)
+class ByDateInterface(GuardInterface[N]):
     mut: GuardMutable
     date: Ref.Scalar_Date
     last: int | None
@@ -356,24 +338,24 @@ class ByDateKW(NamedTuple):
         if not len(params):
             return self
         try:
-            return self._replace(last=max(params.keys()))
+            return replace(self, last=max(params.keys()))
         except:
             raise ValueError(params)
 
-
-class WeekStart(ByDateKW, GuardInterface[N]):
+@dataclass(frozen=True)
+class WeekStart(ByDateInterface[N]):
     pass
 
-
-class WeekEnd(ByDateKW, GuardInterface[N]):
+@dataclass(frozen=True)
+class WeekEnd(ByDateInterface[N]):
     pass
 
-
-class MonthStart(ByDateKW, GuardInterface[N]):
+@dataclass(frozen=True)
+class MonthStart(ByDateInterface[N]):
     pass
 
-
-class MonthEnd(ByDateKW, GuardInterface[N]):
+@dataclass(frozen=True)
+class MonthEnd(ByDateInterface[N]):
 
     def next(
         self,
@@ -400,20 +382,20 @@ class MonthEnd(ByDateKW, GuardInterface[N]):
             )
         return None
 
-
-class QuarterStart(ByDateKW, GuardInterface[N]):
+@dataclass(frozen=True)
+class QuarterStart(ByDateInterface[N]):
     pass
 
-
-class QuarterEnd(ByDateKW, GuardInterface[N]):
+@dataclass(frozen=True)
+class QuarterEnd(ByDateInterface[N]):
     pass
 
-
-class YearStart(ByDateKW, GuardInterface[N]):
+@dataclass(frozen=True)
+class YearStart(ByDateInterface[N]):
     pass
 
-
-class YearEnd(ByDateKW, GuardInterface[N]):
+@dataclass(frozen=True)
+class YearEnd(ByDateInterface[N]):
     pass
 
 
@@ -435,8 +417,8 @@ class YearEnd(ByDateKW, GuardInterface[N]):
 
 #  ------------------
 
-
-class ByValueKW(NamedTuple):
+@dataclass(frozen=True)
+class ByValueInterface(GuardInterface[N]):
     mut: GuardMutable
     value: Ref.Any
     last: int | None
@@ -454,10 +436,10 @@ class ByValueKW(NamedTuple):
     ):
         if not len(params):
             return self
-        return self._replace(last=max(params.keys()))
+        return replace(self, last=max(params.keys()))
 
-
-class SignChange(ByValueKW, GuardInterface[N]):
+@dataclass(frozen=True)
+class SignChange(ByValueInterface[N]):
 
     def next(
         self,

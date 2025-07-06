@@ -12,7 +12,7 @@ from ..core import (
     Ref,
     Event,
     Loop,
-    Defn,
+    dataclass,
     define,
     steps,
 )
@@ -22,17 +22,28 @@ from ..core import (
 import datetime as dt
 
 
-class daily_kw(NamedTuple):
+
+@dataclass(frozen=True)
+class daily(Node.Scalar_Date):
+    """
+    >>> start = dt.date(2025, 1, 1)
+    >>> end = dt.date(2025, 1, 6)
+    >>> g, r = Graph.new().pipe(
+    ...     daily.loop, start, end
+    ... )
+    >>> g, e, t = g.pipe(
+    ...     steps, Event.zero(r), n=6
+    ... ).last()
+    >>> e.ref.history(g).last_before(t)
+    datetime.date(2025, 1, 6)
+    """
+
     type: str
     #
     prev: Ref.Scalar_Date
     start: dt.date
     end: dt.date
     n: int
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_Date:
-        return Ref.d0_date(i, slot=slot)
 
     @classmethod
     def new(
@@ -62,21 +73,6 @@ class daily_kw(NamedTuple):
         ).pipe(g.bind, r, Loop.UntilDate.new(step, end, r))
         return g, cast(Ref.Scalar_Date, r)
 
-class daily(daily_kw, Node.Scalar_Date):
-    """
-    >>> start = dt.date(2025, 1, 1)
-    >>> end = dt.date(2025, 1, 6)
-    >>> g, r = Graph.new().pipe(
-    ...     daily.loop, start, end
-    ... )
-    >>> g, e, t = g.pipe(
-    ...     steps, Event.zero(r), n=6
-    ... ).last()
-    >>> e.ref.history(g).last_before(t)
-    datetime.date(2025, 1, 6)
-    """
-
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_Date, daily_kw)
 
     def __call__(self, event: Event, graph: Graph):
         h = self.prev.history(graph, strict=False)

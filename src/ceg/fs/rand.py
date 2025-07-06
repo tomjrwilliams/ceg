@@ -12,7 +12,7 @@ from ..core import (
     Ref,
     Event,
     Loop,
-    Defn,
+    dataclass,
     define,
     steps,
 )
@@ -47,47 +47,9 @@ def rng(seed: int, reset: bool = False):
 
 #  ------------------
 
-# TODO: change to _def?
-class gaussian_kw(NamedTuple):
-    type: str
-    #
-    mean: float
-    std: float
-    seed: int
-    v: Ref.D0_F64 | None
 
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(
-        cls,
-        mean: float = 0.0,
-        std: float = 1.0,
-        seed: int = 0,
-        v: Ref.D0_F64 | None = None,
-    ):
-        return gaussian("gaussian", mean=mean, std=std, seed=seed, v=v)
-    
-    @classmethod
-    def walk(
-        cls,
-        g: Graph,
-        mean: float = 0.0,
-        std: float = 1.0,
-        seed: int = 0,
-        step=1.0,
-        keep: int = 1,
-    ):
-        # TODO: pass in walk start value
-        g, r = g.bind(None, Ref.Scalar_F64)
-        g, r = gaussian.new(
-            mean, std, seed, v=r.select(last=keep)
-        ).pipe(g.bind, r, Loop.Const.new(step))
-        return g, cast(Ref.Scalar_F64, r)
-
-class gaussian(gaussian_kw, Node.D0_F64):
+@dataclass(frozen=True)
+class gaussian(Node.D0_F64):
     """
     gaussian noise (pass v=self to get random walk)
     mean: float
@@ -123,8 +85,39 @@ class gaussian(gaussian_kw, Node.D0_F64):
     -0.0064
     0.634
     """
+    type: str
+    #
+    mean: float
+    std: float
+    seed: int
+    v: Ref.D0_F64 | None
 
-    DEF: ClassVar[Defn] = define.node(Node.D0_F64, gaussian_kw)
+    @classmethod
+    def new(
+        cls,
+        mean: float = 0.0,
+        std: float = 1.0,
+        seed: int = 0,
+        v: Ref.D0_F64 | None = None,
+    ):
+        return gaussian("gaussian", mean=mean, std=std, seed=seed, v=v)
+    
+    @classmethod
+    def walk(
+        cls,
+        g: Graph,
+        mean: float = 0.0,
+        std: float = 1.0,
+        seed: int = 0,
+        step=1.0,
+        keep: int = 2,
+    ):
+        # TODO: pass in walk start value
+        g, r = g.bind(None, Ref.Scalar_F64)
+        g, r = gaussian.new(
+            mean, std, seed, v=r.select(last=keep)
+        ).pipe(g.bind, r, Loop.Const.new(step))
+        return g, cast(Ref.Scalar_F64, r)
 
     def __call__(self, event: Event, graph: Graph):
         step = rng(self.seed).normal(
@@ -137,17 +130,9 @@ class gaussian(gaussian_kw, Node.D0_F64):
             return step
         return v + step
 
-class gaussian_1d_kw(NamedTuple):
-    type: str
-    #
-    shape: tuple[int]
-    mean: float
-    std: float
-    seed: int
-    v: Ref.D1_F64 | None
 
-
-class gaussian_1d(gaussian_1d_kw, Node.D1_F64):
+@dataclass(frozen=True)
+class gaussian_1d(Node.D1_F64):
     """
     gaussian noise vector (pass v=self to get random walk)
     mean: float
@@ -184,8 +169,13 @@ class gaussian_1d(gaussian_1d_kw, Node.D1_F64):
     [ 0.7662 -0.0272]
     [0.2305 0.3344]
     """
-
-    DEF: ClassVar[Defn] = define.node(Node.D1_F64, gaussian_kw)
+    type: str
+    #
+    shape: tuple[int]
+    mean: float
+    std: float
+    seed: int
+    v: Ref.D1_F64 | None
 
     @classmethod
     def new(
@@ -197,7 +187,7 @@ class gaussian_1d(gaussian_1d_kw, Node.D1_F64):
         v: Ref.D1_F64 | None = None,
     ):
         return cls(
-            cls.DEF.name,
+            "gaussian_1d",
             shape,
             mean=mean,
             std=std,
@@ -231,18 +221,11 @@ class gaussian_1d(gaussian_1d_kw, Node.D1_F64):
         v = self.v.history(graph).last_before(event.t)
         return v + step
 
-
-class gaussian_2d_kw(NamedTuple):
-    type: str
-    #
-    shape: tuple[int, int]
-    mean: float
-    std: float
-    seed: int
-    v: Ref.D2_F64 | None
+gaussian_vec = gaussian_1d
 
 
-class gaussian_2d(gaussian_2d_kw, Node.D2_F64):
+@dataclass(frozen=True)
+class gaussian_2d(Node.D2_F64):
     """
     gaussian noise matrix (pass v=self to get random walk)
     mean: float
@@ -286,7 +269,13 @@ class gaussian_2d(gaussian_2d_kw, Node.D2_F64):
      [ 1.3211  1.0933]]
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.D2_F64, gaussian_kw)
+    type: str
+    #
+    shape: tuple[int, int]
+    mean: float
+    std: float
+    seed: int
+    v: Ref.D2_F64 | None
 
     @classmethod
     def new(
@@ -298,7 +287,7 @@ class gaussian_2d(gaussian_2d_kw, Node.D2_F64):
         v: Ref.D2_F64 | None = None,
     ):
         return cls(
-            cls.DEF.name,
+            "gaussian_2d",
             shape,
             mean=mean,
             std=std,
@@ -331,3 +320,5 @@ class gaussian_2d(gaussian_2d_kw, Node.D2_F64):
             return step
         v = self.v.history(graph).last_before(event.t)
         return v + step
+
+gaussian_mat = gaussian_2d

@@ -9,13 +9,13 @@ from ..core import (
     Ref,
     Event,
     Loop,
-    Defn,
+    dataclass,
     define,
     steps,
     batches,
 )
 
-from .rolling import ewm_kwargs, alpha
+from .rolling import alpha
 
 #  ------------------
 
@@ -25,18 +25,55 @@ from .rolling import ewm_kwargs, alpha
 
 
 
-class xo_mean_ew_rms_ew_kw(NamedTuple):
+
+@dataclass(frozen=True)
+class xo_mean_ew_rms_ew(Node.D0_F64_4):
+    """
+    >>> g = Graph.new()
+    >>> from . import rand
+    >>> _ = rand.rng(seed=0, reset=True)
+    >>> g, r0 = rand.gaussian.walk(
+    ...     g, mean=1, keep=3
+    ... )
+    >>> with g.implicit() as (bind, done):
+    ...     r1 = bind(xo_mean_ew_rms_ew.new(
+    ...         r0, span_f=4, span_s=12, span_v=6
+    ...     ), keep = 2)
+    ...     g = done()
+    ...
+    >>> for g, es, t in batches(
+    ...     g, Event.zero(r0), n=5, g=2, iter=True
+    ... )():
+    ...     v0 = round(
+    ...         r0.history(g).last_before(t), 2
+    ...     )
+    ...     v10 = round(
+    ...         r1.history(g, slot=0).last_before(t), 2
+    ...     )
+    ...     v11 = round(
+    ...         r1.history(g, slot=1).last_before(t), 2
+    ...     )
+    ...     v12 = round(
+    ...         r1.history(g, slot=2).last_before(t), 2
+    ...     )
+    ...     v13 = round(
+    ...         r1.history(g, slot=3).last_before(t), 2
+    ...     )
+    ...     print(v0, v10, v11, v12, v13)
+    1.13 0.0 1.13 1.13 1.13
+    1.99 0.2 1.47 1.26 1.06
+    3.63 0.57 2.34 1.62 1.25
+    4.74 0.99 3.3 2.1 1.21
+    5.2 1.4 4.06 2.58 1.05
+    """
+
     type: str
-    #
+    
     v: Ref.Scalar_F64
     span_f: float
     span_s: float
     span_v: float
     rx: str
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.D0_F64_4:
-        return Ref.d0_f64_4(i, slot=slot)
 
     @classmethod
     def new(
@@ -45,7 +82,7 @@ class xo_mean_ew_rms_ew_kw(NamedTuple):
         span_f: float,
         span_s: float,
         span_v: float,
-        rx: str = "pct"
+        rx: str = "abs"
     ):
         return xo_mean_ew_rms_ew(
             "xo_mean_ew_rms_ew", 
@@ -56,38 +93,7 @@ class xo_mean_ew_rms_ew_kw(NamedTuple):
             rx=rx
         )
 
-
-class xo_mean_ew_rms_ew(xo_mean_ew_rms_ew_kw, Node.D0_F64_4):
-    """
-    >>> g = Graph.new()
-    >>> from . import rand
-    >>> _ = rand.rng(seed=0, reset=True)
-    >>> g, r0 = rand.gaussian.walk(
-    ...     g, mean=1, keep=3
-    ... )
-    >>> with g.implicit() as (bind, done):
-    ...     r1 = bind(rms_ew.new(r0, span=4),keep = 2)
-    ...     g = done()
-    ...
-    >>> for g, es, t in batches(
-    ...     g, Event.zero(r0), n=5, g=2, iter=True
-    ... )():
-    ...     v0 = round(
-    ...         r0.history(g).last_before(t), 2
-    ...     )
-    ...     v1 = round(
-    ...         r1.history(g).last_before(t), 2
-    ...     )
-    ...     print(v0, v1)
-    1.13 1.13
-    1.99 1.53
-    3.63 2.59
-    4.74 3.61
-    5.2 4.32
-    """
-
-    DEF: ClassVar[Defn] = define.node(Node.D0_F64_4, xo_mean_ew_rms_ew_kw)
-    bind = define.bind_from_new(xo_mean_ew_rms_ew_kw.new, xo_mean_ew_rms_ew_kw.ref)
+    bind = define.bind_from_new(new, Node.D0_F64_4.ref)
 
     def __call__(self, event: Event, graph: Graph):
 
@@ -95,8 +101,8 @@ class xo_mean_ew_rms_ew(xo_mean_ew_rms_ew_kw, Node.D0_F64_4):
 
         if event.prev is None:
             if v is None:
-                return v
-            return np.square(v)
+                return None
+            return 0., v, v, np.abs(v)
 
         rf: Ref.D0_F64_4 = cast(Ref.D0_F64_4, event.prev.ref)
 
@@ -107,7 +113,7 @@ class xo_mean_ew_rms_ew(xo_mean_ew_rms_ew_kw, Node.D0_F64_4):
         prev_vol = rf.history(graph, slot = 3).last_before(event.prev.t)
 
         if v is None or prev_v is None:
-            return None, prev_f, prev_s, prev_vol
+            return None
 
         # TODO: pass in the abs adjusted for pnl series and rms
         # to get in dollars
@@ -121,7 +127,7 @@ class xo_mean_ew_rms_ew(xo_mean_ew_rms_ew_kw, Node.D0_F64_4):
             or prev_s is None
             or prev_vol is None
         ):
-            return 0, v, v, np.square(v)
+            return 0., v, v, np.abs(v)
         
         alpha_f = alpha(self.span_f)
         alpha_s = alpha(self.span_s)
@@ -146,6 +152,8 @@ class xo_mean_ew_rms_ew(xo_mean_ew_rms_ew_kw, Node.D0_F64_4):
             ((1 - alpha_v) * prev_sq) + (alpha_v * v_sq)
         )
 
-        return (mu_f - mu_s) / vol, mu_f, mu_s, vol
+        xo = (mu_f - mu_s) / vol
+
+        return xo, mu_f, mu_s, vol
 
 #  ------------------

@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import abc
 from typing import (
-    Generic,
-    ClassVar,
-    Type,
     NamedTuple,
+    Generic,
+    Type,
     TypeVar,
     ParamSpec,
     Callable,
@@ -21,19 +20,21 @@ from typing import (
     cast,
 )
 
-from dataclasses import dataclass
-from heapq import heapify, heappush, heappop
-
 import datetime as dt
 
-from frozendict import frozendict
 import numpy as np
 
+from .types import dataclass, frozendict
 from .refs import Ref, R, GraphInterface, Scope
-
 
 #  ------------------
 
+V = np.ndarray | bool | int | float | dt.date | dt.datetime | None
+
+F = ParamSpec("F")
+FRes = TypeVar("FRes")
+
+#  ------------------
 
 class Event(NamedTuple):
     """
@@ -41,7 +42,6 @@ class Event(NamedTuple):
     ref: Ref.Any
     prev: Event | None
     """
-
     t: float
     ref: Ref.Any
     prev: Event | None
@@ -59,93 +59,12 @@ class Event(NamedTuple):
     def zero(cls, ref: Ref.Any, prev: Event | None = None):
         return cls(0., ref, prev=prev)
 
-
 #  ------------------
 
 
-def rec_yield_param(k, v: Ref.Any | Iterable | Any):
-    if isinstance(v, Ref.Any):
-        yield (k, v.i, v.scope)
-    elif isinstance(v, (tuple, Iterable)):
-        yield from rec_yield_params(k, v)
-
-
-def rec_yield_params(k: str, v: Iterable):
-    if isinstance(v, dict):
-        yield from rec_yield_params(k, v.keys())
-        yield from rec_yield_params(k, v.values())
-    elif isinstance(v, (tuple, Iterable)):
-        for vv in v:
-            yield from rec_yield_param(k, vv)
-
-
-def yield_params(
-    node: Node.Any,
-) -> Iterator[tuple[str, int, Scope | None]]:
-    for k in node.DEF.params:
-        v = getattr(node, k)
-        yield from rec_yield_param(k, v)
-
-
-def rec_yield_hint_types(hint):
-    try:
-        o = get_origin(hint)
-        yield o
-    except:
-        pass
-    try:
-        args = get_args(hint)
-        for a in args:
-            if a == Ellipsis:
-                continue
-            yield from rec_yield_hint_types(a)
-    except:
-        pass
-    yield hint
-
-
-def yield_param_keys(t_kw: Type[NamedTuple]):
-    seen: set[str] = set()
-    for k, h in get_type_hints(t_kw).items():
-        for h in rec_yield_hint_types(h):
-            if k in seen:
-                continue
-            if not isinstance(h, type):
-                continue
-            if issubclass(h, Ref.Any):
-                seen.add(k)
-                yield k
-
-
-#  ------------------
-
-
-class Defn(NamedTuple):
-    name: str
-    params: tuple[str, ...]
-
-#  ------------------
-
-N = TypeVar("N", bound=NamedTuple)
-
-V = np.ndarray | float
-
-F = ParamSpec("F")
-FRes = TypeVar("FRes")
-
-class NodeInterface(abc.ABC, Generic[R, N]):
-
-    DEF: ClassVar[Defn] = Defn("NULL", ())
-
-    @abc.abstractmethod
-    def pipe(
-        self,
-        f: Callable[
-            Concatenate[NodeInterface[R, N], F], FRes
-        ],
-        *args: F.args,
-        **kwargs: F.kwargs,
-    ) -> FRes: ...
+@dataclass(frozen=True)
+class NodeInterface(abc.ABC, Generic[R]):
+    type: str
 
     @classmethod
     def ref(cls, i: int | Ref.Any, slot: int | None = None) -> R: ...
@@ -156,16 +75,12 @@ class NodeInterface(abc.ABC, Generic[R, N]):
     ) -> V: ...
 
 
+N = TypeVar("N", bound=NodeInterface)
+
 #  ------------------
 
-
-class Node_NullKW(NamedTuple):
-    pass
-
-
-class Node_Null(
-    Node_NullKW, NodeInterface[Ref.Any, Node_NullKW]
-):
+@dataclass(frozen=True)
+class Node_Null(NodeInterface[Ref.Any]):
 
     def pipe(
         self,
@@ -175,10 +90,11 @@ class Node_Null(
     ) -> FRes:
         return f(self, *args, **kwargs)
 
+    @classmethod
     def ref(
-        self, i: int, slot: int | None = None
+        cls, i: int | Ref.Any | Ref.Any, slot: int | None = None
     ) -> Ref.Any:
-        raise ValueError(self)
+        raise ValueError(cls)
 
     def __call__(self, event: Event, graph: GraphInterface):
         raise ValueError(self)
@@ -186,8 +102,8 @@ class Node_Null(
 
 #  ------------------
 
-
-class Node_D0_Date(NodeInterface):
+@dataclass(frozen=True)
+class Node_D0_Date(NodeInterface[Ref.D0_Date]):
 
     def pipe(
         self,
@@ -197,10 +113,11 @@ class Node_D0_Date(NodeInterface):
     ) -> FRes:
         return f(self, *args, **kwargs)
 
+    @classmethod
     def ref(
-        self, i: int, slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref.D0_Date:
-        return Ref.D0_Date.new(i, slot)
+        return Ref.d0_date(i, slot=slot)
 
     @abc.abstractmethod
     def __call__(
@@ -208,12 +125,8 @@ class Node_D0_Date(NodeInterface):
     ) -> dt.date: ...
 
 
+@dataclass(frozen=True)
 class Node_D0_F64(NodeInterface):
-
-    
-    # @classmethod
-    # @abc.abstractclassmethod
-    # def new(cls, **kwargs) -> Node_D0_F64: ...
 
     def pipe(
         self,
@@ -223,10 +136,11 @@ class Node_D0_F64(NodeInterface):
     ) -> FRes:
         return f(self, *args, **kwargs)
 
+    @classmethod
     def ref(
-        self, i: int, slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref.D0_F64:
-        return Ref.D0_F64.new(i, slot)
+        return Ref.d0_f64(i, slot=slot)
 
     @abc.abstractmethod
     def __call__(
@@ -237,6 +151,7 @@ class Node_D0_F64(NodeInterface):
 #  ------------------
 
 
+@dataclass(frozen=True)
 class Node_D1_Date(NodeInterface):
 
     def pipe(
@@ -247,10 +162,11 @@ class Node_D1_Date(NodeInterface):
     ) -> FRes:
         return f(self, *args, **kwargs)
 
+    @classmethod
     def ref(
-        self, i: int, slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref.D1_Date:
-        return Ref.D1_Date.new(i, slot)
+        return Ref.d1_date(i, slot)
 
     @abc.abstractmethod
     def __call__(
@@ -258,6 +174,7 @@ class Node_D1_Date(NodeInterface):
     ) -> np.ndarray: ...
 
 
+@dataclass(frozen=True)
 class Node_D1_F64(NodeInterface):
 
     def pipe(
@@ -268,10 +185,11 @@ class Node_D1_F64(NodeInterface):
     ) -> FRes:
         return f(self, *args, **kwargs)
 
+    @classmethod
     def ref(
-        self, i: int, slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref.D1_F64:
-        return Ref.D1_F64.new(i, slot)
+        return Ref.d1_f64(i, slot)
 
     @abc.abstractmethod
     def __call__(
@@ -282,6 +200,7 @@ class Node_D1_F64(NodeInterface):
 #  ------------------
 
 
+@dataclass(frozen=True)
 class Node_D2_F64(NodeInterface):
 
     def pipe(
@@ -292,10 +211,11 @@ class Node_D2_F64(NodeInterface):
     ) -> FRes:
         return f(self, *args, **kwargs)
 
+    @classmethod
     def ref(
-        self, i: int, slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref.D2_F64:
-        return Ref.D2_F64.new(i, slot)
+        return Ref.d2_f64(i, slot)
 
     @abc.abstractmethod
     def __call__(
@@ -303,9 +223,9 @@ class Node_D2_F64(NodeInterface):
     ) -> np.ndarray: ...
 
 
-
 #  ------------------
 
+@dataclass(frozen=True)
 class Node_D0_F64_3(NodeInterface):
 
     def pipe(
@@ -316,16 +236,18 @@ class Node_D0_F64_3(NodeInterface):
     ) -> FRes:
         return f(self, *args, **kwargs)
 
+    @classmethod
     def ref(
-        self, i: int, slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref.D0_F64_3:
-        return Ref.D0_F64_3.new(i, slot)
+        return Ref.d0_f64_3(i, slot)
 
     @abc.abstractmethod
     def __call__(
         self, event: Event, graph: GraphInterface
     ) -> tuple[float, float, float]: ...
 
+@dataclass(frozen=True)
 class Node_D0_F64_4(NodeInterface):
 
     def pipe(
@@ -336,10 +258,11 @@ class Node_D0_F64_4(NodeInterface):
     ) -> FRes:
         return f(self, *args, **kwargs)
 
+    @classmethod
     def ref(
-        self, i: int, slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref.D0_F64_4:
-        return Ref.D0_F64_4.new(i, slot)
+        return Ref.d0_f64_4(i, slot)
 
     @abc.abstractmethod
     def __call__(
@@ -347,7 +270,7 @@ class Node_D0_F64_4(NodeInterface):
     ) -> tuple[float, float, float, float]: ...
 
 
-
+@dataclass(frozen=True)
 class Node_D1_F64_D2_F64(NodeInterface):
 
     def pipe(
@@ -358,10 +281,11 @@ class Node_D1_F64_D2_F64(NodeInterface):
     ) -> FRes:
         return f(self, *args, **kwargs)
 
+    @classmethod
     def ref(
-        self, i: int, slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref.D1_F64_D2_F64:
-        return Ref.D1_F64_D2_F64.new(i, slot)
+        return Ref.d1_f64_d2_f64(i, slot)
 
     @abc.abstractmethod
     def __call__(
@@ -396,7 +320,64 @@ class Node:
     D0_F64_3 = Node_D0_F64_3
 
     Null = Node_Null
-    null = Node_Null()
+    null = Node_Null("null")
+
+
+#  ------------------
+
+
+def rec_yield_param(k, v: Ref.Any | Iterable | Any):
+    if isinstance(v, Ref.Any):
+        yield (k, v.i, v.scope)
+    elif isinstance(v, (tuple, Iterable)):
+        yield from rec_yield_params(k, v)
+
+
+def rec_yield_params(k: str, v: Iterable):
+    if isinstance(v, dict):
+        yield from rec_yield_params(k, v.keys())
+        yield from rec_yield_params(k, v.values())
+    elif isinstance(v, (tuple, Iterable)):
+        for vv in v:
+            yield from rec_yield_param(k, vv)
+
+
+def yield_params(
+    node: Node.Any,
+) -> Iterator[tuple[str, int, Scope | None]]:
+    for k in yield_param_keys(type(node)):
+        v = getattr(node, k)
+        yield from rec_yield_param(k, v)
+
+
+def rec_yield_hint_types(hint):
+    try:
+        o = get_origin(hint)
+        yield o
+    except:
+        pass
+    try:
+        args = get_args(hint)
+        for a in args:
+            if a == Ellipsis:
+                continue
+            yield from rec_yield_hint_types(a)
+    except:
+        pass
+    yield hint
+
+
+def yield_param_keys(t_kw: Type):
+    seen: set[str] = set()
+    for k, h in get_type_hints(t_kw).items():
+        for h in rec_yield_hint_types(h):
+            if k in seen:
+                continue
+            if not isinstance(h, type):
+                continue
+            if issubclass(h, Ref.Any):
+                seen.add(k)
+                yield k
 
 
 #  ------------------

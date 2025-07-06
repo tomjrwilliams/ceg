@@ -8,7 +8,7 @@ from ..core import (
     Ref,
     Event,
     Loop,
-    Defn,
+    dataclass,
     define,
     steps,
     batches,
@@ -18,14 +18,9 @@ from ..core import (
 #  ------------------
 
 
-class vs_x_vec_kw(NamedTuple):
-    type: str
-    #
-    vs: tuple[Ref.D0_F64, ...]
-    vec: Ref.D1_F64
 
-
-class vs_x_vec(vs_x_vec_kw, Node.D0_F64):
+@dataclass(frozen=True)
+class vs_x_vec(Node.D0_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -63,7 +58,10 @@ class vs_x_vec(vs_x_vec_kw, Node.D0_F64):
     -0.17 -0.98 1.0
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.D0_F64, vs_x_vec_kw)
+    type: str
+    #
+    vs: tuple[Ref.D0_F64, ...]
+    vec: Ref.D1_F64
 
     @classmethod
     def new(
@@ -71,7 +69,7 @@ class vs_x_vec(vs_x_vec_kw, Node.D0_F64):
         vs: tuple[Ref.D0_F64, ...],
         vec: Ref.D1_F64,
     ):
-        return cls(cls.DEF.name, vs=vs, vec=vec)
+        return cls("vs_x_vec", vs=vs, vec=vec)
 
     def __call__(self, event: Event, graph: Graph):
         vs = list(
@@ -94,15 +92,9 @@ class vs_x_vec(vs_x_vec_kw, Node.D0_F64):
 #  ------------------
 
 
-class v_x_vec_i_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.D0_F64
-    vec: Ref.D1_F64
-    i: int
 
-
-class v_x_vec_i(v_x_vec_i_kw, Node.D0_F64):
+@dataclass(frozen=True)
+class v_x_vec_i( Node.D0_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -137,7 +129,11 @@ class v_x_vec_i(v_x_vec_i_kw, Node.D0_F64):
     -0.17 0.03
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.D0_F64, v_x_vec_i_kw)
+    type: str
+    #
+    v: Ref.D0_F64
+    vec: Ref.D1_F64
+    i: int
 
     @classmethod
     def new(
@@ -146,7 +142,7 @@ class v_x_vec_i(v_x_vec_i_kw, Node.D0_F64):
         vec: Ref.D1_F64,
         i: int,
     ):
-        return cls(cls.DEF.name, v=v, vec=vec, i=i)
+        return cls("v_x_vec_i", v=v, vec=vec, i=i)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
@@ -163,30 +159,9 @@ class v_x_vec_i(v_x_vec_i_kw, Node.D0_F64):
 #  ------------------
 
 
-class vec_x_mat_i_kw(NamedTuple):
-    type: str
-    #
-    v: Ref.D1_F64
-    vec: Ref.D1_F64_D2_F64
-    f: int
-    slot: int
 
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(
-        cls,
-        v: Ref.D1_F64,
-        vec: Ref.D1_F64_D2_F64,
-        f: int,
-        slot: int,
-    ):
-        return vec_x_mat_i("vec_x_mat_i", v=v, vec=vec, f=f,slot=slot)
-
-
-class vec_x_mat_i(vec_x_mat_i_kw, Node.D0_F64):
+@dataclass(frozen=True)
+class vec_x_mat_i( Node.D0_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -223,9 +198,24 @@ class vec_x_mat_i(vec_x_mat_i_kw, Node.D0_F64):
 
     # TODO: tup in the name
 
-    DEF: ClassVar[Defn] = define.node(Node.D0_F64, vec_x_mat_i_kw)
+    type: str
+    #
+    v: Ref.D1_F64
+    vec: Ref.D1_F64_D2_F64
+    f: int
+    slot: int
 
-    bind = define.bind_from_new(vec_x_mat_i_kw.new, vec_x_mat_i_kw.ref)
+    @classmethod
+    def new(
+        cls,
+        v: Ref.D1_F64,
+        vec: Ref.D1_F64_D2_F64,
+        f: int,
+        slot: int,
+    ):
+        return vec_x_mat_i("vec_x_mat_i", v=v, vec=vec, f=f,slot=slot)
+
+    bind = define.bind_from_new(new, Node.D0_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)

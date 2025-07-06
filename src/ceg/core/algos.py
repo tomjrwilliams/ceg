@@ -76,70 +76,70 @@ def last_before_np(
     return v[:occupied][t[:occupied] <= before][-1]
 
 
-@nb.jit()
-def last_before_naive(
-    v: np.ndarray,
-    t: np.ndarray,
-    before: float,
-    occupied: int,
-    exponent: int,
-):
-    """
-    >>> EXPON = 3
-    >>> round = lambda v: np.round(v, 4).tolist()
-    >>> last_before = last_before_naive
-    >>> vs = np.linspace(0, 2**EXPON, 2**EXPON)
-    >>> assert vs.shape == (8,)
-    >>> list(round(vs))
-    [0.0, 1.1429, 2.2857, 3.4286, 4.5714, 5.7143, 6.8571, 8.0]
-    >>> round(
-    ...     last_before(
-    ...         vs,
-    ...         vs,
-    ...         2,
-    ...         occupied=1,
-    ...         exponent=EXPON,
-    ...     )
-    ... )
-    0.0
-    >>> round(
-    ...     last_before(
-    ...         vs,
-    ...         vs,
-    ...         2,
-    ...         occupied=2,
-    ...         exponent=EXPON,
-    ...     )
-    ... )
-    1.1429
-    >>> round(
-    ...     last_before(
-    ...         vs,
-    ...         vs,
-    ...         3,
-    ...         occupied=2,
-    ...         exponent=EXPON,
-    ...     )
-    ... )
-    1.1429
-    >>> round(
-    ...     last_before(
-    ...         vs,
-    ...         vs,
-    ...         8,
-    ...         occupied=8,
-    ...         exponent=EXPON,
-    ...     )
-    ... )
-    8.0
-    """
-    if t[0] > before:
-        return np.nan
-    for i in range(occupied):
-        ix = occupied - (1 + i)
-        if t[ix] <= before:
-            return v[ix]
-    return np.nan
+# @nb.jit()
+# def last_before_naive(
+#     v: np.ndarray,
+#     t: np.ndarray,
+#     before: float,
+#     occupied: int,
+#     exponent: int,
+# ):
+#     """
+#     >>> EXPON = 3
+#     >>> round = lambda v: np.round(v, 4).tolist()
+#     >>> last_before = last_before_naive
+#     >>> vs = np.linspace(0, 2**EXPON, 2**EXPON)
+#     >>> assert vs.shape == (8,)
+#     >>> list(round(vs))
+#     [0.0, 1.1429, 2.2857, 3.4286, 4.5714, 5.7143, 6.8571, 8.0]
+#     >>> round(
+#     ...     last_before(
+#     ...         vs,
+#     ...         vs,
+#     ...         2,
+#     ...         occupied=1,
+#     ...         exponent=EXPON,
+#     ...     )
+#     ... )
+#     0.0
+#     >>> round(
+#     ...     last_before(
+#     ...         vs,
+#     ...         vs,
+#     ...         2,
+#     ...         occupied=2,
+#     ...         exponent=EXPON,
+#     ...     )
+#     ... )
+#     1.1429
+#     >>> round(
+#     ...     last_before(
+#     ...         vs,
+#     ...         vs,
+#     ...         3,
+#     ...         occupied=2,
+#     ...         exponent=EXPON,
+#     ...     )
+#     ... )
+#     1.1429
+#     >>> round(
+#     ...     last_before(
+#     ...         vs,
+#     ...         vs,
+#     ...         8,
+#     ...         occupied=8,
+#     ...         exponent=EXPON,
+#     ...     )
+#     ... )
+#     8.0
+#     """
+#     if t[0] > before:
+#         return np.nan
+#     for i in range(occupied):
+#         ix = occupied - (1 + i)
+#         if t[ix] <= before:
+#             return v[ix]
+#     return np.nan
 
 
 @nb.jit()
@@ -225,11 +225,11 @@ def last_before(
     8.0
     """
     if t[0] > before:
-        return np.nan
+        return False, np.nan
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
-        return np.nan
-    return v[ix]
+        return False, np.nan
+    return True, v[ix]
 
 @nb.jit()
 def last_before_not_nan(
@@ -271,17 +271,17 @@ def last_before_not_nan(
     3.4286
     """
     if t[0] > before:
-        return np.nan
+        return False, np.nan
     ix = last_ix_before(t, before, occupied, exponent)
     # print(ix)
     if ix == -1:
-        return np.nan
+        return False, np.nan
     while (v[ix] == np.nan or np.isnan(v[ix])) and ix >= 0:
         # print(ix)
         ix -= 1
     if ix == -1:
-        return np.nan
-    return v[ix]
+        return False, np.nan
+    return True, v[ix]
 
 # TODO: parallel=true?
 
@@ -358,13 +358,13 @@ def last_between(
     nan
     """
     if t[0] > before:
-        return np.nan
+        return False, np.nan
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
-        return np.nan
+        return False, np.nan
     if t[ix] < after:
-        return np.nan
-    return v[ix]
+        return False, np.nan
+    return True, v[ix]
 
 
 def last_before_equiv():
@@ -406,29 +406,29 @@ def last_before_equiv():
 #  ------------------
 
 
-@nb.jit()
-def last_n_before_naive(
-    v: np.ndarray,
-    t: np.ndarray,
-    n: int,
-    before: float,
-    occupied: int,
-    exponent: int,
-):
-    res = np.empty(n, dtype=v.dtype)
-    res[:] = np.nan
-    if t[0] > before:
-        return res
-    for i in range(occupied):
-        ix = occupied - (1 + i)
-        if t[ix] <= before:
-            ix += 1
-            if ix >= n:
-                res[:] = v[ix - n : ix]
-            else:
-                res[-ix:] = v[:ix]
-            break
-    return res
+# @nb.jit()
+# def last_n_before_naive(
+#     v: np.ndarray,
+#     t: np.ndarray,
+#     n: int,
+#     before: float,
+#     occupied: int,
+#     exponent: int,
+# ):
+#     res = np.empty(n, dtype=v.dtype)
+#     res[:] = np.nan
+#     if t[0] > before:
+#         return res
+#     for i in range(occupied):
+#         ix = occupied - (1 + i)
+#         if t[ix] <= before:
+#             ix += 1
+#             if ix >= n:
+#                 res[:] = v[ix - n : ix]
+#             else:
+#                 res[-ix:] = v[:ix]
+#             break
+#     return res
 
 
 
@@ -485,16 +485,17 @@ def last_n_before(
     res = np.empty(n, dtype=v.dtype)
     res[:] = np.nan
     if t[0] > before:
-        return res
+        return 0, res
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
-        return res
+        return 0, res
     ix += 1
     if ix >= n:
         res[:] = v[ix - n : ix]
+        return n, res
     else:
         res[-ix:] = v[:ix]
-    return res
+        return ix, res
 
 
 def last_n_before_np(
@@ -559,22 +560,24 @@ def last_n_between(
     res = np.empty(n, dtype=v.dtype)
     res[:] = np.nan
     if t[0] > before:
-        return res
+        return 0, res
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
-        return res
+        return 0, res
     if t[ix] < after:
-        return res
+        return 0, res
     ix += 1
     while t[ix - n] < after:
         n -= 1
         if n == 0:
-            return res
+            return 0, res
     if ix >= n:
         res[-n:] = v[ix - n : ix]
+        return n, res
     else:
         res[-ix:] = v[:ix]
-    return res
+        return ix, res
+        
 
 
 #  ------------------
@@ -633,11 +636,11 @@ def last_before_nd(
     res = np.empty(size, dtype=v.dtype)
     res[:] = np.nan
     if t[0] > before:
-        return res
+        return False, res
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
-        return res
-    return v[ix * size : (ix + 1) * size]
+        return False, res
+    return True, v[ix * size : (ix + 1) * size]
 
 
 @nb.jit()
@@ -685,13 +688,13 @@ def last_between_nd(
     res = np.empty(size, dtype=v.dtype)
     res[:] = np.nan
     if t[0] > before:
-        return res
+        return False, res
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
-        return res
+        return False, res
     if t[ix] < after:
-        return res
-    return v[ix * size : (ix + 1) * size]
+        return False, res
+    return True, v[ix * size : (ix + 1) * size]
 
 
 @nb.jit()
@@ -752,13 +755,14 @@ def last_n_before_nd(
     res[:] = np.nan
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
-        return res
+        return 0, res
     ix += 1
     if ix >= n:
         res[:] = v[(ix - n) * size : ix * size]
+        return n, res
     else:
         res[-ix * size :] = v[: ix * size]
-    return res
+        return ix, res
 
 
 @nb.jit()
@@ -823,18 +827,19 @@ def last_n_between_nd(
     res[:] = np.nan
     ix = last_ix_before(t, before, occupied, exponent)
     if ix == -1:
-        return res
+        return 0, res
     if t[ix] < after:
-        return res
+        return 0, res
     ix += 1
     while t[ix - n] < after:
         n -= 1
         if n == 0:
-            return res
+            return 0, res
     if ix >= n:
         res[-n * size :] = v[(ix - n) * size : ix * size]
+        return n, res
     else:
         res[-ix * size :] = v[: ix * size]
-    return res
+        return ix, res
 
 #  ------------------

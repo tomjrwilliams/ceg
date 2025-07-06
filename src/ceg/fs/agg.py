@@ -15,44 +15,25 @@ from ..core import (
     Ref,
     Event,
     Loop,
-    Defn,
+    dataclass,
     define,
     steps,
     batches,
 )
 #  ------------------
 
-class mean_vec_kw(NamedTuple):
-    type: str
-    #
-    vec: Ref.Vector_F64
-    a: float
-    b: float
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(
-        cls, 
-        vec: Ref.Vector_F64,
-        a: float = 0.,
-        b: float = 1.,
-    ):
-        return sum_vec("sum_vec", vec=vec, a=a, b=b)
-
-class mean_vec(mean_vec_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class mean_vec(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r0 = g.bind(
-    ...     rand.gaussian_vec.new(),
+    ...     rand.gaussian_vec.new((3,)),
     ...     when=Loop.every(1),
     ... )
     >>> with g.implicit() as (bind, done):
-    ...     r1 = bind(sum_vec.new(r0))
+    ...     r1 = bind(mean_vec.new(r0))
     ...     g = done()
     ...
     >>> es = [Event.zero(r0), Event.zero(r1)]
@@ -66,15 +47,29 @@ class mean_vec(mean_vec_kw, Node.Scalar_F64):
     ...         r1.history(g).last_before(t), 2
     ...     )
     ...     print(v0, v1)
-    0.13 -0.13 -0.95
-    0.64 0.1 6.11
-    -0.54 0.36 -1.48
-    1.3 0.95 1.38
-    -0.7 -1.27 0.56
+    [ 0.13 -0.13  0.64] 0.21
+    [ 1.3   0.95 -0.7 ] -0.02
+    [-1.27 -0.62  0.04] -0.62
+    [-0.73 -0.54 -0.32] -1.26
+    [ 0.41  1.04 -0.13] 0.44
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, mean_vec_kw)
-    bind = define.bind_from_new(mean_vec_kw.new, mean_vec_kw.ref)
+    type: str
+    #
+    vec: Ref.Vector_F64
+    a: float
+    b: float
+
+    @classmethod
+    def new(
+        cls, 
+        vec: Ref.Vector_F64,
+        a: float = 0.,
+        b: float = 1.,
+    ):
+        return mean_vec("mean_vec", vec=vec, a=a, b=b)
+
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.vec.history(graph).last_before(event.t)
@@ -82,33 +77,15 @@ class mean_vec(mean_vec_kw, Node.Scalar_F64):
 
 #  ------------------
 
-class sum_vec_kw(NamedTuple):
-    type: str
-    #
-    vec: Ref.Vector_F64
-    a: float
-    b: float
 
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(
-        cls, 
-        vec: Ref.Vector_F64,
-        a: float = 0.,
-        b: float = 1.,
-    ):
-        return sum_vec("sum_vec", vec=vec, a=a, b=b)
-
-class sum_vec(sum_vec_kw, Node.Scalar_F64):
+@dataclass(frozen=True)
+class sum_vec(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
     >>> _ = rand.rng(seed=0, reset=True)
     >>> g, r0 = g.bind(
-    ...     rand.gaussian_vec.new(),
+    ...     rand.gaussian_vec.new((3,)),
     ...     when=Loop.every(1),
     ... )
     >>> with g.implicit() as (bind, done):
@@ -126,15 +103,28 @@ class sum_vec(sum_vec_kw, Node.Scalar_F64):
     ...         r1.history(g).last_before(t), 2
     ...     )
     ...     print(v0, v1)
-    0.13 -0.13 -0.95
-    0.64 0.1 6.11
-    -0.54 0.36 -1.48
-    1.3 0.95 1.38
-    -0.7 -1.27 0.56
+    [ 0.13 -0.13  0.64] 0.63
+    [ 1.3   0.95 -0.7 ] -0.07
+    [-1.27 -0.62  0.04] -1.85
+    [-0.73 -0.54 -0.32] -3.79
+    [ 0.41  1.04 -0.13] 1.33
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, sum_vec_kw)
-    bind = define.bind_from_new(sum_vec_kw.new, sum_vec_kw.ref)
+    type: str
+    #
+    vec: Ref.Vector_F64
+    a: float
+    b: float
+
+    @classmethod
+    def new(
+        cls, 
+        vec: Ref.Vector_F64,
+        a: float = 0.,
+        b: float = 1.,
+    ):
+        return sum_vec("sum_vec", vec=vec, a=a, b=b)
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.vec.history(graph).last_before(event.t)
@@ -143,6 +133,15 @@ class sum_vec(sum_vec_kw, Node.Scalar_F64):
 #  ------------------
 
 class sum_mat_i_kw(NamedTuple):
+
+    @classmethod
+    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+        return Ref.d0_f64(i, slot=slot)
+
+
+@dataclass(frozen=True)
+class sum_mat_i(Node.Scalar_F64):
+
     type: str
     #
     mat: Ref.D1_F64_D2_F64
@@ -151,10 +150,6 @@ class sum_mat_i_kw(NamedTuple):
     a: float
     b: float
     t: bool
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
 
     @classmethod
     def new(
@@ -167,11 +162,7 @@ class sum_mat_i_kw(NamedTuple):
         b: float = 1.,
     ):
         return sum_mat_i("sum_mat_i", mat=mat,slot=slot,i=i,t=t, a=a, b=b)
-
-class sum_mat_i(sum_mat_i_kw, Node.Scalar_F64):
-
-    DEF: ClassVar[Defn] = define.node(Node.Scalar_F64, sum_mat_i_kw)
-    bind = define.bind_from_new(sum_mat_i_kw.new, sum_mat_i_kw.ref)
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.mat.history(

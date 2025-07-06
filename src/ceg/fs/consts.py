@@ -9,7 +9,7 @@ from ..core import (
     Ref,
     Event,
     Loop,
-    Defn,
+    dataclass,
     define,
     steps,
     batches,
@@ -19,22 +19,10 @@ from ..core import (
 #  ------------------
 
 
-class const_float_kw(NamedTuple):
-    type: str
-    #
-    v: float
-    rf: Ref.Scalar_F64 | None
-
-    @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
-        return Ref.d0_f64(i, slot=slot)
-
-    @classmethod
-    def new(cls, v: float, rf: Ref.Scalar_F64 | None = None):
-        return const_float("const_float", v=v, rf=rf)
 
 
-class const_float(const_float_kw, Node.D0_F64):
+@dataclass(frozen=True)
+class const_float(Node.D0_F64):
     """
     >>> g = Graph.new()
     >>> g, r0 = g.pipe(const_float.zero_every, 1.)
@@ -46,7 +34,14 @@ class const_float(const_float_kw, Node.D0_F64):
     0.0
     """
 
-    DEF: ClassVar[Defn] = define.node(Node.D0_F64, const_float_kw)
+    type: str
+    #
+    v: float
+    rf: Ref.Scalar_F64 | None
+
+    @classmethod
+    def new(cls, v: float, rf: Ref.Scalar_F64 | None = None):
+        return const_float("const_float", v=v, rf=rf)
 
     @classmethod
     def one(cls, sign = 1):
