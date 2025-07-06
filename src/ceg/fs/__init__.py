@@ -8,5 +8,5 @@ from . import norm
 from . import agg
 from . import rolling
 from . import risk
-from . import arrays
+from . import shapes
 from . import mm

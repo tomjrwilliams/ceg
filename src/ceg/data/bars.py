@@ -12,7 +12,7 @@ import numpy as np
 from ..apis import frd
 
 from .. import core
-from ..core import define
+from ..core import define, dataclass
 
 from ..fs import dates
 
@@ -336,6 +336,8 @@ def get_daily_bars(
         i_l = (start - cache_start).days
         i_r = (cache_end - end).days
 
+    # TODO: pass back null mask as well, so dont have to infer by all nan
+
     if i_r > 0:
         res = res[i_l:-i_r,:]
     else:
@@ -422,23 +424,24 @@ TBar = Annotated[Bar | None, define.annotation("internal")]
 TField = Annotated[str | int, define.annotation("internal")]
 
 def f_daily_bar(
-    self: daily_bar_kw | daily_level_kw,
+    self: daily_bar | daily_level,
     event: core.Event,
     graph: core.Graph
 ):
     assert self.bar is not None, self
     dx = self.d.history(graph).last_before(event.t)
-    if dx is None:
-        return np.array([
-            None for _ in range(len(BARS_SCHEMA))
-        ])
-    return get_daily_bars(
+    if not isinstance(dx, dt.date):
+        return None
+    res = get_daily_bars(
         self.bar,
         dx,
         dt.date.today(),
         df=False,
         at=dx,
     )
+    if np.all(np.isnan(res)):
+        return None
+    return res
 
 def new_bar(
     bar: Bar | None,
@@ -453,36 +456,8 @@ def new_bar(
         )
     return bar, product, symbol
 
-class daily_bar_kw(NamedTuple):
-    type: str
-    #
-    d: core.Ref.Scalar_Date
-    product: str | None
-    symbol: str | None
-    bar: TBar
-
-    @classmethod
-    def ref(cls, i: int | core.Ref.Any, slot: int | None = None) -> core.Ref.Vector_F64:
-        return core.Ref.d1_f64(i, slot=slot)
-
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Scalar_Date,
-        product: str | None=None,
-        symbol: str | None=None,
-        bar: TBar=None,
-    ):
-        bar, product, symbol = new_bar(bar, product, symbol)
-        return daily_bar(
-            "daily_bar",
-            d=d,
-            bar = bar,
-            product=product,
-            symbol=symbol,
-        )
-
-class daily_bar(daily_bar_kw, core.Node.D1_F64):
+@dataclass(frozen=True)
+class daily_bar(core.Node.D1_F64):
     """
     >>> start = dt.date(2025, 1, 1)
     >>> end = dt.date(2025, 1, 6)
@@ -503,12 +478,33 @@ class daily_bar(daily_bar_kw, core.Node.D1_F64):
     2025-01-05 [nan, nan, nan, nan]
     """
 
-    DEF: ClassVar[core.Defn] = core.define.node(
-        core.Node.D1_F64, daily_bar_kw
-    )
+    type: str
+    #
+    d: core.Ref.Scalar_Date
+    product: str | None
+    symbol: str | None
+    bar: TBar
+
+    @classmethod
+    def new(
+        cls,
+        d: core.Ref.Scalar_Date,
+        product: str | None=None,
+        symbol: str | None=None,
+        bar: TBar=None,
+    ):
+        bar, product, symbol = new_bar(bar, product, symbol)
+        return daily_bar(
+            "daily_bar",
+            d=d,
+            bar = bar,
+            product=product,
+            symbol=symbol,
+        )
+
     bind = define.bind_from_new(
-        daily_bar_kw.new,
-        daily_bar_kw.ref,
+        new,
+        core.Node.D1_F64.ref,
     )
 
     def __call__(
@@ -518,7 +514,8 @@ class daily_bar(daily_bar_kw, core.Node.D1_F64):
 
 #  ------------------
 
-class daily_level_kw(NamedTuple):
+@dataclass(frozen=True)
+class daily_level(core.Node.D0_F64):
     type: str
     #
     d: core.Ref.Scalar_Date
@@ -526,10 +523,6 @@ class daily_level_kw(NamedTuple):
     product: str | None
     symbol: str | None
     field: TField
-
-    @classmethod
-    def ref(cls, i: int | core.Ref.Any, slot: int | None = None) -> core.Ref.Scalar_F64:
-        return core.Ref.d0_f64(i, slot=slot)
 
     def __call__(
         self, event: core.Event, graph: core.Graph
@@ -541,6 +534,9 @@ class daily_level_kw(NamedTuple):
         else:
             fx = self.field
         
+        if vs is None:
+            return vs
+
         v = vs[fx]
 
         # if np.isnan(v):
@@ -549,7 +545,28 @@ class daily_level_kw(NamedTuple):
     
 #  ------------------
 
-class daily_open_kw(daily_level_kw):
+@dataclass(frozen=True)
+class daily_open(daily_level):
+    """
+    >>> start = dt.date(2025, 1, 1)
+    >>> end = dt.date(2025, 1, 6)
+    >>> g, d = core.Graph.new().pipe(
+    ...     dates.daily.loop, start, end
+    ... )
+    >>> g, r = g.pipe(daily_open.bind, d, product="FUT", symbol="ES")
+    >>> for g, es, t in core.batches(
+    ...     g, core.Event.zero(d), n=5, g=2, iter=True
+    ... )():
+    ...     dx = d.history(g).last_before(t)
+    ...     v = r.history(g).last_before(t)
+    ...     print(dx, v)
+    2025-01-01 None
+    2025-01-02 6016.77
+    2025-01-03 5988.2
+    2025-01-04 None
+    2025-01-05 None
+    """
+
 
     @classmethod
     def new(
@@ -571,61 +588,16 @@ class daily_open_kw(daily_level_kw):
             field=field,
         )
 
-class daily_open(daily_open_kw, core.Node.D0_F64):
-    """
-    >>> start = dt.date(2025, 1, 1)
-    >>> end = dt.date(2025, 1, 6)
-    >>> g, d = core.Graph.new().pipe(
-    ...     dates.daily.loop, start, end
-    ... )
-    >>> g, r = g.pipe(daily_open.bind, d, product="FUT", symbol="ES")
-    >>> for g, es, t in core.batches(
-    ...     g, core.Event.zero(d), n=5, g=2, iter=True
-    ... )():
-    ...     dx = d.history(g).last_before(t)
-    ...     v = r.history(g).last_before(t)
-    ...     print(dx, v)
-    2025-01-01 None
-    2025-01-02 6016.77
-    2025-01-03 5988.2
-    2025-01-04 None
-    2025-01-05 None
-    """
-
-    DEF: ClassVar[core.Defn] = core.define.node(
-        core.Node.D0_F64, daily_open_kw
-    )
     bind = define.bind_from_new(
-        daily_open_kw.new,
-        daily_open_kw.ref,
+        new,
+        core.Node.D0_F64.ref,
     )
     
 #  ------------------
 
 
-class daily_high_kw(daily_level_kw):
-
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Scalar_Date,
-        product: str | None = None,
-        symbol: str | None = None,
-        bar: TBar = None,
-        field: TField = "high",
-    ):
-        assert field == "high", (cls, field)
-        bar, product, symbol = new_bar(bar, product, symbol)
-        return daily_high(
-            "daily_high",
-            d=d,
-            bar=bar,
-            product=product,
-            symbol=symbol,
-            field=field,
-        )
-
-class daily_high(daily_high_kw, core.Node.D0_F64):
+@dataclass(frozen=True)
+class daily_high(daily_level):
     """
     >>> start = dt.date(2025, 1, 1)
     >>> end = dt.date(2025, 1, 6)
@@ -646,18 +618,6 @@ class daily_high(daily_high_kw, core.Node.D0_F64):
     2025-01-05 None
     """
 
-    DEF: ClassVar[core.Defn] = core.define.node(
-        core.Node.D0_F64, daily_high_kw
-    )
-    bind = define.bind_from_new(
-        daily_high_kw.new,
-        daily_high_kw.ref,
-    )
-    
-#  ------------------
-
-class daily_low_kw(daily_level_kw):
-
     @classmethod
     def new(
         cls,
@@ -665,20 +625,28 @@ class daily_low_kw(daily_level_kw):
         product: str | None = None,
         symbol: str | None = None,
         bar: TBar = None,
-        field: TField = "low",
+        field: TField = "high",
     ):
-        assert field == "low", (cls, field)
+        assert field == "high", (cls, field)
         bar, product, symbol = new_bar(bar, product, symbol)
-        return daily_low(
-            "daily_low",
+        return daily_high(
+            "daily_high",
             d=d,
             bar=bar,
             product=product,
             symbol=symbol,
             field=field,
         )
+    bind = define.bind_from_new(
+        new,
+        core.Node.D0_F64.ref,
+    )
+    
+#  ------------------
 
-class daily_low(daily_low_kw, core.Node.D0_F64):
+
+@dataclass(frozen=True)
+class daily_low(daily_level):
     """
     >>> start = dt.date(2025, 1, 1)
     >>> end = dt.date(2025, 1, 6)
@@ -699,18 +667,56 @@ class daily_low(daily_low_kw, core.Node.D0_F64):
     2025-01-05 None
     """
 
-    DEF: ClassVar[core.Defn] = core.define.node(
-        core.Node.D0_F64, daily_low_kw
-    )
+    @classmethod
+    def new(
+        cls,
+        d: core.Ref.Scalar_Date,
+        product: str | None = None,
+        symbol: str | None = None,
+        bar: TBar = None,
+        field: TField = "low",
+    ):
+        assert field == "low", (cls, field)
+        bar, product, symbol = new_bar(bar, product, symbol)
+        return daily_low(
+            "daily_low",
+            d=d,
+            bar=bar,
+            product=product,
+            symbol=symbol,
+            field=field,
+        )
     bind = define.bind_from_new(
-        daily_low_kw.new,
-        daily_low_kw.ref,
+        new,
+        core.Node.D0_F64.ref,
     )
     
 #  ------------------
 
 
-class daily_close_kw(daily_level_kw):
+
+
+@dataclass(frozen=True)
+class daily_close(daily_level):
+    """
+    >>> start = dt.date(2025, 1, 1)
+    >>> end = dt.date(2025, 1, 6)
+    >>> g, d = core.Graph.new().pipe(
+    ...     dates.daily.loop, start, end
+    ... )
+    >>> g, r = g.pipe(daily_close.bind, d, product="FUT", symbol="ES")
+    >>> for g, es, t in core.batches(
+    ...     g, core.Event.zero(d), n=5, g=2, iter=True
+    ... )():
+    ...     dx = d.history(g).last_before(t)
+    ...     v = r.history(g).last_before(t)
+    ...     print(dx, v)
+    2025-01-01 None
+    2025-01-02 5983.65
+    2025-01-03 6057.48
+    2025-01-04 None
+    2025-01-05 None
+    """
 
     @classmethod
     def new(
@@ -732,66 +738,16 @@ class daily_close_kw(daily_level_kw):
             field=field,
         )
 
-
-class daily_close(
-    daily_close_kw, 
-    core.Node.D0_F64
-):
-    """
-    >>> start = dt.date(2025, 1, 1)
-    >>> end = dt.date(2025, 1, 6)
-    >>> g, d = core.Graph.new().pipe(
-    ...     dates.daily.loop, start, end
-    ... )
-    >>> g, r = g.pipe(daily_close.bind, d, product="FUT", symbol="ES")
-    >>> for g, es, t in core.batches(
-    ...     g, core.Event.zero(d), n=5, g=2, iter=True
-    ... )():
-    ...     dx = d.history(g).last_before(t)
-    ...     v = r.history(g).last_before(t)
-    ...     print(dx, v)
-    2025-01-01 None
-    2025-01-02 5983.65
-    2025-01-03 6057.48
-    2025-01-04 None
-    2025-01-05 None
-    """
-
-    DEF: ClassVar[core.Defn] = core.define.node(
-        core.Node.D0_F64, daily_close_kw
-    )
-
     bind = define.bind_from_new(
-        daily_close_kw.new,
-        daily_close_kw.ref,
+        new,
+        core.Node.D0_F64.ref,
     )
 
 #  ------------------
 
 
-class daily_volume_kw(daily_level_kw):
-
-    @classmethod
-    def new(
-        cls,
-        d: core.Ref.Scalar_Date,
-        product: str | None=None,
-        symbol: str | None=None,
-        bar: TBar=None,
-        field: TField = "volume",
-    ):
-        assert field == "volume", (cls, field)
-        bar, product, symbol = new_bar(bar, product, symbol)
-        return daily_volume(
-            "daily_volume",
-            d=d,
-            bar=bar,
-            product=product,
-            symbol=symbol,
-            field=field,
-        )
-
-class daily_volume(daily_volume_kw, core.Node.D0_F64):
+@dataclass(frozen=True)
+class daily_volume(daily_level):
     """
     >>> start = dt.date(2025, 1, 1)
     >>> end = dt.date(2025, 1, 6)
@@ -812,39 +768,35 @@ class daily_volume(daily_volume_kw, core.Node.D0_F64):
     2025-01-05 None
     """
 
-    DEF: ClassVar[core.Defn] = core.define.node(
-        core.Node.D0_F64, daily_volume_kw
-    )
-    bind = define.bind_from_new(
-        daily_volume_kw.new,
-        daily_volume_kw.ref,
-    )
-
-#  ------------------
-
-class daily_open_interest_kw(daily_level_kw):
-
     @classmethod
     def new(
         cls,
         d: core.Ref.Scalar_Date,
-        product: str | None = None,
-        symbol: str | None = None,
-        bar: TBar = None,
-        field: TField = "open_interest",
+        product: str | None=None,
+        symbol: str | None=None,
+        bar: TBar=None,
+        field: TField = "volume",
     ):
-        assert field == "open_interest", (cls, field)
+        assert field == "volume", (cls, field)
         bar, product, symbol = new_bar(bar, product, symbol)
-        return daily_open_interest(
-            "daily_open_interest",
+        return daily_volume(
+            "daily_volume",
             d=d,
             bar=bar,
             product=product,
             symbol=symbol,
             field=field,
         )
+    bind = define.bind_from_new(
+        new,
+        core.Node.D0_F64.ref,
+    )
 
-class daily_open_interest(daily_open_interest_kw, core.Node.D0_F64):
+#  ------------------
+
+
+@dataclass(frozen=True)
+class daily_open_interest(daily_level):
     """
     >>> start = dt.date(2025, 1, 1)
     >>> end = dt.date(2025, 1, 6)
@@ -865,12 +817,29 @@ class daily_open_interest(daily_open_interest_kw, core.Node.D0_F64):
     2025-01-05 None
     """
 
-    DEF: ClassVar[core.Defn] = core.define.node(
-        core.Node.D0_F64, daily_open_interest_kw
-    )
+    @classmethod
+    def new(
+        cls,
+        d: core.Ref.Scalar_Date,
+        product: str | None = None,
+        symbol: str | None = None,
+        bar: TBar = None,
+        field: TField = "open_interest",
+    ):
+        assert field == "open_interest", (cls, field)
+        bar, product, symbol = new_bar(bar, product, symbol)
+        return daily_open_interest(
+            "daily_open_interest",
+            d=d,
+            bar=bar,
+            product=product,
+            symbol=symbol,
+            field=field,
+        )
+        
     bind = define.bind_from_new(
-        daily_open_interest_kw.new,
-        daily_open_interest_kw.ref,
+        new,
+        core.Node.D0_F64.ref,
     )
     
 

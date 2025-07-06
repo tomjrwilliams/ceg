@@ -1,9 +1,8 @@
-from typing import Callable
+from typing import Callable, cast
 from functools import partial, lru_cache
 
 from dataclasses import dataclass
 
-from llvmlite.ir import Value
 from numba import vectorize, float64, int32
 import numpy as np
 
@@ -119,7 +118,7 @@ if __name__ == "__main__":
     rng = np.random.default_rng(seed=69)
 
     x = 1 + rng.normal(0., 1., (100,))
-    y = (0.5 * x) + rng.normal(2., .1, (100,))
+    y = cast(np.ndarray, (0.5 * x) + rng.normal(2., .1, (100,)))
 
     y_mu = np.mean(y)
     y_cent = y - y_mu
