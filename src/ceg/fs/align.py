@@ -57,9 +57,9 @@ class align_d0_date(Node.D0_Date):
     to: Ref.Any
     tx: float
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_Date, to: Ref.Any, tx=10e-6):
-        return cls("align_d0_date", v=v, to=to, tx=tx)
+    @staticmethod
+    def new(v: Ref.Scalar_Date, to: Ref.Any, tx=10e-6):
+        return align_d0_date("align_d0_date", v=v, to=to, tx=tx)
 
     def __call__(self, event: Event, graph: Graph):
         if event.prev is None:
@@ -108,9 +108,9 @@ class align_d0_f64(Node.D0_F64):
     to: Ref.Any
     tx: float
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, to: Ref.Any, tx=10e-6):
-        return cls("align_d0_f64", v=v, to=to, tx=tx)
+    @staticmethod
+    def new(v: Ref.Scalar_F64, to: Ref.Any, tx=10e-6):
+        return align_d0_f64("align_d0_f64", v=v, to=to, tx=tx)
 
     def __call__(self, event: Event, graph: Graph):
         if event.prev is None:
@@ -138,9 +138,9 @@ class lag_d0_f64(Node.Scalar_F64):
     v: Ref.Scalar_F64
     w: int
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, w: int):
-        return cls("lag_d0_f64", v=v, w=w)
+    @staticmethod
+    def new(v: Ref.Scalar_F64, w: int):
+        return lag_d0_f64("lag_d0_f64", v=v, w=w)
 
     def __call__(self, event: Event, graph: Graph):
         return self.v.history(graph).last_n_before(
@@ -158,9 +158,9 @@ class lag_d0_date(Node.Scalar_Date):
     v: Ref.Scalar_Date
     w: int
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_Date, w: int):
-        return cls("lag_d0_date", v=v, w=w)
+    @staticmethod
+    def new(v: Ref.Scalar_Date, w: int):
+        return lag_d0_date("lag_d0_date", v=v, w=w)
 
     def __call__(self, event: Event, graph: Graph):
         return self.v.history(graph).last_n_before(

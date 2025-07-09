@@ -69,9 +69,9 @@ class pca(Node.D1_F64_D2_F64):
     signs: tuple[int | None] | None
     centre: bool
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         vs: tuple[Ref.Scalar_F64, ...],
         window: int,
         factors: int,
@@ -79,7 +79,7 @@ class pca(Node.D1_F64_D2_F64):
         signs: tuple[int | None] | None = None,
         centre: bool = False,
     ):
-        return cls(
+        return pca(
             "pca",
             vs=vs,
             window=window,
@@ -190,9 +190,9 @@ class pca_v(Node.D1_F64_D2_F64):
             #  when=ByDate.month_end(d)
         )
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         vs: Ref.Vector_F64,
         window: int,
         factors: int,
@@ -200,7 +200,7 @@ class pca_v(Node.D1_F64_D2_F64):
         signs: tuple[int | None] | None = None,
         centre: bool = False,
     ):
-        return cls(
+        return pca_v(
             "pca_v",
             vs=vs,
             window=window,

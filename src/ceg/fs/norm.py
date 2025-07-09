@@ -78,9 +78,9 @@ class norm_range_pct(Node.Scalar_F64):
     a: float
     b: float
 
-    @classmethod
+    @staticmethod
     def new(
-        cls, 
+        # cls, 
         l: Ref.Scalar_F64, 
         r: Ref.Scalar_F64, 
         v: Ref.Scalar_F64,
@@ -142,9 +142,9 @@ class norm_mid_pct_vec(Node.Vector_F64):
     a: float
     b: float
 
-    @classmethod
+    @staticmethod
     def new(
-        cls, 
+        # cls, 
         vec: Ref.Vector_F64,
         a: float = 0.,
         b: float = 1.,
@@ -200,9 +200,9 @@ class norm_mid_vec(Node.Vector_F64):
     a: float
     b: float
 
-    @classmethod
+    @staticmethod
     def new(
-        cls, 
+        # cls, 
         vec: Ref.Vector_F64,
         a: float = 0.,
         b: float = 1.,
@@ -258,9 +258,9 @@ class norm_mid_inner_vec( Node.Vector_F64):
     a: float
     b: float
 
-    @classmethod
+    @staticmethod
     def new(
-        cls, 
+        # cls, 
         vec: Ref.Vector_F64,
         a: float = 0.,
         b: float = 1.,

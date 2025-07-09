@@ -63,13 +63,13 @@ class vs_x_vec(Node.D0_F64):
     vs: tuple[Ref.D0_F64, ...]
     vec: Ref.D1_F64
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         vs: tuple[Ref.D0_F64, ...],
         vec: Ref.D1_F64,
     ):
-        return cls("vs_x_vec", vs=vs, vec=vec)
+        return vs_x_vec("vs_x_vec", vs=vs, vec=vec)
 
     def __call__(self, event: Event, graph: Graph):
         vs = list(
@@ -135,14 +135,14 @@ class v_x_vec_i( Node.D0_F64):
     vec: Ref.D1_F64
     i: int
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.D0_F64,
         vec: Ref.D1_F64,
         i: int,
     ):
-        return cls("v_x_vec_i", v=v, vec=vec, i=i)
+        return v_x_vec_i("v_x_vec_i", v=v, vec=vec, i=i)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
@@ -205,9 +205,9 @@ class vec_x_mat_i( Node.D0_F64):
     f: int
     slot: int
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.D1_F64,
         vec: Ref.D1_F64_D2_F64,
         f: int,

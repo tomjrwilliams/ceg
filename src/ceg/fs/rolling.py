@@ -54,9 +54,9 @@ class sum(Node.Scalar_F64):
     v: Ref.Scalar_F64
     window: int
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, window: int):
-        return cls("sum", v=v, window=window)
+    @staticmethod
+    def new(v: Ref.Scalar_F64, window: int):
+        return sum("sum", v=v, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return np.nansum(
@@ -104,13 +104,13 @@ class mean(Node.Scalar_F64):
     v: Ref.Scalar_F64
     window: int
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
         window: int,
     ):
-        return cls("mean", v=v, window=window)
+        return mean("mean", v=v, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return np.nanmean(
@@ -130,12 +130,12 @@ class mean_w(Node.Scalar_F64):
     #
     v: Ref.Scalar_F64
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
     ):
-        return cls(
+        return mean_w(
             "mean_w",
             v=v,
         )
@@ -201,9 +201,9 @@ class mean_ew(Node.Scalar_F64):
     span: float | None
     alpha: float | None
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
         span: float | None=None,
         alpha: float | None=None,
@@ -214,11 +214,11 @@ class mean_ew(Node.Scalar_F64):
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
-        v = self.v.history(graph).last_before(event.t)
+        v = self.v.history(graph).last_before(event.t, strict=False)
         if event.prev is None:
             return v
         rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
-        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False)
+        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False, strict=False)
         if prev is None or np.isnan(prev):
             return v
         elif v is None or np.isnan(v):
@@ -269,8 +269,8 @@ class std(Node.Scalar_F64):
     v: Ref.Scalar_F64
     window: int
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, window: int):
+    @staticmethod
+    def new(v: Ref.Scalar_F64, window: int):
         return std("std", v=v, window=window)
 
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
@@ -294,12 +294,12 @@ class std_w(Node.Scalar_F64):
     #
     v: Ref.Scalar_F64
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
     ):
-        return cls(
+        return std_w(
             "std_w",
             v=v,
         )
@@ -353,9 +353,9 @@ class std_ew(Node.Scalar_F64):
     span: float | None
     alpha: float | None
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
         mu: Ref.Scalar_F64,
         span: float | None=None,
@@ -367,14 +367,14 @@ class std_ew(Node.Scalar_F64):
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
-        v = self.v.history(graph).last_before(event.t)
-        mu = self.mu.history(graph).last_before(event.t)
+        v = self.v.history(graph).last_before(event.t, strict=False)
+        mu = self.mu.history(graph).last_before(event.t, strict=False)
         if v is None or mu is None:
             return v
         if event.prev is None:
             return v - mu
         rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
-        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False)
+        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False, strict=False)
         if prev is None or np.isnan(prev):
             return v
         alpha = self.alpha
@@ -425,8 +425,8 @@ class rms(Node.Scalar_F64):
     v: Ref.Scalar_F64
     window: int
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, window: int):
+    @staticmethod
+    def new(v: Ref.Scalar_F64, window: int):
         return rms("rms", v=v, window=window)
 
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
@@ -454,12 +454,12 @@ class rms_w(Node.Scalar_F64):
     #
     v: Ref.Scalar_F64
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
     ):
-        return cls(
+        return rms_w(
             "rms_w",
             v=v,
         )
@@ -507,9 +507,9 @@ class rms_ew(Node.Scalar_F64):
     alpha: float | None
     b: float
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
         span: float | None=None,
         alpha: float | None=None,
@@ -522,13 +522,13 @@ class rms_ew(Node.Scalar_F64):
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
-        v = self.v.history(graph).last_before(event.t)
+        v = self.v.history(graph).last_before(event.t, strict=False)
         if event.prev is None:
             if v is None:
                 return v
             return np.abs(v) * self.b
         rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
-        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False)
+        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False, strict=False)
         if prev is None or np.isnan(prev) or v is None or np.isnan(v):
             if v is None:
                 return v
@@ -587,9 +587,9 @@ class max( Node.Scalar_F64):
     v: Ref.Scalar_F64
     window: int
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, window: int):
-        return cls("max", v=v, window=window)
+    @staticmethod
+    def new(v: Ref.Scalar_F64, window: int):
+        return max("max", v=v, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return np.nanmax(self.v.history(graph).last_n_before(
@@ -608,12 +608,12 @@ class max_w(Node.Scalar_F64):
     #
     v: Ref.Scalar_F64
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
     ):
-        return cls(
+        return max_w(
             "max_w",
             v=v,
         )
@@ -667,9 +667,9 @@ class max_ew(Node.Scalar_F64):
     span: float | None
     alpha: float | None
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
         mu: Ref.Scalar_F64 | None = None,
         span: float | None=None,
@@ -685,11 +685,11 @@ class max_ew(Node.Scalar_F64):
 
     def __call__(self, event: Event, graph: Graph):
         alpha = self.alpha
-        v = self.v.history(graph).last_before(event.t)
+        v = self.v.history(graph).last_before(event.t, strict=False)
         if event.prev is None:
             return v
         rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
-        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False)
+        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False, strict=False)
         if v is None or np.isnan(v):
             return np.nan
         if prev is None or np.isnan(prev):
@@ -746,9 +746,9 @@ class min(Node.Scalar_F64):
     v: Ref.Scalar_F64
     window: int
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, window: int):
-        return cls("min", v=v, window=window)
+    @staticmethod
+    def new(v: Ref.Scalar_F64, window: int):
+        return min("min", v=v, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return np.nanmin(
@@ -767,12 +767,12 @@ class min_w(Node.Scalar_F64):
     #
     v: Ref.Scalar_F64
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
     ):
-        return cls(
+        return min_w(
             "min_w",
             v=v,
         )
@@ -826,15 +826,15 @@ class min_ew(Node.Scalar_F64):
     span: float | None
     alpha: float | None
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
         mu: Ref.Scalar_F64 | None = None,
         span: float | None=None,
         alpha: float | None=None,
     ):
-        return cls("min_ew", v=v, mu=mu, **ewm_kwargs(
+        return min_ew("min_ew", v=v, mu=mu, **ewm_kwargs(
             span=span, alpha=alpha
         ))
     bind = define.bind_from_new(
@@ -842,12 +842,12 @@ class min_ew(Node.Scalar_F64):
     )
 
     def __call__(self, event: Event, graph: Graph):
-        v = self.v.history(graph).last_before(event.t)
+        v = self.v.history(graph).last_before(event.t, strict=False)
         if event.prev is None:
             return v
         rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
         # TODO: fix allow nan......
-        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False)
+        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False, strict=False)
         if v is None or np.isnan(v):
             return np.nan
         if prev is None or np.isnan(prev):
@@ -914,9 +914,9 @@ class skew(Node.Scalar_F64):
     v: Ref.Scalar_F64
     window: int
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, window: int):
-        return cls("skew", v=v, window=window)
+    @staticmethod
+    def new(v: Ref.Scalar_F64, window: int):
+        return skew("skew", v=v, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return scipy.stats.skew(
@@ -960,9 +960,9 @@ class kurtosis(Node.Scalar_F64):
     v: Ref.Scalar_F64
     window: int
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, window: int):
-        return cls("kurtosis", v=v, window=window)
+    @staticmethod
+    def new(v: Ref.Scalar_F64, window: int):
+        return kurtosis("kurtosis", v=v, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return scipy.stats.kurtosis(
@@ -1010,9 +1010,9 @@ class quantile(Node.Scalar_F64):
     q: float
     window: int
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, q: float, window: int):
-        return cls("quantile", v=v,q=q, window=window)
+    @staticmethod
+    def new(v: Ref.Scalar_F64, q: float, window: int):
+        return quantile("quantile", v=v,q=q, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return np.nanquantile(
@@ -1033,12 +1033,12 @@ class quantile_w(Node.Scalar_F64):
     #
     v: Ref.Scalar_F64
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
     ):
-        return cls(
+        return quantile_w(
             "quantile_w",
             v=v,
         )
@@ -1059,14 +1059,14 @@ class quantile_ew(Node.Scalar_F64):
     span: float | None
     alpha: float | None
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
         span: float | None=None,
         alpha: float | None=None,
     ):
-        return cls("quantile_ew", v=v, **ewm_kwargs(
+        return quantile_ew("quantile_ew", v=v, **ewm_kwargs(
             span=span, alpha=alpha
         ))
 
@@ -1125,16 +1125,16 @@ class cov(Node.Scalar_F64):
     mu_1: Ref.Scalar_F64 | None
     mu_2: Ref.Scalar_F64 | None
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v1: Ref.Scalar_F64,
         v2: Ref.Scalar_F64,
         window: int,
         mu_1: Ref.Scalar_F64 | None = None,
         mu_2: Ref.Scalar_F64 | None = None,
     ):
-        return cls(
+        return cov(
             "cov",
             v1=v1,
             v2=v2,
@@ -1227,14 +1227,14 @@ class corr( Node.Scalar_F64):
     v1: Ref.Scalar_F64 # vol
     v2: Ref.Scalar_F64 # vol
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         cov: Ref.Scalar_F64,
         v1: Ref.Scalar_F64,
         v2: Ref.Scalar_F64,
     ):
-        return cls(
+        return corr(
             "corr",
             cov=cov,
             v1=v1,
@@ -1310,14 +1310,14 @@ class beta(Node.Scalar_F64):
     v1: Ref.Scalar_F64 # vol
     v2: Ref.Scalar_F64 # vol
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         corr: Ref.Scalar_F64,
         v1: Ref.Scalar_F64,
         v2: Ref.Scalar_F64,
     ):
-        return cls(
+        return beta(
             "beta",
             corr=corr,
             v1=v1,

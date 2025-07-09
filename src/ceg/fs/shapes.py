@@ -59,12 +59,12 @@ class vs_to_vec( Node.D1_F64):
     #
     vs: tuple[Ref.D0_F64, ...]
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         vs: tuple[Ref.D0_F64, ...],
     ):
-        return cls("vs_to_vec", vs=vs)
+        return vs_to_vec("vs_to_vec", vs=vs)
 
     def __call__(self, event: Event, graph: Graph):
         return np.array(list(
@@ -133,9 +133,9 @@ class v_args_to_vec(Node.D1_F64):
     v14: Ref.Scalar_F64 | None = None
     v15: Ref.Scalar_F64 | None = None
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v0: Ref.Scalar_F64,
         v1: Ref.Scalar_F64 | None = None,
         v2: Ref.Scalar_F64 | None = None,
@@ -171,14 +171,17 @@ class v_args_to_vec(Node.D1_F64):
             self.v10, self.v11, self.v12, self.v13, self.v14, self.v15
         ]
         vs = [v for v in vs if v is not None]
-        return np.array(list(
+        vals = list(
             map(
                 lambda v: v.history(graph).last_before(
-                    event.t
+                    event.t, strict=False
                 ),
                 vs,
             )
-        ))
+        )
+        if None in vals:
+            return None
+        return np.array(vals)
 
 #  ------------------
 
@@ -197,9 +200,9 @@ class mat_tup_to_v(Node.D1_F64):
     i1: int
     slot: int
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         vec: Ref.D1_F64_D2_F64,
         i0: int,
         i1: int,

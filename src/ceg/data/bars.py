@@ -567,17 +567,16 @@ class daily_open(daily_level):
     2025-01-05 None
     """
 
-
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         d: core.Ref.Scalar_Date,
         product: str | None = None,
         symbol: str | None = None,
         bar: TBar = None,
         field: TField = "open",
     ):
-        assert field == "open", (cls, field)
+        assert field == "open", field
         bar, product, symbol = new_bar(bar, product, symbol)
         return daily_open(
             "daily_open",
@@ -592,7 +591,7 @@ class daily_open(daily_level):
         new,
         core.Node.D0_F64.ref,
     )
-    
+
 #  ------------------
 
 
@@ -618,16 +617,16 @@ class daily_high(daily_level):
     2025-01-05 None
     """
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         d: core.Ref.Scalar_Date,
         product: str | None = None,
         symbol: str | None = None,
         bar: TBar = None,
         field: TField = "high",
     ):
-        assert field == "high", (cls, field)
+        assert field == "high", field
         bar, product, symbol = new_bar(bar, product, symbol)
         return daily_high(
             "daily_high",
@@ -667,16 +666,16 @@ class daily_low(daily_level):
     2025-01-05 None
     """
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         d: core.Ref.Scalar_Date,
         product: str | None = None,
         symbol: str | None = None,
         bar: TBar = None,
         field: TField = "low",
     ):
-        assert field == "low", (cls, field)
+        assert field == "low", field
         bar, product, symbol = new_bar(bar, product, symbol)
         return daily_low(
             "daily_low",
@@ -718,16 +717,16 @@ class daily_close(daily_level):
     2025-01-05 None
     """
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         d: core.Ref.Scalar_Date,
         product: str | None = None,
         symbol: str | None = None,
         bar: TBar = None,
         field: TField = "close",
     ):
-        assert field == "close", (cls, field)
+        assert field == "close", field
         bar, product, symbol = new_bar(bar, product, symbol)
         return daily_close(
             "daily_close",
@@ -768,16 +767,16 @@ class daily_volume(daily_level):
     2025-01-05 None
     """
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         d: core.Ref.Scalar_Date,
         product: str | None=None,
         symbol: str | None=None,
         bar: TBar=None,
         field: TField = "volume",
     ):
-        assert field == "volume", (cls, field)
+        assert field == "volume", field
         bar, product, symbol = new_bar(bar, product, symbol)
         return daily_volume(
             "daily_volume",
@@ -817,16 +816,16 @@ class daily_open_interest(daily_level):
     2025-01-05 None
     """
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         d: core.Ref.Scalar_Date,
         product: str | None = None,
         symbol: str | None = None,
         bar: TBar = None,
         field: TField = "open_interest",
     ):
-        assert field == "open_interest", (cls, field)
+        assert field == "open_interest", field
         bar, product, symbol = new_bar(bar, product, symbol)
         return daily_open_interest(
             "daily_open_interest",
@@ -836,7 +835,7 @@ class daily_open_interest(daily_level):
             symbol=symbol,
             field=field,
         )
-        
+
     bind = define.bind_from_new(
         new,
         core.Node.D0_F64.ref,

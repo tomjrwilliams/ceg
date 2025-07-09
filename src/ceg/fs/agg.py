@@ -60,9 +60,9 @@ class mean_vec(Node.Scalar_F64):
     a: float
     b: float
 
-    @classmethod
+    @staticmethod
     def new(
-        cls, 
+        # cls, 
         vec: Ref.Vector_F64,
         a: float = 0.,
         b: float = 1.,
@@ -116,9 +116,9 @@ class sum_vec(Node.Scalar_F64):
     a: float
     b: float
 
-    @classmethod
+    @staticmethod
     def new(
-        cls, 
+        # cls, 
         vec: Ref.Vector_F64,
         a: float = 0.,
         b: float = 1.,
@@ -151,9 +151,9 @@ class sum_mat_i(Node.Scalar_F64):
     b: float
     t: bool
 
-    @classmethod
+    @staticmethod
     def new(
-        cls, 
+        # cls, 
         mat: Ref.D1_F64_D2_F64,
         slot: int,
         i: int,

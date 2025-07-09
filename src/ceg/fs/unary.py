@@ -59,8 +59,8 @@ class abs(Node.Scalar_F64):
     #
     v: Ref.Scalar_F64
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64):
+    @staticmethod
+    def new(v: Ref.Scalar_F64):
         return abs("abs", v=v)
 
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
@@ -75,6 +75,7 @@ class abs(Node.Scalar_F64):
         hist = self.v.history(graph)
 
         v0 = hist.last_before(event.t)
+
         if v0 is None:
             return v0
 
@@ -111,8 +112,8 @@ class abs_change(Node.Scalar_F64):
     #
     v: Ref.Scalar_F64
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64):
+    @staticmethod
+    def new(v: Ref.Scalar_F64):
         return abs_change("abs_change", v=v)
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
@@ -169,8 +170,8 @@ class pct_change(Node.Scalar_F64):
     #
     v: Ref.Scalar_F64
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64):
+    @staticmethod
+    def new(v: Ref.Scalar_F64):
         return pct_change("pct_change", v=v)
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
@@ -185,8 +186,8 @@ class pct_change(Node.Scalar_F64):
 
         hist = self.v.history(graph)
 
-        v0 = hist.last_before(event.t)
-        v1 = hist.last_before(event.prev.t, allow_nan=False)
+        v0 = hist.last_before(event.t, strict=False)
+        v1 = hist.last_before(event.prev.t, allow_nan=False, strict=False)
         
         if v0 is None or v1 is None or np.isnan(v0) or np.isnan(v1):
             return np.nan
@@ -227,9 +228,9 @@ class sqrt(Node.Scalar_F64):
     #
     v: Ref.Scalar_F64
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64):
-        return cls("sqrt", v=v)
+    @staticmethod
+    def new(v: Ref.Scalar_F64):
+        return sqrt("sqrt", v=v)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
@@ -271,9 +272,9 @@ class sq(Node.Scalar_F64):
     #
     v: Ref.Scalar_F64
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64):
-        return cls("sq", v=v)
+    @staticmethod
+    def new(v: Ref.Scalar_F64):
+        return sq("sq", v=v)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
@@ -319,8 +320,8 @@ class cum_sum(Node.Scalar_F64):
     type: str
     #
     v: Ref.Scalar_F64
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64):
+    @staticmethod
+    def new(v: Ref.Scalar_F64):
         return cum_sum("cum_sum", v=v.select(4))
 
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
@@ -377,10 +378,10 @@ class cum_prod(Node.Scalar_F64):
     v: Ref.Scalar_F64
     a: float
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, a: float = 0.0):
+    @staticmethod
+    def new(v: Ref.Scalar_F64, a: float = 0.0):
         # NOTE: eg. a = 1 to compound pct rx
-        return cls("cum_prod", v=v, a=a)
+        return cum_prod("cum_prod", v=v, a=a)
 
     def __call__(self, event: Event, graph: Graph):
         hist = self.v.history(graph)

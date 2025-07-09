@@ -3,7 +3,7 @@ import types
 import datetime as dt
 import math
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import polars as pl
@@ -418,7 +418,7 @@ def df_to_line_plot(
     exprs = {
         label: EXPR_MAP[
             e.split(":")[0]
-        ](pl.col(label), **expr_params(e), LEN=len(data)) for label, e in zip(
+        ](pl.col(label), **expr_params(e), **dict(LEN=len(data))) for label, e in zip(
             df_exprs.get_column("label"),
             df_exprs.get_column("expr"),
         )
@@ -654,7 +654,7 @@ class RunGraph(Transformation):
             ref_align = refs[align]
 
             if slot is not None:
-                ref = ref._replace(slot=slot)
+                ref = cast(ceg.Ref.Scalar_F64, ref.select_slot(slot))
 
             g, ref = g.bind(
                 ceg.fs.align.scalar_f64.new(ref, ref_align),

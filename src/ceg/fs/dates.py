@@ -45,9 +45,9 @@ class daily(Node.Scalar_Date):
     end: dt.date
     n: int
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         prev: Ref.Scalar_Date,
         start: dt.date,
         end: dt.date,
@@ -75,13 +75,13 @@ class daily(Node.Scalar_Date):
 
 
     def __call__(self, event: Event, graph: Graph):
-        h = self.prev.history(graph, strict=False)
-        if h is None:
+        h = self.prev.history(graph)
+        d = h.last_before(event.t, strict = False)
+        if d is None:
             if event.ref.eq(self.prev):
                 return self.start
             raise ValueError(dict(self=self, h=h))
-        d = h.last_before(event.t)
-        assert d is not None, self
+        assert isinstance(d, dt.date), dict(self=self, d=d)
         d = d + dt.timedelta(days=self.n)
         if d > self.end:
             raise ValueError(self, d)

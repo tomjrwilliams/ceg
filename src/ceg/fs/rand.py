@@ -92,9 +92,9 @@ class gaussian(Node.D0_F64):
     seed: int
     v: Ref.D0_F64 | None
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         mean: float = 0.0,
         std: float = 1.0,
         seed: int = 0,
@@ -177,16 +177,16 @@ class gaussian_1d(Node.D1_F64):
     seed: int
     v: Ref.D1_F64 | None
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         shape: tuple[int],
         mean: float = 0.0,
         std: float = 1.0,
         seed: int = 0,
         v: Ref.D1_F64 | None = None,
     ):
-        return cls(
+        return gaussian_1d(
             "gaussian_1d",
             shape,
             mean=mean,
@@ -277,16 +277,16 @@ class gaussian_2d(Node.D2_F64):
     seed: int
     v: Ref.D2_F64 | None
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         shape: tuple[int, int],
         mean: float = 0.0,
         std: float = 1.0,
         seed: int = 0,
         v: Ref.D2_F64 | None = None,
     ):
-        return cls(
+        return gaussian_2d(
             "gaussian_2d",
             shape,
             mean=mean,

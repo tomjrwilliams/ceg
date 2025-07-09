@@ -39,8 +39,8 @@ class const_float(Node.D0_F64):
     v: float
     rf: Ref.Scalar_F64 | None
 
-    @classmethod
-    def new(cls, v: float, rf: Ref.Scalar_F64 | None = None):
+    @staticmethod
+    def new(v: float, rf: Ref.Scalar_F64 | None = None):
         return const_float("const_float", v=v, rf=rf)
 
     @classmethod

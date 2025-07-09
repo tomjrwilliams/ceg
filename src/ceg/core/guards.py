@@ -90,26 +90,20 @@ G = TypeVar("G", bound=GuardInterface)
 class ReadyAll(GuardInterface[N]):
     mut: GuardMutable
     params: tuple[int, ...]
-    ts: list[float]
-    queue: list[tuple[float, int]]
+    counter: dict[float, int]
 
     @classmethod
     def new(cls) -> ReadyAll:
-        return ReadyAll(GuardMutable(), (), [], [])  # type: ignore
+        return ReadyAll(GuardMutable(), (), {})  # type: ignore
 
     def init(
         self,
         ref: Ref.Any,
         params: frozendict[int, tuple[str, ...]],
     ) -> ReadyAll:
-        ts = []
-        queue = []
-        heapify(ts)
-        heapify(queue)
         return replace(self, 
             params=tuple(params.keys()),
-            ts=ts,
-            queue=queue,
+            counter={}
         )
 
     def next(
@@ -123,19 +117,16 @@ class ReadyAll(GuardInterface[N]):
         # TODO: now we have prev
         # assume we always push a final event, can simply wait for prev != event.t, fire event(t=prev)? but then events arent strictly ordered?
         t = event.t
-        i = event.ref.i
-        if not len(self.ts) or t > self.ts[-1]:
-            heappush(self.ts, t)
-            for p in self.params:
-                heappush(self.queue, (t, p))
-        t_next = self.ts[0]
-        (t_next_, i_next) = self.queue[0]
-        assert t_next == t_next_, (t_next, t_next_)
-        if t_next == event.t and i_next == i:
-            heappop(self.queue)
-        if not len(self.queue) or self.queue[0][0] > t_next:
-            heappop(self.ts)
+        c = self.counter.get(t, 0) + 1
+        if c == 1 and len(self.counter):
+            pop = [prev_t for prev_t in self.counter.keys() if prev_t < t]
+            for prev_t in pop:
+                self.counter.pop(prev_t)
+        if c == len(self.params):
+            if len(self.params) > 1:
+                self.counter.pop(t)
             return self.set_prev(Event.new(t, ref), event)
+        self.counter[t] = c
         return None
 
 @dataclass(frozen=True)

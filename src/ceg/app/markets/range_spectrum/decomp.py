@@ -70,7 +70,7 @@ def lines(
             "pnl": fs.risk.pnl_linear.bind,
             "cum": fs.unary.cum_sum.bind,
             "stack": fs.shapes.v_args_to_vec.bind,
-            "pca": fs.rolling.pca_v.month_end,
+            "pca": fs.factors.pca_v.month_end,
             "dot": fs.mm.vec_x_mat_i.bind,
             "loading": fs.shapes.mat_tup_to_v.bind,
         })))

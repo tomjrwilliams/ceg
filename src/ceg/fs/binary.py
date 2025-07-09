@@ -65,9 +65,9 @@ class truncate(Node.Scalar_F64):
     bound: Ref.Scalar_F64
     b: float
 
-    @classmethod
-    def new(cls, v: Ref.Scalar_F64, bound: Ref.Scalar_F64, b: float = 1.):
-        return cls("truncate", v=v, bound=bound, b=b)
+    @staticmethod
+    def new(v: Ref.Scalar_F64, bound: Ref.Scalar_F64, b: float = 1.):
+        return truncate("truncate", v=v, bound=bound, b=b)
 
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
@@ -124,8 +124,8 @@ class ratio(Node.Scalar_F64):
     l: Ref.Scalar_F64
     r: Ref.Scalar_F64
 
-    @classmethod
-    def new(cls, l: Ref.Scalar_F64, r: Ref.Scalar_F64):
+    @staticmethod
+    def new(l: Ref.Scalar_F64, r: Ref.Scalar_F64):
         return ratio("ratio", l=l, r=r)
 
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
@@ -186,15 +186,15 @@ class pct_diff(Node.Scalar_F64):
     shift: tuple[int | None, ...] | None
     m: float | None = None
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         l: Ref.Scalar_F64,
         r: Ref.Scalar_F64,
         shift: tuple[int | None, ...] | None = None,
         m: float | None = None,
     ):
-        return cls("pct_diff", l=l, r=r, shift=shift, m=m)
+        return pct_diff("pct_diff", l=l, r=r, shift=shift, m=m)
 
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
@@ -258,8 +258,8 @@ class subtract(Node.Scalar_F64):
     a: float
     b: float
 
-    @classmethod
-    def new(cls, l: Ref.Scalar_F64, r: Ref.Scalar_F64, a: float = 0., b: float = 1.):
+    @staticmethod
+    def new(l: Ref.Scalar_F64, r: Ref.Scalar_F64, a: float = 0., b: float = 1.):
         return subtract("subtract", l=l, r=r, a=a,b=b)
 
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
@@ -322,8 +322,8 @@ class add(Node.Scalar_F64):
     a: float
     b: float
 
-    @classmethod
-    def new(cls, l: Ref.Scalar_F64, r: Ref.Scalar_F64, a: float = 0., b: float = 1.):
+    @staticmethod
+    def new(l: Ref.Scalar_F64, r: Ref.Scalar_F64, a: float = 0., b: float = 1.):
         return add("add", l=l, r=r, a=a,b=b)
 
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
@@ -386,8 +386,8 @@ class subtract_vec_i(Node.Scalar_F64):
     a: float
     b: float
 
-    @classmethod
-    def new(cls, l: Ref.Vector_F64, r: Ref.Vector_F64, il: int, ir: int, a: float = 0., b: float = 1.):
+    @staticmethod
+    def new(l: Ref.Vector_F64, r: Ref.Vector_F64, il: int, ir: int, a: float = 0., b: float = 1.):
         return subtract_vec_i("subtract_vec_i", l=l, r=r, il=il, ir=ir, a=a,b=b)
 
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)

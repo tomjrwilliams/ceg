@@ -540,6 +540,7 @@ class define:
     ]:
         if isinstance(new, classmethod):
             new = new.__func__
+
         @wraps(new)
         def bind(
             # cls,
@@ -549,7 +550,11 @@ class define:
         ) -> tuple[Graph, R]:
             keep_ = kwargs.pop("keep", keep)
             g, r = g.bind(
-                node=new(*args, **kwargs), 
+                node=new(
+                    # cls,
+                    *args, 
+                    **kwargs
+                ), 
                 keep=keep_ # type: ignore
             )
             return g, ref(r)

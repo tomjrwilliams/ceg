@@ -100,6 +100,7 @@ def step(graph: Graph, *events: Event) -> GraphEvent:
     res = node(event, graph)
 
     if res is not None:
+
         hist = data[ref.i]
         try:
             if isinstance(hist, History.Null):
@@ -120,7 +121,9 @@ def step(graph: Graph, *events: Event) -> GraphEvent:
     dstream = graph.dstream
     guards = graph.guards
 
-    for i in dstream.get(ref.i, ()) + (
+    for i in (
+        () if res is None else dstream.get(ref.i, ())
+    ) + (
         (ref.i,) if not len(graph.ustream[ref.i]) else ()
     ):
         nd = nodes[i]

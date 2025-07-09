@@ -75,9 +75,9 @@ class xo_mean_ew_rms_ew(Node.D0_F64_4):
     span_v: float
     rx: str
 
-    @classmethod
+    @staticmethod
     def new(
-        cls,
+        # cls,
         v: Ref.Scalar_F64,
         span_f: float,
         span_s: float,

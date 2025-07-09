@@ -33,24 +33,24 @@ class GraphInterface(Protocol):
 H = TypeVar("H", bound=History.Any)
 
 
-@overload
-def history(
-    g: GraphInterface,
-    i: int,
-    t: Type[H],
-    strict: bool | Literal[True] = True,
-    slot: int | None = None,
-) -> H: ...
+# @overload
+# def history(
+#     g: GraphInterface,
+#     i: int,
+#     t: Type[H],
+#     strict: bool | Literal[True] = True,
+#     slot: int | None = None,
+# ) -> H: ...
 
 
-@overload
-def history(
-    g: GraphInterface,
-    i: int,
-    t: Type[H],
-    strict: Literal[False],
-    slot: int | None = None,
-) -> H | None: ...
+# @overload
+# def history(
+#     g: GraphInterface,
+#     i: int,
+#     t: Type[H],
+#     strict: Literal[False],
+#     slot: int | None = None,
+# ) -> H | None: ...
 
 
 def history(
@@ -62,21 +62,23 @@ def history(
 ):
     h = g.data[i]
     if slot is None:
-        if not strict and isinstance(h, History.Null):
-            return None
-        assert isinstance(h, t), dict(
-            h=h, t=t, strict=strict, node=g.nodes[i]  # type: ignore
-        )
-        return h
+        # if not strict and isinstance(h, History.Null):
+        #     return None
+        # assert isinstance(h, t), dict(
+        #     h=h, t=t, strict=strict, node=g.nodes[i]  # type: ignore
+        # )
+        return cast(t, h)
     slot = int(slot)
+    if isinstance(h, History.Null):
+        return cast(t, h)
     assert isinstance(h, tuple), (h, t, slot)
     h_slot = h[slot]
-    if not strict and isinstance(h_slot, History.Null):
-        return None
-    assert isinstance(h_slot, t), dict(
-        h=h_slot, t=t, strict=strict, node=g.nodes[i]  # type: ignore
-    )
-    return h_slot
+    # if not strict and isinstance(h_slot, History.Null):
+    #     return None
+    # assert isinstance(h_slot, t), dict(
+    #     h=h_slot, t=t, strict=strict, node=g.nodes[i]  # type: ignore
+    # )
+    return cast(t, h_slot)
 
 
 #  ------------------
@@ -133,6 +135,9 @@ class RefInterface(abc.ABC):
         return replace(
             self, scope=Scope(required=0 if not last else last)
         )
+
+    def select_slot(self, slot: int) -> RefInterface:
+        raise ValueError()
 
     @abc.abstractmethod
     def select(self, last: bool | int) -> RefInterface: ...
@@ -341,6 +346,9 @@ class Ref_D0_F64_3(RefInterface):
     def select(self, last: bool | int) -> Ref_D0_F64_3:
         return self._select(last)
 
+    def select_slot(self, slot: int) -> Ref_D0_F64:
+        return Ref_D0_F64(self.i, slot, scope=self.scope)
+
     @overload
     def history(
         self,
@@ -410,6 +418,9 @@ class Ref_D0_F64_4(RefInterface):
 
     def select(self, last: bool | int) -> Ref_D0_F64_4:
         return self._select(last)
+
+    def select_slot(self, slot: int) -> Ref_D0_F64:
+        return Ref_D0_F64(self.i, slot, scope=self.scope)
 
     @overload
     def history(

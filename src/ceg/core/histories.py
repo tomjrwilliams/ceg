@@ -341,16 +341,24 @@ class History_Null(HistoryInterface):
     def append(self, v: V, t: float):
         return
 
-    def last_n_before(self, n: int, t: float):
+    def last_n_before(self, n: int, t: float, strict: bool | int = False):
+        if not strict:
+            return np.empty((n)) * np.nan
         raise ValueError(self)
 
-    def last_n_between(self, n: int, l: float, r: float):
+    def last_n_between(self, n: int, l: float, r: float, strict: bool | int = False):
+        if not strict:
+            return np.empty((n)) * np.nan
         raise ValueError(self)
 
     def last_before(self, t: float, allow_nan: bool = True, strict: bool = True):
+        if not strict:
+            return None
         raise ValueError(self)
 
-    def last_between(self, l: float, r: float):
+    def last_between(self, l: float, r: float, strict: bool = True):
+        if not strict:
+            return None
         raise ValueError(self)
 
     def last_t(self):
@@ -405,9 +413,19 @@ class History_D0_F64(History_0D):
             assert exists >= n_strict(n, strict), self
         return res
 
+    @overload
+    def last_before(
+        self, t: float, allow_nan: bool = True, strict: Literal[True] = True
+    ) -> float: ...
+
+    @overload
+    def last_before(
+        self, t: float, allow_nan: bool = True, strict: bool = False
+    ) -> float | None: ...
+
     def last_before(
         self, t: float, allow_nan: bool = True, strict: bool = True
-    ) -> float:
+    ) -> float | None:
         f = algos.last_before if allow_nan else algos.last_before_not_nan
         exists, res = f(
             self.values,
@@ -416,6 +434,8 @@ class History_D0_F64(History_0D):
             self.mut.occupied,
             self.exponent,
         )
+        if not exists and not strict:
+            return None
         if strict:
             assert exists, self
         return res

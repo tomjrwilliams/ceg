@@ -66,14 +66,13 @@ class pos_linear(Node.D0_F64_3):
 
     freq: str | None
 
-    @classmethod
-    def new(cls, scale: Ref.Scalar_F64, d: Ref.Scalar_Date | None = None, signal: Ref.Scalar_F64 | None=None, upper: float | None = None, lower: float | None = None, delta: float | None = None, freq: str | None = None, const: float | None = None):
+    @staticmethod
+    def new(scale: Ref.Scalar_F64, d: Ref.Scalar_Date | None = None, signal: Ref.Scalar_F64 | None=None, upper: float | None = None, lower: float | None = None, delta: float | None = None, freq: str | None = None, const: float | None = None):
         return pos_linear("pos_linear", signal=signal, scale=scale, d=d, upper = upper, lower = lower, delta=delta, freq=freq, const=const)
 
     bind = define.bind_from_new(new, Node.D0_F64_3.ref)
 
     def __call__(self, event: Event, graph: Graph):
-
         if event.prev is None:
             return np.nan, np.nan, np.nan
 
@@ -87,6 +86,7 @@ class pos_linear(Node.D0_F64_3):
 
         v_scl = scl_hist.last_before(event.t)
 
+
         if self.d is not None:
             d_hist = self.d.history(graph)
             d = d_hist.last_before(event.t)
@@ -96,7 +96,7 @@ class pos_linear(Node.D0_F64_3):
             assert isinstance(d_prev, dt.date), self
         else:
             d = d_prev = None
-
+        
         ref = cast(Ref.D0_F64_3, event.ref)
 
         hist_self_pos = ref.history(graph, slot=0)
@@ -218,8 +218,8 @@ class pnl_linear(Node.Scalar_F64):
     pos: Ref.D0_F64_3
     px: Ref.Scalar_F64
 
-    @classmethod
-    def new(cls, pos: Ref.D0_F64_3, px: Ref.Scalar_F64, ):
+    @staticmethod
+    def new(pos: Ref.D0_F64_3, px: Ref.Scalar_F64, ):
         return pnl_linear("pnl_linear", pos = pos.select(4), px=px.select(4))
 
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
