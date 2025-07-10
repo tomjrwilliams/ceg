@@ -66,11 +66,12 @@ class daily(Node.Scalar_Date):
         n: int = 1,
         step=1.0,
         keep: int = 1,
+        alias: str | None = None,
     ):
         g, r = g.bind(None, Ref.Scalar_Date)
         g, r = daily.new(
             r.select(last=keep), start, end, n=n
-        ).pipe(g.bind, r, Loop.UntilDate.new(step, end, r))
+        ).pipe(g.bind, r, Loop.UntilDate.new(step, end, r), alias=alias)
         return g, cast(Ref.Scalar_Date, r)
 
 

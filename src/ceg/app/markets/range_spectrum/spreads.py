@@ -279,7 +279,7 @@ def lines(
             "dot": fs.mm.vec_x_mat_i.bind,
             "loading": fs.shapes.mat_tup_to_v.bind,
         })))
-        .with_model(init=[
+        .with_graph(nodes=[
             dict(
                 label="date",
                 I=True,# type: ignore

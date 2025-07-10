@@ -3,7 +3,7 @@ import types
 import datetime as dt
 import math
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, fields
 
 import numpy as np
 import polars as pl
@@ -88,6 +88,7 @@ def signatures(
             hints_extra = get_type_hints(f, include_extras=True)
         returns = hints.pop("return", None)
         keep = hints.pop("keep", None)
+        alias = hints.pop("alias", None)
         annots = cast(tuple[ceg.define.Annotation], ())
         for k, h in hints.items():
             extra = hints_extra[k]
@@ -188,20 +189,21 @@ def parse_date(v: str | int):
         return dt.date(y, m, d)
     vs = v.split("-")
     if len(vs) == 2:
-        y, m = v
+        y, m = vs
         return dt.date(int(y), int(m), 1)
     elif len(vs) == 3:
-        y, m, d = v
+        y, m, d = vs
         return dt.date(int(y), int(m), int(d))
     else:
         raise ValueError(v)
 
 def parse_kwarg(
+    g: ceg.Graph,
     i: int,
     kw: str, 
-    refs: dict[str, ceg.Ref.Any],
     annots: frozendict[str, Annot],
-    ks: list[str]
+    ks: list[str],
+    label: str
 ):
     if "=" in kw:
         k, v = kw.split("=")
@@ -211,7 +213,13 @@ def parse_kwarg(
     if ":" in k:
         k, t = k.split(":")
         if t == "ref":
-            v = refs[v]
+            try:
+                v = g.aliased(v)
+            except:
+                if label == v:
+                    return None
+                else:
+                    raise ValueError((k, label))  
         elif t == "date":
             v = parse_date(v)
         else:
@@ -255,9 +263,10 @@ def kwargs_ready(
         return False, []
 
 def parse_kwargs(
+    g: ceg.Graph,
     row: dict[str, str | None],
-    refs: dict[str, ceg.Ref.Any],
-    sig: Signature
+    sig: Signature,
+    label: str
 ):
     # TODO: pass in the type so we can infer from sig
     vs = [v for k, v in row.items() if k.startswith("kw-")]
@@ -265,17 +274,17 @@ def parse_kwargs(
     if not ready:
         return {}
     ks = list(sig.annots.keys())
-    return dict((
-        parse_kwarg(1+i, v, refs, sig.annots, ks)
+    res = (
+        parse_kwarg(g, 1+i, v, sig.annots, ks, label)
         for i, v in enumerate(vs)
-    ))
+    )
+    return dict((kv for kv in res if kv is not None))
 
 #  ------------------
 
 def rows_to_refs(
     g: ceg.Graph,
     df: pl.DataFrame,
-    refs: dict[str, ceg.Ref.Any],
     universe: Universe,
     sigs: Signatures,
     keep: dict[str, int] = {}
@@ -332,7 +341,7 @@ def rows_to_refs(
         sig = sigs[func_name]
         func = sig.f
 
-        kwargs = parse_kwargs(row, refs, sig)
+        kwargs = parse_kwargs(g, row, sig, label=label)
 
         if not len(kwargs):
             continue
@@ -341,20 +350,16 @@ def rows_to_refs(
             kwargs["keep"] = keep[label]
         
         if sig.depth:
-            res = func(g)(**kwargs) # type: ignore
+            res = func(g)(**kwargs, alias=label) # type: ignore
         else:
-            res = func(g, **kwargs) # type: ignore
+            res = func(g, **kwargs, alias=label) # type: ignore
 
         g, r = cast(tuple[ceg.Graph, ceg.Ref.Any], res)
-
-        # i += offset
-        # label = f"{str(i).rjust(pad, '0')}-{row['label']}"
-        refs[label] = r
 
         if init:
             es.append(ceg.Event.zero(r))
 
-    return g, refs, es
+    return g, es
 
 import plotly
 import plotly.express
@@ -386,20 +391,19 @@ def expr_params(e):
 def df_to_line_plot(
     df: pl.DataFrame,
     g: ceg.Graph,
-    refs: dict[str, ceg.Ref.Any],
     t: float,
     id: str | None = None,
 ):
     steps = None
     for label in df.get_column("label"):
-        ref = refs[label]
+        ref = g.aliased(label)
         steps = ref.history(g).mut.occupied
 
     assert steps is not None, steps
     
     data = pl.DataFrame({
         label: (
-            refs[label].history(g)
+            g.aliased(label).history(g)
             # , **(
             #     {} if slot is None else dict(slot=slot)
             # ))
@@ -490,10 +494,14 @@ class ModelKW(NamedTuple):
     def with_functions(self, universe: Universe):
         sigs = signatures(universe)
         sig_df = signatures_df(sigs)
+        dfs = tuple((
+            df for df in self.dfs
+            if df.page != self.name or df.name != "sigs"
+        ))
         return self._replace(
             universe=universe,
             signatures=sigs,
-            dfs=self.dfs + (
+            dfs=dfs + (
                 DataFrame.new(
                     self.name, 
                     "sigs", 
@@ -503,12 +511,34 @@ class ModelKW(NamedTuple):
             )
         )
 
-    def with_model(
-        self, init: pl.DataFrame | list[dict] | None=None,
+    def expand_functions(
+        self, aliasing: dict[Callable | Type[ceg.Node.Any], str] = {}
+    ):
+        universe = self.universe
+        for f_or_node_t, alias in aliasing.items():
+            if isinstance(f_or_node_t, type):
+                # TODO: assert is subclass node (and all nodes have bind)
+                universe = universe.set(alias, (
+                    f_or_node_t.bind # type: ignore
+                ))
+            else:
+                universe = universe.set(alias, (
+                    f_or_node_t
+                ))
+        if len(universe) > len(self.universe):
+            return self.with_functions(universe)
+        return self            
+
+    def with_graph(
+        self, 
+        nodes: ceg.Graph | pl.DataFrame | list[dict] | None=None,
+        using: dict[ceg.Ref.Any, Callable] = {},
+        aliasing: dict[Callable | Type[ceg.Node.Any], str] = {},
+        init: dict[ceg.Ref.Any, bool]={},
     ):
         i_schema = None
         for i, df in enumerate(self.dfs):
-            if df.name == "sigs":
+            if df.name == "sigs": # signatures
                 i_schema = i
         if i_schema is None:
             raise ValueError(self)
@@ -523,20 +553,25 @@ class ModelKW(NamedTuple):
         })
         k_last = list(empty.schema.keys())[-1]
         c_last = pl.col(k_last)
-        if init is None:
-            init = empty
-        elif isinstance(init, pl.DataFrame):
+
+        if isinstance(nodes, ceg.Graph):
+            nodes = graph_to_model(nodes, using, aliasing, init)
+            self = self.expand_functions(aliasing)
+
+        if nodes is None:
+            nodes = empty
+        elif isinstance(nodes, pl.DataFrame):
             assert all([
-                k in init for k in ("label", "func")
-            ]), init.schema
-            init = init.select(
+                k in nodes for k in ("label", "func")
+            ]), nodes.schema
+            nodes = nodes.select(
                 pl.col(k) 
-                if k in init.schema 
+                if k in nodes.schema 
                 else pl.lit(None).alias(k).cast(empty.schema[k])
                 for k in empty.schema.keys()
             )
-        elif isinstance(init, list):
-            init = pl.DataFrame([
+        elif isinstance(nodes, list):
+            nodes = pl.DataFrame([
                 {
                     "label": r["label"],
                     "I": r.get("I", None),
@@ -548,20 +583,21 @@ class ModelKW(NamedTuple):
                         ):])
                     }
                 }
-                for r in init
+                for r in nodes
             ], schema=empty.schema)
         else:
-            raise ValueError(init)
+            raise ValueError(nodes)
 
-        init = init.with_columns(
+        nodes = nodes.with_columns(
             pl.when(c_last.is_null())
             .then(pl.lit("."))
             .otherwise(c_last)
             .alias(k_last)
         )
 
+        # TODO: rename model -> graph
         df = DataFrame.new(
-            self.name, "model", data=init, editable=True, label="model"
+            self.name, "model", data=nodes, editable=True, label="model"
         )
         return self._replace(
             dfs=self.dfs + (df,),
@@ -613,7 +649,6 @@ class RunGraph(Transformation):
         self,
         page: Model,
         g: ceg.Graph,
-        refs: dict[str, ceg.Ref.Any],
         es: list[ceg.Event],
         dfs: dict[str, pl.DataFrame],
         shared: frozendict[str, Any],
@@ -631,10 +666,9 @@ class RunGraph(Transformation):
         keep_labels = df_keep.get_column("label")
         align_labels = df_align.get_column("label")
 
-        g, refs, es = g.pipe(
+        g, es = g.pipe(
             rows_to_refs, 
             dfs["model"],
-            refs=refs,
             universe=page.universe,
             sigs=page.signatures,
             keep={
@@ -650,8 +684,8 @@ class RunGraph(Transformation):
             df_align.get_column("align"),
             df_align.get_column("slot"),
         ):
-            ref = cast(ceg.Ref.Scalar_F64, refs[label])
-            ref_align = refs[align]
+            ref = cast(ceg.Ref.Scalar_F64, g.aliased(label))
+            ref_align = g.aliased(align)
 
             if slot is not None:
                 ref = cast(ceg.Ref.Scalar_F64, ref.select_slot(slot))
@@ -659,19 +693,18 @@ class RunGraph(Transformation):
             g, ref = g.bind(
                 ceg.fs.align.scalar_f64.new(ref, ref_align),
                 keep=True,
-                when=ceg.Ready.ref(ref_align)
+                when=ceg.Ready.ref(ref_align),
+                alias=label,
             )
             
             aligned[label] = ref
-
-        refs = {**refs, **aligned}
 
         # TODO: for keep, iter tfs for add_plot, get name
         # combine all labels in plot dfs
         # according to relevant plot keep requirements
 
-        if not len(refs) or not len(es) or len(df_plot) < 2:
-            return g, refs, es, shared
+        if not len(es) or len(df_plot) < 2:
+            return g, es, shared
 
         e = es[-1]
         for g, e, t in ceg.steps(
@@ -679,7 +712,7 @@ class RunGraph(Transformation):
         )():
             continue
 
-        return g, refs, [e], shared
+        return g, [e], shared
 
 @dataclass(frozen=True)
 class AddPlot(Transformation):
@@ -691,7 +724,6 @@ class AddPlot(Transformation):
         self,
         page: Model,
         g: ceg.Graph,
-        refs: dict[str, ceg.Ref.Any],
         es: list[ceg.Event],
         dfs: dict[str, pl.DataFrame],
         shared: frozendict[str, Any],
@@ -702,16 +734,77 @@ class AddPlot(Transformation):
             pl.col("label").is_not_null()
         )
 
-        if not len(refs) or not len(es) or len(df_plot) < 2:
-            return g, refs, es, shared
+        if not len(es) or len(df_plot) < 2:
+            return g, es, shared
         
         df_plot.pipe(
             df_to_line_plot,
             g,
-            refs,
             t=es[-1].t,
             id=f"{page.name}.{self.name}"
         )
-        return g, refs, es, shared
+        return g, es, shared
+
+#  ------------------
+
+def graph_to_model(
+    g: ceg.Graph, 
+    using: dict[ceg.Ref.Any, Callable],
+    aliasing: dict[Callable | Type[ceg.Node.Any], str],
+    init: dict[ceg.Ref.Any, bool]
+):
+    i_init = {ref.i: b for ref, b in init.items()}
+    using_i = {
+        ref.i: f for ref, f in using.items()
+    }
+
+    res = []
+    for i, node in enumerate(g.nodes):
+        ref = node.ref(i)
+        label = g.aliases[i]
+
+        try:
+            if i in using_i:
+                func = aliasing[using_i[i]]
+            else:
+                func = aliasing[type(node)]
+        except:
+            raise ValueError((aliasing, using, node, ref))
+
+        # TODO: drop scope from universe keys
+        r = {
+            "label": label,
+            "I":  i_init.get(ref.i, False),
+            "func": func,
+        }
+        
+        # hints = get_type_hints(f)
+        hints_extra = get_type_hints(type(node), include_extras=True)
+
+        for fld in fields(node):
+            
+            extra = hints_extra[fld.name]
+
+            if get_origin(extra) is Annotated:
+                args = get_args(extra)
+                annots = args[1:]
+
+                if ceg.define.Annotation("internal") in annots:
+                    continue
+
+            if fld.name == "type":
+                continue
+
+            v = getattr(node, fld.name)
+            if isinstance(v, ceg.Ref.Any):
+                t = "ref"
+                v = g.aliases[v.i]
+            else:
+                t = repr_type(type(v))
+            
+            r[fld.name] = f"{fld.name}:{t}={v}"
+        
+        res.append(r)
+    return res
 
 #  ------------------

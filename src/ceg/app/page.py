@@ -83,12 +83,11 @@ class Transformation:
         self,
         page: Page,
         g: ceg.Graph,
-        refs: dict[str, ceg.Ref.Any],
         es: list[ceg.Event],
         dfs: dict[str, pl.DataFrame],
         shared: frozendict[str, Any],
     ):
-        return g, refs, es, shared
+        return g, es, shared
 
 
 class DynamicKw(NamedTuple):
@@ -139,14 +138,12 @@ class Dynamic(DynamicKw, Page):
             # here we do graphs?
             g = ceg.Graph.new()
 
-            refs: dict[str, ceg.Ref.Any] = {}
             es: list[ceg.Event] = []
 
             for tf in self.tfs:
-                g, refs, es, shared = tf.apply(
+                g, es, shared = tf.apply(
                     self,
                     g,
-                    refs,
                     es,
                     self.dfs_data,
                     shared

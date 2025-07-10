@@ -56,7 +56,7 @@ def lines(
             "pnl": fs.risk.pnl_linear.bind,
             "cum": fs.unary.cum_sum.bind,
         })))
-        .with_model(init=[
+        .with_graph(nodes=[
             dict(
                 label="date",
                 I=True,# type: ignore

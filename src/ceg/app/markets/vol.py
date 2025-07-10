@@ -36,7 +36,7 @@ def lines(
             "low": data.bars.daily_low.bind,
             "close": data.bars.daily_close.bind,
         })))
-        .with_model(init=[
+        .with_graph(nodes=[
             dict(
                 label="date",
                 I=True,# type: ignore

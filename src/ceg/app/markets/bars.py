@@ -1,12 +1,20 @@
 
 from typing import Any, cast, Callable
-from functools import wraps
+import datetime as dt
 
 from frozendict import frozendict
 
+import ceg
 import ceg.fs as fs
 import ceg.data as data
 import ceg.app as app
+
+FIELDS = {
+    "open": data.bars.daily_open,
+    "high": data.bars.daily_high,
+    "low": data.bars.daily_low,
+    "close": data.bars.daily_close,
+}
 
 def lines(
     symbol: str,
@@ -17,37 +25,41 @@ def lines(
     shared: app.Shared = cast(app.Shared, frozendict())
 ):
     ident = f"{product}-{symbol}"
+    g = ceg.Graph.new()
+    g, d = fs.dates.daily.loop(
+        g, 
+        app.model.parse_date(start), 
+        app.model.parse_date(end),
+        alias="date"
+    )
+    for field, node in FIELDS.items():
+        g, n = node.bind(
+            g,
+            d, 
+            product=product, 
+            symbol=symbol, 
+            alias=f"{ident}-{field[0].upper()}"
+        )
     return (
         app.model.Model.new(
             f"bars: {ident}",
             shared.set("steps", steps)
         )
         .with_universe(data.bars.UNIVERSE)
-        .with_functions(cast(app.model.Universe, frozendict({
-            "date": fs.dates.daily.loop,
-            "open": data.bars.daily_open.bind,
-            "high": data.bars.daily_high.bind,
-            "low": data.bars.daily_low.bind,
-            "close": data.bars.daily_close.bind,
-        })))
-        .with_model(init=[
-            dict(
-                label="date",
-                I=True,
-                func="date",
-                start=start,
-                end=end,
-            )
-        ] + [
-            dict(
-                label=f"{ident}-{field[0].upper()}",
-                func=field,
-                d="d:ref=date",
-                product=product,
-                symbol=symbol,
-            )
-            for field in ["open", "high", "low", "close"]
-        ])
+        .with_functions(
+            cast(app.model.Universe, frozendict({
+                "date": fs.dates.daily.loop,
+            }))
+        )
+        .with_graph(
+            nodes=g,
+            init={d: True},
+            using = {d: fs.dates.daily.loop},
+            aliasing = {
+                fs.dates.daily.loop: "date",
+                **{n: k for k, n in FIELDS.items()}
+            }
+        )
         .with_plot(init=[
             dict(label="date", x=True),
             dict(label=f"{ident}-O", y=True),
@@ -55,4 +67,5 @@ def lines(
             dict(label=f"{ident}-L", y=True),
             dict(label=f"{ident}-C", y=True),
         ])
+        # TODO: plot also take the refs instead of labels, pass g, resolve to alias
     )

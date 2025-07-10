@@ -12,6 +12,7 @@ from typing import (
     Literal,
     Protocol,
     Generic,
+    cast,
     overload,
 )
 from heapq import heapify, heappush, heappop
@@ -71,6 +72,7 @@ class Value(NamedTuple):
 
 TNodes = tuple[Node.Any, ...]
 TGuards = tuple[Guard.Any, ...]
+TAliases = tuple[str | None, ...]
 
 UStream = tuple[frozendict[int, tuple[str, ...]], ...]
 DStream = frozendict[int, tuple[int, ...]]
@@ -97,12 +99,20 @@ class Graph(NamedTuple):
     queue: list[Event]  # heapify
     nodes: TNodes
     guards: TGuards
+    aliases: TAliases
     index: frozendict[Node.Any, int]
+    index_aliases: frozendict[str, int]
     ustream: UStream  # params
     dstream: DStream  # dependents
     required: frozendict[int, int]
     data: Data
     state: State
+
+    def aliased(self, alias: str, slot: int | None = None) -> Ref.Any:
+        i = self.index_aliases.get(alias)
+        if i is None:
+            raise ValueError((alias, i))
+        return self.nodes[i].ref(i, slot=slot)
 
     def pipe(
         self,
@@ -122,7 +132,9 @@ class Graph(NamedTuple):
             queue=queue,
             nodes=(),
             guards=(),
+            aliases=(),
             index=index,
+            index_aliases=cast(frozendict[str, int], frozendict()),
             ustream=(),
             dstream=dstream,
             required=frozendict(),  # type: ignore
@@ -141,9 +153,10 @@ class Graph(NamedTuple):
         ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
         keep: int | None = 1,
+        alias: str | None = None,
     ) -> tuple[Graph, R]:
         return bind(
-            self, node=node, ref=ref, when=when, keep=keep
+            self, node=node, ref=ref, when=when, keep=keep, alias=alias
         )
 
     @contextlib.contextmanager
@@ -179,6 +192,7 @@ class MutableBind(Protocol):
         ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
         keep: int | None = 1,
+        alias: str | None = None,
     ) -> R: ...
 
 
@@ -190,6 +204,7 @@ class ImplicitBind(Protocol):
         ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
         keep: int | None = 1,
+        alias: str | None = None,
     ) -> R: ...
 
 
@@ -239,13 +254,14 @@ def graph_context(
         ref: R | Type[R] | None = None,
         when: Guard.Any[N] | None = None,
         keep: int | None = 1,
+        alias: str | None = None,
     ) -> R:
         nonlocal g
         nonlocal DONE
         assert not DONE, (node, ref)
         # TODO: partition
         g, res = g.bind(
-            node=node, ref=ref, when=when, keep=keep
+            node=node, ref=ref, when=when, keep=keep, alias=alias
         )
         return res
 
@@ -288,12 +304,14 @@ def init_node(
     ref: R,
     nodes: TNodes,
     guards: TGuards,
+    aliases: TAliases,
     ustream: UStream,
     dstream: DStream,
     data: Data,
     when: Guard.Any[N] | None = None,
+    alias: str | None = None,
 ) -> tuple[
-    TNodes, TGuards, UStream, DStream, Data, dict[int, int]
+    TNodes, TGuards, TAliases, UStream, DStream, Data, dict[int, int]
 ]:
     i = ref.i
     nodes = set_tuple(nodes, i, node, Node.null)
@@ -325,6 +343,9 @@ def init_node(
         ustream, i, params, frozendict()  # type: ignore
     )
 
+    if alias is not None:
+        aliases = set_tuple(aliases, i, alias, None)
+
     dstream = fold_star(
         dstream,
         frozendict_append_tuple,
@@ -341,7 +362,7 @@ def init_node(
     guards = set_tuple(
         guards, i, when, Ready.All.new()
     )
-    return nodes, guards, ustream, dstream, data, required
+    return nodes, guards, aliases, ustream, dstream, data, required
 
 
 #  ------------------
@@ -357,6 +378,7 @@ def bind(
     ref: R | Type[R] | None = None,
     when: Guard.Any[N] | None = None,
     keep: bool | int | None = 1,
+    alias: str | None = None,
 ) -> tuple[Graph, R]:
     # TODO: node= int to prealloc many ref ?
     # TODO: option to only return graph (eg. if pre alloc ref and want to fold over)?
@@ -372,7 +394,9 @@ def bind(
         queue,
         nodes,
         guards,
+        aliases,
         index,
+        index_aliases,
         ustream,
         dstream,
         required,
@@ -396,6 +420,7 @@ def bind(
         nodes = nodes + (Node.null,)
         ustream = ustream + (frozendict(),)  # type: ignore
         data = data + (History.null,)
+        aliases = aliases + (alias,)
     elif isinstance(node, Node.Any) and ref is None:
         i = index.get(node, len(graph.nodes))
         res = node.ref(i)
@@ -403,6 +428,7 @@ def bind(
             (
                 nodes,
                 guards,
+                aliases,
                 ustream,
                 dstream,
                 data,
@@ -412,10 +438,12 @@ def bind(
                 res,
                 nodes,
                 guards,
+                aliases,
                 ustream,
                 dstream,
                 data,
                 when=when,
+                alias=alias,
             )  # type: ignore
     elif isinstance(node, Node.Any) and isinstance(
         ref, Ref.Any
@@ -427,6 +455,7 @@ def bind(
             (
                 nodes,
                 guards,
+                aliases,
                 ustream,
                 dstream,
                 data,
@@ -436,10 +465,12 @@ def bind(
                 res,
                 nodes,
                 guards,
+                aliases,
                 ustream,
                 dstream,
                 data,
                 when=when,
+                alias=alias,
             )  # type: ignore
     else:
         raise ValueError(type(node), type(ref), node, ref)
@@ -462,11 +493,16 @@ def bind(
         or r == True
     }
 
+    if alias is not None:
+        index_aliases = index_aliases.set(alias, i)
+
     graph = Graph(
         queue,
         nodes,
         guards,
+        aliases,
         index,
+        index_aliases,
         ustream,
         dstream,
         required,
@@ -488,6 +524,7 @@ class fs:
 
 Fs = TypeVar("Fs", bound=fs)
 
+# TODO: rename, this is not a general prepend? specific to bind
 def prepend_argument(
     f,
     f_wrapped: Callable[P, PRes],
@@ -502,13 +539,14 @@ def prepend_argument(
             annotation=t
         )
     ] + list(sig.parameters.values()) + [
-        Parameter("keep", Parameter.KEYWORD_ONLY, annotation=int | None)
+        Parameter("keep", Parameter.KEYWORD_ONLY, annotation=int | None),
+        Parameter("alias", Parameter.KEYWORD_ONLY, annotation=str | None)
     ]
     f_wrapped.__signature__ = sig.replace(parameters=params)
     f_wrapped.__annotations__ = {
         **{name: t},
         **f_wrapped.__annotations__,
-        **{"keep": int | None}
+        **{"keep": int | None, "alias": str | None}
     }
     return f_wrapped
 
@@ -549,13 +587,16 @@ class define:
             **kwargs: P.kwargs,
         ) -> tuple[Graph, R]:
             keep_ = kwargs.pop("keep", keep)
+            alias_ = kwargs.pop("alias", None)
+            alias_kw = {} if alias_ is None else dict(alias=alias_)
             g, r = g.bind(
                 node=new(
                     # cls,
                     *args, 
                     **kwargs
-                ), 
-                keep=keep_ # type: ignore
+                ),
+                keep=keep_, # type: ignore
+                **alias_kw, # type: ignore
             )
             return g, ref(r)
         return prepend_argument(
