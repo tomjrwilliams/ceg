@@ -46,11 +46,6 @@ def lines(
             shared.set("steps", steps)
         )
         .with_universe(data.bars.UNIVERSE)
-        .with_functions(
-            cast(app.model.Universe, frozendict({
-                "date": fs.dates.daily.loop,
-            }))
-        )
         .with_graph(
             nodes=g,
             init={d: True},

@@ -536,6 +536,10 @@ class ModelKW(NamedTuple):
         aliasing: dict[Callable | Type[ceg.Node.Any], str] = {},
         init: dict[ceg.Ref.Any, bool]={},
     ):
+        if isinstance(nodes, ceg.Graph):
+            nodes = graph_to_model(nodes, using, aliasing, init)
+            self = self.expand_functions(aliasing)
+
         i_schema = None
         for i, df in enumerate(self.dfs):
             if df.name == "sigs": # signatures
@@ -553,10 +557,6 @@ class ModelKW(NamedTuple):
         })
         k_last = list(empty.schema.keys())[-1]
         c_last = pl.col(k_last)
-
-        if isinstance(nodes, ceg.Graph):
-            nodes = graph_to_model(nodes, using, aliasing, init)
-            self = self.expand_functions(aliasing)
 
         if nodes is None:
             nodes = empty
