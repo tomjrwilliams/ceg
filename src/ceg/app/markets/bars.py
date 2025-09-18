@@ -9,7 +9,7 @@ import ceg.fs as fs
 import ceg.data as data
 import ceg.app as app
 
-FIELDS = {
+OHLC = {
     "open": data.bars.daily_open,
     "high": data.bars.daily_high,
     "low": data.bars.daily_low,
@@ -21,7 +21,6 @@ def lines(
     product: str = "FUT",
     start: str = "2024",
     end: str = "2025",
-    steps: int = 365,
     shared: app.Shared = cast(app.Shared, frozendict())
 ):
     ident = f"{product}-{symbol}"
@@ -32,8 +31,9 @@ def lines(
         app.model.parse_date(end),
         alias="date"
     )
-    for field, node in FIELDS.items():
-        g, n = node.bind(
+    ohlc = {}
+    for field, node in OHLC.items():
+        g, ohlc[field] = node.bind(
             g,
             d, 
             product=product, 
@@ -41,10 +41,7 @@ def lines(
             alias=f"{ident}-{field[0].upper()}"
         )
     return (
-        app.model.Model.new(
-            f"bars: {ident}",
-            shared.set("steps", steps)
-        )
+        app.model.Model.new(f"bars: {ident}", shared)
         .with_universe(data.bars.UNIVERSE)
         .with_graph(
             nodes=g,
@@ -52,15 +49,13 @@ def lines(
             using = {d: fs.dates.daily.loop},
             aliasing = {
                 fs.dates.daily.loop: "date",
-                **{n: k for k, n in FIELDS.items()}
+                **{n: k for k, n in OHLC.items()}
             }
         )
         .with_plot(init=[
-            dict(label="date", x=True),
-            dict(label=f"{ident}-O", y=True),
-            dict(label=f"{ident}-H", y=True),
-            dict(label=f"{ident}-L", y=True),
-            dict(label=f"{ident}-C", y=True),
+            dict(label="date", x=True)
+        ] + [
+            dict(label=ohlc[field], y=True)
+            for field in OHLC.keys()
         ])
-        # TODO: plot also take the refs instead of labels, pass g, resolve to alias
     )

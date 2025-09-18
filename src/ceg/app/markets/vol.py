@@ -1,80 +1,85 @@
 
 from typing import Any, cast, Callable
 from functools import wraps
+from dataclasses import dataclass
 
 from frozendict import frozendict
 
+import ceg
 import ceg.fs as fs
 import ceg.data as data
 import ceg.app as app
+
+OHLC = {
+    "open": data.bars.daily_open,
+    "high": data.bars.daily_high,
+    "low": data.bars.daily_low,
+    "close": data.bars.daily_close,
+}
 
 def lines(
     symbol: str,
     product: str = "FUT",
     start: str = "2024",
     end: str = "2025",
-    steps: int = 365,
+    span: int = 16,
     shared: app.Shared = cast(app.Shared, frozendict())
 ):
+
     ident = f"{product}-{symbol}"
-    fields = ["open", "high", "low", "close"]
-    return (
-        app.model.Model.new(
-            f"vol: {ident}",
-            shared.set("steps", steps)
+    g = ceg.Graph.new()
+    g, d = fs.dates.daily.loop(
+        g, 
+        app.model.parse_date(start), 
+        app.model.parse_date(end),
+        alias="date"
+    )
+    ohlc = {}
+    ohlc_pct = {}
+    ohlc_vol = {}
+    for field, node in OHLC.items():
+        g, ohlc[field] = node.bind(
+            g,
+            d, 
+            product=product, 
+            symbol=symbol, 
+            alias=f"{ident}-{field[0].upper()}"
         )
+        g, ohlc_pct[field] = fs.unary.pct_change.bind(
+            g, 
+            ohlc[field],
+            alias=f"{ident}-{field[0].upper()}-pct"
+        )
+        g, ohlc_vol[field] = fs.rolling.rms_ew.bind(
+            g, 
+            ohlc_pct[field], 
+            span=span,
+            alias=f"{ident}-{field[0].upper()}-vol",
+        )
+    return (
+        app.model.Model.new(f"vol: {ident}", shared)
         .with_universe(data.bars.UNIVERSE)
-        .with_functions(cast(app.model.Universe, frozendict({
-            "date": fs.dates.daily.loop,
-            "pct_chg": fs.unary.pct_change.bind, 
-            "std": fs.rolling.std.bind, 
-            "rms": fs.rolling.rms.bind, 
-            "std_ew": fs.rolling.std_ew.bind, 
-            "rms_ew": fs.rolling.rms_ew.bind, 
-            "open": data.bars.daily_open.bind,
-            "high": data.bars.daily_high.bind,
-            "low": data.bars.daily_low.bind,
-            "close": data.bars.daily_close.bind,
-        })))
-        .with_graph(nodes=[
-            dict(
-                label="date",
-                I=True,# type: ignore
-                func="date",
-                start=start,
-                end=end,
-            )
-        ] + [
-            dict(
-                label=f"{ident}-{field[0].upper()}",
-                func=field,
-                d="d:ref=date",
-                product=product,
-                symbol=symbol,
-            )
-            for field in fields
-        ] + [
-            dict(
-                label=f"{ident}-{field[0].upper()}-pct",
-                func="pct_chg",
-                v=f"v:ref={ident}-{field[0].upper()}"
-            )
-            for field in fields
-        ] + [
-            dict(
-                label=f"{ident}-{field[0].upper()}-vol",
-                func="rms_ew",
-                v=f"v:ref={ident}-{field[0].upper()}-pct",
-                span=16, # type: ignore
-            )
-            for field in fields
-        ])
+        .with_graph(
+            nodes=g,
+            init={d: True},
+            using = {d: fs.dates.daily.loop},
+            aliasing = {
+                fs.dates.daily.loop: "date",
+                **{n: k for k, n in OHLC.items()},
+                **{
+                    fs.unary.pct_change: "pct_chg",
+                    fs.rolling.std: "std",
+                    fs.rolling.rms: "rms",
+                    fs.rolling.std_ew: "std_ew",
+                    fs.rolling.rms_ew: "rms_ew",
+                }
+            }
+        )
         .with_plot(init=[
-            dict(label="date", x=True),
-            dict(label=f"{ident}-O-vol", y=True, align=f"{ident}-O"),
-            dict(label=f"{ident}-H-vol", y=True, align=f"{ident}-H"),
-            dict(label=f"{ident}-L-vol", y=True, align=f"{ident}-L"),
-            dict(label=f"{ident}-C-vol", y=True, align=f"{ident}-C"),
+            dict(label="date", x=True)
+        ] + [
+            dict(label=ohlc_vol[field], y=True, align=ohlc[field])
+            for field in OHLC.keys()
         ])
     )
 

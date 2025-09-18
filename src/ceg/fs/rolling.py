@@ -514,6 +514,7 @@ class rms_ew(Node.Scalar_F64):
         span: float | None=None,
         alpha: float | None=None,
         b: float = 1.,
+        alias: str | None = None,
     ):
         return rms_ew("rms_ew", v=v, b=b, **ewm_kwargs(
             span=span, alpha=alpha

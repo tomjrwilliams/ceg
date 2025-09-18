@@ -13,6 +13,7 @@ class Page_Kw(NamedTuple):
 class Page_Interface:
     name: str
     shared: Shared
+    
     def run(self) -> StreamlitPage: ...
 
     def named_run(self):

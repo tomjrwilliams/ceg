@@ -4,16 +4,31 @@ from functools import wraps
 
 from frozendict import frozendict
 
+import ceg
 import ceg.fs as fs
 import ceg.data as data
 import ceg.app as app
+
+OHLC = {
+    "open": data.bars.daily_open,
+    "high": data.bars.daily_high,
+    "low": data.bars.daily_low,
+    "close": data.bars.daily_close,
+}
+BOUNDS = {
+    "high": fs.rolling.max_ew,
+    "low": fs.rolling.min_ew,
+}
+
+# TOOD: rename contour rather than spectrum (that implies fourier, decomp)
+
+# range-contours? hl contours? minmax contours?
 
 def lines(
     symbol: str,
     product: str = "FUT",
     start: str = "2008",
     end: str = "2025",
-    steps: int = 365,
     shared: app.Shared = cast(app.Shared, frozendict()),
     span: list[int] = [
         # 4,
@@ -25,20 +40,12 @@ def lines(
         256, 
         512,
     ],
-    span_mu: list[int] | None = None,
     truncate: float | None = None,
     norm: bool = True,
     relative: bool | str = False,
+    vol_span=64,
 ):
-    consts = {"long": 1, "short": -1}
-    factors = [0, 1, 2][:1]
     ident = f"{product}-{symbol}"
-    fields = {
-        "high": "max_ew",
-        "low": "min_ew"
-    }
-    if span_mu is None:
-        span_mu = span
 
     labels_spectrum = [
         f"H-max-{sp}" for sp in reversed(span)
@@ -57,79 +64,111 @@ def lines(
         for _ in range(n_spreads)
     ] + [1] + [1 for _ in range(n_spreads)]
 
-    if relative:
-        spreads = [
-            dict(
-                label=f"{ident}-{l0}-{l1}",
-                func="spread_vec",
-                l=f"l:ref={ident}-vec-unit",
-                r=f"r:ref={ident}-vec-unit",
-                il=f"il:int={i0}",
-                ir=f"ir:int={i1}",
-                b=f"b:float={b}",
+    g = ceg.Graph.new()
+    g, d = fs.dates.daily.loop(
+        g, 
+        app.model.parse_date(start), 
+        app.model.parse_date(end),
+        alias="date"
+    )
+
+    ohlc = {}
+    ohlc_chg = {}
+    ohlc_vol = {}
+    
+    for field, node in OHLC.items():
+        g, ohlc[field] = node.bind(
+            g,
+            d, 
+            product=product, 
+            symbol=symbol, 
+            alias=f"{ident}-{field[0].upper()}"
+        )
+        g, ohlc_chg[field] = fs.unary.abs_change.bind(
+            g, 
+            ohlc[field],
+            alias=f"{ident}-{field[0].upper()}-rx"
+        )
+        g, ohlc_vol[field] = fs.rolling.rms_ew.bind(
+            g, 
+            ohlc_chg[field], 
+            span=vol_span,
+            alias=f"{ident}-{field[0].upper()}-vol",
+        )
+
+    ohlc_mu = {}
+    ohlc_bound = {b: {} for b in BOUNDS.keys()}
+
+    for field, node in BOUNDS.items():
+        for sp in span:
+            g, ohlc_mu[field][sp] = fs.rolling.mean_ew.bind(
+                g, 
+                ohlc[field],
+                span=sp,
             )
-            for l0, l1, i0, i1, b in zip(
-                labels_spectrum[:-1],
-                labels_spectrum[1:],
+            g, ohlc_bound[field][sp] = node.bind(
+                g,
+                ohlc[field],
+                ohlc_mu[field][sp],
+                span=sp
+            )
+
+    g, spectrum = fs.shapes.v_args_to_vec.bind(
+        g,
+        *reversed(ohlc_bound["high"].values()),
+        *ohlc_bound["low"].values()
+    )
+    g, spectrum_unit = (
+        fs.norm.norm_mid_inner_vec.bind
+        if relative == "mid-inner"
+        else fs.norm.norm_mid_pct_vec.bind
+        if relative == "mid-pct"
+        else fs.norm.norm_mid_vec.bind
+    )(g, spectrum)
+    
+    if relative:
+        g, spreads = g.fold_map(
+            lambda g, tup: fs.binary.subtract_vec_i.bind(
+                g, spectrum_unit, spectrum_unit, *tup[:-1], b=tup[-1]
+            ),
+            zip(
                 indices_spectrum[:-1],
                 indices_spectrum[1:],
                 b,
             )
-        ]
+        )
     else:
-        spreads = [
-            dict(
-                label=f"{ident}-{l0}-{l1}",
-                func="spread",
-                l=f"l:ref={ident}-{l0}",
-                r=f"r:ref={ident}-{l1}",
-                b=f"b:float={b}"
-            )
-            for l0, l1, b in zip(
-                labels_spectrum[:-1],
-                labels_spectrum[1:],
+        g, spreads = g.fold_map(
+            lambda g, tup: fs.binary.subtract.bind(
+                g, *tup[:-1], b=tup[-1]
+            ),
+            zip(
+                *reversed(ohlc_bound["high"].values()),
+                *ohlc_bound["low"].values(),
                 b,
             )
-        ]
-
-    spread_high = spreads[:len(span) - 1]
-    spread_low = spreads[-(len(span) - 1):]
-    spread_suffixes = [
-        s["label"].replace(f"{ident}-", "") for s in spreads
-    ]
-
-    spread_high_suffixes = [
-        s["label"].replace(f"{ident}-", "") for s in spread_high
-    ]
-    spread_low_suffixes = [
-        s["label"].replace(f"{ident}-", "") for s in spread_low
-    ]
-
-    spread_sums = [
-        dict(
-            label=f"{ident}-{l0}-{l1}",
-            func="add",
-            l=f"l:ref={ident}-{l0}",
-            r=f"r:ref={ident}-{l1}",
         )
-        for l0, l1 in zip(
-            reversed(spread_low_suffixes),
-            spread_high_suffixes, 
+    
+    spreads_high = spreads[:len(span) - 1]
+    spreads_low = spreads[-(len(span) - 1):]
+
+    g, spread_sums = g.fold_map(
+        lambda g, tup: fs.binary.add.bind(
+            g, *tup
+        ),
+        zip(
+            reversed(spreads_low),
+            spreads_high
         )
-    ]
+    )
+
     rms_span = 512
-    spread_sum_rms = [
-        dict(
-            label=f"{ident}-{l0}-{l1}-rms",
-            func="rms_ew",
-            v=f"v:ref={ident}-{l0}-{l1}",
-            span=f"span:float={rms_span}",
-        )
-        for l0, l1 in zip(
-            reversed(spread_low_suffixes),
-            spread_high_suffixes, 
-        )
-    ]
+    g, spreads_rms = g.fold_map(
+        lambda g, tup: fs.rolling.rms_ew.bind(
+            g, *tup, span=rms_span
+        ),
+        spread_sums
+    )
     # 256 512 first
 
     if truncate:
@@ -238,10 +277,7 @@ def lines(
     name += f": {ident}"
 
     page = (
-        app.model.Model.new(
-            name,
-            shared.set("steps", steps)
-        )
+        app.model.Model.new(name, shared)
         .with_universe(data.bars.UNIVERSE)
         .with_functions(cast(app.model.Universe, frozendict({
             "date": fs.dates.daily.loop,
@@ -262,13 +298,7 @@ def lines(
             "low": data.bars.daily_low.bind,
             "close": data.bars.daily_close.bind,
             # "norm": fs.norm.norm_range_pct.bind,
-            "norm_mid": (
-                fs.norm.norm_mid_inner_vec.bind
-                if relative == "mid-inner"
-                else fs.norm.norm_mid_pct_vec.bind
-                if relative == "mid-pct"
-                else fs.norm.norm_mid_vec.bind
-            ),
+            "norm_mid": ,
             "sum_mat": fs.agg.sum_mat_i.bind,
             "mean_vec": fs.agg.mean_vec.bind,
             "pos": fs.risk.pos_linear.bind,
@@ -287,65 +317,7 @@ def lines(
                 start=start,
                 end=end,
             )
-        ] + [
-            dict(
-                label=f"{ident}-{field[0].upper()}",
-                func=field,
-                d="d:ref=date",
-                product=product,
-                symbol=symbol,
-            )
-            for field in list(fields.keys()) + ["close"]
-        ] + [
-            dict(
-                label=f"{ident}-C-rx",
-                func="abs_chg",
-                v=f"v:ref={ident}-C"
-            ),
-            dict(
-                label=f"{ident}-C-vol",
-                func="rms_ew",
-                v=f"v:ref={ident}-C-rx",
-                span=64,
-            ),
-        ] + [
-            dict(
-                label=f"{ident}-{field[0].upper()}-mu-{sp}",
-                func="mean_ew",
-                v=f"v:ref={ident}-{field[0].upper()}",
-                span=sp, # type: ignore
-            )
-            for field in fields
-            for sp in span_mu
-        ] + [
-            dict(
-                label=f"{ident}-{field[0].upper()}-{func[:-3]}-{sp}",
-                func=func,
-                v=f"v:ref={ident}-{field[0].upper()}",
-                mu=f"mu:ref={ident}-{field[0].upper()}-mu-{sp}",
-                span=sp, # type: ignore
-            )
-            for field, func in fields.items()
-            for sp in span
-        ] + [
-            dict(
-                label=f"{ident}-vec",
-                func="stack",
-                **{
-                    f"v{i}": f"v{i}:ref={ident}-H-max-{sp}"
-                    for i, sp in enumerate(reversed(span))
-                },
-                **{
-                    f"v{i+len(span)}": f"v{i+len(span)}:ref={ident}-L-min-{sp}"
-                    for i, sp in enumerate(span)
-                }
-            ),
-            dict(
-                label=f"{ident}-vec-unit",
-                func="norm_mid",
-                vec=f"vec:ref={ident}-vec",
-            ),
-        ]
+        ] + 
         + spreads
         # + sum([
         #     [

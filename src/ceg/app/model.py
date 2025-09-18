@@ -605,7 +605,12 @@ class ModelKW(NamedTuple):
             # TODO: callback
         )
 
-    def with_plot(self, init: pl.DataFrame | list[dict] | None=None, name: str = "plot"):
+    def with_plot(
+        self, 
+        init: pl.DataFrame | list[dict] | None=None, 
+        name: str = "plot",
+        g: ceg.Graph | None = None,
+    ):
         empty = pl.DataFrame(schema={
             "label": pl.String,
             "x": pl.Boolean,
@@ -620,6 +625,15 @@ class ModelKW(NamedTuple):
         elif isinstance(init, pl.DataFrame):
             pass
         elif isinstance(init, list):
+            for r in init:
+                label = r["label"]
+                align = r["align"]
+                if not isinstance(label, str):
+                    assert g is not None, dict(r=r, g=g)
+                    r["label"] = g.aliased(label)
+                if align is not None and not isinstance(align, str):
+                    assert g is not None, dict(r=r, g=g)
+                    r["align"] = g.aliased(align)
             init = pl.DataFrame(init, schema=empty.schema)
         df = DataFrame.new(
             self.name, name, data=init, editable=True, label=name

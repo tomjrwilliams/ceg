@@ -6,6 +6,8 @@ from . import nav
 from . import page
 from . import model
 
+from . import vis
+
 Shared = frozendict[
     str, Any
 ]

@@ -11,6 +11,7 @@ from typing import (
     Callable,
     Literal,
     Protocol,
+    Iterable,
     Generic,
     cast,
     overload,
@@ -79,7 +80,9 @@ DStream = frozendict[int, tuple[int, ...]]
 
 State = frozendict[Key, Value]
 
-
+V = TypeVar("V")
+Res = TypeVar("Res")
+Param = TypeVar("Param")
 F = ParamSpec("F")
 FRes = TypeVar("FRes")
 
@@ -121,6 +124,17 @@ class Graph(NamedTuple):
         **kwargs: F.kwargs,
     ) -> FRes:
         return f(self, *args, **kwargs)
+
+    def fold_map(
+        self,
+        f: Callable[[Graph, Param], tuple[Graph, Res]],
+        it: Iterable[Param],
+    ) -> tuple[Graph, list[Res]]:
+        res = []
+        for v in it:
+            self, r = f(self, v)
+            res.append(r)
+        return self, res
 
     @classmethod
     def new(cls):
@@ -516,6 +530,7 @@ def bind(
 #  ------------------
 
 P = ParamSpec("P")
+PRes = TypeVar("PRes")
 O = TypeVar("O", bound = Node.Any)
 R = TypeVar("R", bound = Ref.Any)
 
@@ -540,8 +555,9 @@ def prepend_argument(
         )
     ] + list(sig.parameters.values()) + [
         Parameter("keep", Parameter.KEYWORD_ONLY, annotation=int | None),
+    ] + ([] if "alias" in sig.parameters.keys() else [
         Parameter("alias", Parameter.KEYWORD_ONLY, annotation=str | None)
-    ]
+    ])
     f_wrapped.__signature__ = sig.replace(parameters=params)
     f_wrapped.__annotations__ = {
         **{name: t},
@@ -549,9 +565,6 @@ def prepend_argument(
         **{"keep": int | None, "alias": str | None}
     }
     return f_wrapped
-
-P = ParamSpec("P")
-PRes = TypeVar("PRes")
 
 class Annotation(NamedTuple):
     type: str

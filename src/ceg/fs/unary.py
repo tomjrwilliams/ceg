@@ -171,8 +171,9 @@ class pct_change(Node.Scalar_F64):
     v: Ref.Scalar_F64
 
     @staticmethod
-    def new(v: Ref.Scalar_F64):
+    def new(v: Ref.Scalar_F64, alias: str | None = None):
         return pct_change("pct_change", v=v)
+        
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     # @classmethod
