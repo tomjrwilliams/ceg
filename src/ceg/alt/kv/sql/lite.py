@@ -1,13 +1,13 @@
 
-from typing import Type, Generic, Literal, TypeGuard
+from typing import Type, TypeVar, Generic, Literal, TypeGuard
 from dataclasses import dataclass, replace
 from abc import ABC, abstractmethod
 
-from ..core.store import KeyValStore, KeyValStoreConfig
+from ..core import KeyVal, KeyValConfig, _, KeyO, ValO
 from ....apis import sqlite
 
 @dataclass(frozen=True)
-class SQLiteConfig(KeyValStoreConfig):
+class SQLiteConfig(KeyValConfig):
     
     db: str
     name: str
@@ -15,45 +15,37 @@ class SQLiteConfig(KeyValStoreConfig):
     table: sqlite.Table | None = None
     spec: dict | None = None
 
-class TSQLite:
-    Key = int | str
-    Val = bool | int | float | str | bytes
-
+ID = TypeVar("ID", bound = int)
+KeyI = TypeVar("KeyI", bound = int | str)
+ValI = TypeVar(
+    "ValI", bound = bool | int | float | str | bytes
+)
 
 @dataclass(frozen=True)
-class SQLiteStore(KeyValStore[
-    int,
-    TSQLite.Key,
-    TSQLite.Val,
-]):
+class SQLiteKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
     
-    key_type: Type[TSQLite.Key]
-    val_type: Type[TSQLite.Val] | dict[str, Type[TSQLite.Val]]
-
     config: SQLiteConfig
+
+    # TODO: we can in theory set this different ot generic param in the subclass def - is there a way to err that?
+
+    type_id: Type[ID]
+    type_key_i: Type[KeyI]
+    type_val_i: Type[ValI]
 
     chunked: int | None = None # indicates chunk size
 
     def prepare(self):
         # TODO STRICT
-        if isinstance(self.val_type, dict):
-            # assert key not in val_type
-            t = sqlite.Table.new(
-                self.config.name,
-                primary_key="id",
-                key = self.key_type,
-                **self.val_type,
-                unique=("key",)
-            )
-        else:
-            t = sqlite.Table.new(
-                self.config.name,
-                primary_key="id",
-                key = self.key_type,
-                val=self.val_type,
-                # TODO: dict, col names
-                unique=("key",)
-            )
+
+        # TODO: chunk
+        t = sqlite.Table.new(
+            self.config.name,
+            primary_key="id",
+            key = self.type_key_i,
+            val=self.type_val_i,
+            # TODO: dict, col names
+            unique=("key",)
+        )
 
         # TODO: if exists, assert types match!
         # TODO: add chunk to spec if given, assert there if exists
@@ -67,47 +59,24 @@ class SQLiteStore(KeyValStore[
             )
         )
 
-    def identify(self, key: TSQLite.Key) -> None | int: ...
+    def identify(self, key: KeyI,) -> None | int: ...
 
-    def lookup(self, id: int) -> TSQLite.Key: ...
+    def lookup(self, id: int) -> KeyI: ...
 
-    def select_val(
+    def select(
         self,
-        key: TSQLite.Key, 
-        field: str | None = None,
+        key: KeyI, 
         chunk: int | None = None,
-    ) -> None | TSQLite.Val:
-        """
-        >>> Key = int | str
-        >>> Val = bool | int | float | str | bytes
-        """
+    ) -> None | ValI:
         ...
 
-    def select_vals(
-        self,
-        key: TSQLite.Key, 
-        field: tuple[str, ...] = (),
-        chunk: int | None = None,
-    ) -> None | tuple[TSQLite.Val, ...]:
-        """
-        >>> Key = int | str
-        >>> Val = bool | int | float | str | bytes
-        """
-        ...
-
-    def iselect_val(
+    def iselect(
         self, 
-        key: TSQLite.Key, 
-        field: str | None = None,
+        key: KeyI, 
         chunk: int | None = None,
     ) -> tuple[
-        int | None, TSQLite.Val | None
+        ID | None, ValI | None
     ]:
-        """
-        >>> Key = int | str
-        >>> Val = bool | int | float | str | bytes
-        """
-        
         table = self.config.table
         assert table is not None, self
 
@@ -124,36 +93,17 @@ class SQLiteStore(KeyValStore[
         id: int = r[f"{self.config.name}.id"]
         val = r[f"{self.config.name}.val"]
 
+        assert isinstance(id, self.type_id), id
+        assert isinstance(val, self.type_val_i), val
+
         return id, val
 
-    def iselect_vals(
+    def insert(
         self, 
-        key: TSQLite.Key, 
-        field: tuple[str, ...] = (),
+        key: KeyI, 
+        val: ValI,
         chunk: int | None = None,
-    ) -> tuple[
-        int | None, tuple[TSQLite.Val, ...] | None
-    ]:
-        """
-        >>> Key = int | str
-        >>> Val = bool | int | float | str | bytes
-        """
-        ...
-
-    # TODO: field is either tuple or none
-    # if not singular, must pass dict (even if len =1)
-
-    def insert_val(
-        self, 
-        key: TSQLite.Key, 
-        val: TSQLite.Val,
-        field: str | None = None,
-        chunk: int | None = None,
-    ) -> int:
-        """
-        >>> Key = int | str
-        >>> Val = bool | int | float | str | bytes
-        """
+    ) -> ID:
        
         table = self.config.table
         assert table is not None, self.config
@@ -162,33 +112,18 @@ class SQLiteStore(KeyValStore[
             key=key, val=val
         )
 
-        return res[0]["id"]
+        id = res[0]["id"]
 
-    def insert_vals(
-        self, 
-        key: TSQLite.Key, 
-        val: tuple[TSQLite.Val, ...],
-        field: tuple[str, ...] = (),
-        chunk: int | None = None,
-    ) -> int:
-        """
-        >>> Key = int | str
-        >>> Val = bool | int | float | str | bytes
-        """
-        ...
+        assert isinstance(id, self.type_id), id
+        return id
 
-    def update_val(
+    def update(
         self, 
-        key: TSQLite.Key, 
-        val: TSQLite.Val, 
-        field: str | None = None,
+        key: KeyI, 
+        val: ValI, 
         chunk: int | None = None,
         i: int | None = None
-    ) -> int:
-        """
-        >>> Key = int | str
-        >>> Val = bool | int | float | str | bytes
-        """
+    ) -> ID:
         table = self.config.table
         assert table is not None, self.config
         if i is None:
@@ -201,21 +136,36 @@ class SQLiteStore(KeyValStore[
                 val=val,
                 where=table.col("id") == i
             )
-        return res[0]
+        
+        id = res[0]
+        assert isinstance(id, self.type_id), id
 
-    def update_vals(
-        self, 
-        key: TSQLite.Key, 
-        val: tuple[TSQLite.Val, ...],
-        field: tuple[str, ...] = (),
-        chunk: int | None = None,
-        i: int | None = None
-    ) -> int:
-        """
-        >>> Key = int | str
-        >>> Val = bool | int | float | str | bytes
-        """
-        ...
+        return id
 
+@dataclass(frozen=True)
+class Ex(SQLiteKeyVal[int, int, bool, str, str]):
+    type_id: Type[int] = int
+    type_key_i: Type[str] = str
+    type_val_i: Type[float] = float
+    type_key_o: Type[str] = str
+    type_val_o: Type[str] = str
 
-i, v = SQLiteStore(int, int, SQLiteConfig("", "")).iselect_val("")
+    def encode_key_type(self, t):
+        return
+
+    def encode_val_type(self, t):
+        return
+    
+    def encode_key(self, k):
+        return
+
+    def encode_val(self, v):
+        return
+
+    def decode_key(self, k):
+        return
+    
+    def decode_val(self, v):
+        return
+
+i, v = Ex(SQLiteConfig("", "")).iselect(0)
