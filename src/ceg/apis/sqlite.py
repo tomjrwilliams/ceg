@@ -96,7 +96,7 @@ TYPE_PARSE = {
 #  ------------------
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq = False)
 class Column:
     table: TTable
     key: str
@@ -107,17 +107,17 @@ class Column:
         table = str(self.table)
         return f"{table}.{self.key}"
 
-    def __eq__(self, val):
+    def __eq__(self, val) -> Comparator:
         return eq(self, val)
-    def __neq__(self, val):
+    def __neq__(self, val) -> Comparator:
         return ne(self, val)
-    def __gt__(self, val):
+    def __gt__(self, val) -> Comparator:
         return gt(self, val)
-    def __lt__(self, val):
+    def __lt__(self, val) -> Comparator:
         return lt(self, val)
-    def __ge__(self, val):
+    def __ge__(self, val) -> Comparator:
         return ge(self, val)
-    def __le__(self, val):
+    def __le__(self, val) -> Comparator:
         return le(self, val)
 
 
@@ -385,15 +385,15 @@ class Table(NamedTuple):
 
     def update(
         self,
-        values: dict[str, Any],
         joins: Comparator | list[Comparator] | None = None,
         where: Comparator | list[Comparator] | None = None,
+        **values: Any
     ):
         """
         >>> t = Table.new("tab", val=float).create(TEST_DB)
         >>> val = t.col("val")
         >>> ids_0 = t.insert(val=4.)
-        >>> ids_1 = t.update(dict(val=5.0), where=val==4.)
+        >>> ids_1 = t.update(val=5.0, where=val==4.)
         >>> assert ids_0 == ids_1
         >>> rs = t.select(
         ...     t.col("id"), 
