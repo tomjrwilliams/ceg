@@ -23,8 +23,6 @@ from ..core import (
 #  ------------------
 
 
-
-
 @dataclass(frozen=True)
 class norm_range_pct(Node.Scalar_F64):
     """
@@ -70,6 +68,7 @@ class norm_range_pct(Node.Scalar_F64):
     -1.27 -0.62 0.04 2.03
     -2.33 -0.22 -1.25 0.51
     """
+
     type: str
     #
     l: Ref.Scalar_F64
@@ -80,23 +79,33 @@ class norm_range_pct(Node.Scalar_F64):
 
     @staticmethod
     def new(
-        # cls, 
-        l: Ref.Scalar_F64, 
-        r: Ref.Scalar_F64, 
+        # cls,
+        l: Ref.Scalar_F64,
+        r: Ref.Scalar_F64,
         v: Ref.Scalar_F64,
-        a: float = 0.,
-        b: float = 1.,
+        a: float = 0.0,
+        b: float = 1.0,
     ):
-        return norm_range_pct("norm_pct", l=l, r=r, v=v, a=a, b=b)
+        return norm_range_pct(
+            "norm_pct", l=l, r=r, v=v, a=a, b=b
+        )
+
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         l = self.l.history(graph).last_before(event.t)
         r = self.r.history(graph).last_before(event.t)
         v = self.v.history(graph).last_before(event.t)
-        if l is None or np.isnan(l) or r is None or np.isnan(r) or v is None or np.isnan(v):
+        if (
+            l is None
+            or np.isnan(l)
+            or r is None
+            or np.isnan(r)
+            or v is None
+            or np.isnan(v)
+        ):
             return np.nan
-        norm = (r - l)
+        norm = r - l
         if norm == 0:
             return np.nan
         res = (v - l) / norm
@@ -144,20 +153,21 @@ class norm_mid_pct_vec(Node.Vector_F64):
 
     @staticmethod
     def new(
-        # cls, 
+        # cls,
         vec: Ref.Vector_F64,
-        a: float = 0.,
-        b: float = 1.,
+        a: float = 0.0,
+        b: float = 1.0,
     ):
-        return norm_mid_pct_vec("norm_mid_pct_vec", vec=vec, a=a, b=b)
-
+        return norm_mid_pct_vec(
+            "norm_mid_pct_vec", vec=vec, a=a, b=b
+        )
 
     bind = define.bind_from_new(new, Node.Vector_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.vec.history(graph).last_before(event.t)
-        l = int(len(v)/2)
-        mid = (v[l-1] + v[l]) / 2
+        l = int(len(v) / 2)
+        mid = (v[l - 1] + v[l]) / 2
         res = (v - mid) / mid
         return res
 
@@ -194,6 +204,7 @@ class norm_mid_vec(Node.Vector_F64):
     [-0.73 -0.54 -0.32] [-0.09  0.09  0.32]
     [ 1.37 -0.67  0.35] [-0.32  0.32 -0.86]
     """
+
     type: str
     #
     vec: Ref.Vector_F64
@@ -202,25 +213,25 @@ class norm_mid_vec(Node.Vector_F64):
 
     @staticmethod
     def new(
-        # cls, 
+        # cls,
         vec: Ref.Vector_F64,
-        a: float = 0.,
-        b: float = 1.,
+        a: float = 0.0,
+        b: float = 1.0,
     ):
         return norm_mid_vec("norm_mid_vec", vec=vec, a=a, b=b)
+
     bind = define.bind_from_new(new, Node.Vector_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.vec.history(graph).last_before(event.t)
-        l = int(len(v)/2)
-        mid = (v[l-1] + v[l]) / 2
+        l = int(len(v) / 2)
+        mid = (v[l - 1] + v[l]) / 2
         res = v - mid
         return res
 
 
-
 @dataclass(frozen=True)
-class norm_mid_inner_vec( Node.Vector_F64):
+class norm_mid_inner_vec(Node.Vector_F64):
     """
     note: assumes sorted ascending
     >>> g = Graph.new()
@@ -260,19 +271,21 @@ class norm_mid_inner_vec( Node.Vector_F64):
 
     @staticmethod
     def new(
-        # cls, 
+        # cls,
         vec: Ref.Vector_F64,
-        a: float = 0.,
-        b: float = 1.,
+        a: float = 0.0,
+        b: float = 1.0,
     ):
-        return norm_mid_inner_vec("norm_mid_inner_vec", vec=vec, a=a, b=b)
+        return norm_mid_inner_vec(
+            "norm_mid_inner_vec", vec=vec, a=a, b=b
+        )
 
     bind = define.bind_from_new(new, Node.Vector_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.vec.history(graph).last_before(event.t)
-        l = int(len(v)/2)
-        mid = (v[l-1] + v[l]) / 2
-        inner_range = v[l-1] - v[l]
+        l = int(len(v) / 2)
+        mid = (v[l - 1] + v[l]) / 2
+        inner_range = v[l - 1] - v[l]
         res = (v - mid) / inner_range
         return res

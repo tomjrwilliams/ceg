@@ -19,6 +19,7 @@ from ..num.pca import *
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class pca(Node.D1_F64_D2_F64):
     """
@@ -91,9 +92,7 @@ class pca(Node.D1_F64_D2_F64):
 
     def __call__(self, event: Event, graph: Graph):
         vs = [
-            v.history(graph).last_n_before(
-                self.window, event.t
-            )
+            v.history(graph).last_n_before(self.window, event.t)
             for v in self.vs
         ]
         if self.mus is not None:
@@ -103,13 +102,13 @@ class pca(Node.D1_F64_D2_F64):
             ]
         else:
             mus = None
-        
+
         e, U = svd_pca(
             vs,
             mus=mus,
             centre=self.centre,
             signs=self.signs,
-            keep=self.factors
+            keep=self.factors,
         )
 
         return e, U
@@ -167,8 +166,8 @@ class pca_v(Node.D1_F64_D2_F64):
 
     @classmethod
     def month_end(
-        cls, 
-        g: Graph, 
+        cls,
+        g: Graph,
         vs: Ref.Vector_F64,
         d: Ref.Scalar_Date,
         window: int,
@@ -214,7 +213,7 @@ class pca_v(Node.D1_F64_D2_F64):
         vs = self.vs.history(graph).last_n_before(
             self.window, event.t
         )
-        
+
         if self.mus is not None:
             mus = [
                 mu.history(graph).last_before(event.t)
@@ -222,16 +221,17 @@ class pca_v(Node.D1_F64_D2_F64):
             ]
         else:
             mus = None
-        
+
         e, U = svd_pca(
             vs,
             mus=mus,
             centre=self.centre,
             signs=self.signs,
-            keep=self.factors
+            keep=self.factors,
         )
 
         return e, U
+
 
 #  ------------------
 
@@ -241,8 +241,6 @@ class pca_v(Node.D1_F64_D2_F64):
 # optionally fitting with some smoothing to previous value
 
 
-
-
 #  ------------------
 
-# 
+#

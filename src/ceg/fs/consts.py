@@ -1,4 +1,3 @@
-
 from typing import NamedTuple, ClassVar, cast
 
 import numpy as np
@@ -17,8 +16,6 @@ from ..core import (
 
 
 #  ------------------
-
-
 
 
 @dataclass(frozen=True)
@@ -44,12 +41,12 @@ class const_float(Node.D0_F64):
         return const_float("const_float", v=v, rf=rf)
 
     @classmethod
-    def one(cls, sign = 1):
-        return cls.new(1. * sign)
+    def one(cls, sign=1):
+        return cls.new(1.0 * sign)
 
     @classmethod
     def zero(cls):
-        return cls.new(0.)
+        return cls.new(0.0)
 
     @classmethod
     def one_every(
@@ -57,7 +54,7 @@ class const_float(Node.D0_F64):
         g: Graph,
         step=1.0,
         keep: int = 1,
-        sign: float = 1.,
+        sign: float = 1.0,
     ):
         return cls.bind(g, sign, step=step, keep=keep)
 
@@ -68,7 +65,7 @@ class const_float(Node.D0_F64):
         step=1.0,
         keep: int = 1,
     ):
-        return cls.bind(g, 0., step=step, keep=keep)
+        return cls.bind(g, 0.0, step=step, keep=keep)
 
     @classmethod
     def bind(
@@ -79,16 +76,16 @@ class const_float(Node.D0_F64):
         keep: int = 1,
     ):
         g, r = g.bind(None, Ref.Scalar_F64)
-        g, r = cls.new(
-            v=v, rf=r.select(last=keep)
-        ).pipe(g.bind, r, Loop.every(step), keep=keep)
+        g, r = cls.new(v=v, rf=r.select(last=keep)).pipe(
+            g.bind, r, Loop.every(step), keep=keep
+        )
         return g, cast(Ref.Scalar_F64, r)
 
     def __call__(self, event: Event, graph: Graph):
         return self.v
 
-# const float, date etc.
 
+# const float, date etc.
 
 
 # the easiest way to streamllit, is probably just to run the graph
@@ -100,7 +97,6 @@ class const_float(Node.D0_F64):
 
 
 # not try to wrap the plots into the graph run
-
 
 
 # later can look at that, but work backwards from workig plot apps rather than trying to design up front

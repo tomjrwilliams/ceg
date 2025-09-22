@@ -1,4 +1,3 @@
-
 import numpy as np
 from scipy.linalg import qr
 
@@ -10,8 +9,11 @@ from scipy.optimize import NonlinearConstraint
 
 rng = np.random.default_rng(69)
 
-def unit_norm_beta(vs, ws: np.ndarray | None = None, strict: bool = True):
-    
+
+def unit_norm_beta(
+    vs, ws: np.ndarray | None = None, strict: bool = True
+):
+
     con = lambda x: np.dot(x, x.T)
     nlc = NonlinearConstraint(con, 0.99, 1.01)
 
@@ -23,7 +25,7 @@ def unit_norm_beta(vs, ws: np.ndarray | None = None, strict: bool = True):
         f_loss = lambda x: np.mean(np.square(np.dot(vs, x)))
     else:
         f_loss = lambda x: np.sum(np.square(np.dot(vs, x)) * ws)
-    
+
     f = lambda x: f_norm(x) - f_loss(x)
 
     w = rng.normal(0, 1, (vs.shape[1],))
@@ -35,11 +37,13 @@ def unit_norm_beta(vs, ws: np.ndarray | None = None, strict: bool = True):
 
     return w
 
+
 def exp_weights(n: int, span: float):
     a = 2 / (span + 1)
     decay = 1 - a
     weights = 1 * (decay ** np.arange(n))
     return np.divide(weights, sum(weights))
+
 
 def compare_pc(vs, factors):
     # n_obs, n_features
@@ -58,23 +62,29 @@ def compare_pc(vs, factors):
 
     unit_beta = unit_norm_beta(vs, exp_weights(vs.shape[0], 16))
     print("unit beta", unit_beta)
-    print("unit norm", np.round(np.dot(unit_beta, unit_beta.T), 2))
+    print(
+        "unit norm",
+        np.round(np.dot(unit_beta, unit_beta.T), 2),
+    )
 
     for f in range(factors.shape[1]):
         beta = np.round(
-            np.linalg.lstsq(vs, factors[:, f], rcond=None)[0], 3
+            np.linalg.lstsq(vs, factors[:, f], rcond=None)[0],
+            3,
         )
         print("beta", f, beta)
         # vs = vs - np.matmul()
 
 
-factors = np.hstack([
-    rng.normal(0., 3., size=(100, 1)),
-    rng.normal(0., 1, size=(100, 1)),
-    rng.normal(0., 0.01, size=(100, 1)),
-])
+factors = np.hstack(
+    [
+        rng.normal(0.0, 3.0, size=(100, 1)),
+        rng.normal(0.0, 1, size=(100, 1)),
+        rng.normal(0.0, 0.01, size=(100, 1)),
+    ]
+)
 
-weights = qr(rng.normal(0, 1., (3, 3)))[0]
+weights = qr(rng.normal(0, 1.0, (3, 3)))[0]
 weights = np.round(weights, 3)
 
 print("weight norm")

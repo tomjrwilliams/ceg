@@ -26,7 +26,6 @@ logger = logging.Logger(__file__)
 # various activations (sigmoid, rev_sigmoid, relu, etc.)
 
 
-
 @dataclass(frozen=True)
 class abs(Node.Scalar_F64):
     """
@@ -81,6 +80,7 @@ class abs(Node.Scalar_F64):
 
         return v0 * np.sign(v0)
 
+
 @dataclass(frozen=True)
 class abs_change(Node.Scalar_F64):
     """
@@ -108,6 +108,7 @@ class abs_change(Node.Scalar_F64):
     0.74 0.1
     0.2 -0.54
     """
+
     type: str
     #
     v: Ref.Scalar_F64
@@ -115,6 +116,7 @@ class abs_change(Node.Scalar_F64):
     @staticmethod
     def new(v: Ref.Scalar_F64):
         return abs_change("abs_change", v=v)
+
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     # @classmethod
@@ -130,10 +132,15 @@ class abs_change(Node.Scalar_F64):
 
         v0 = hist.last_before(event.t)
         v1 = hist.last_before(event.prev.t, allow_nan=False)
-        
-        if v0 is None or v1 is None or np.isnan(v0) or np.isnan(v1):
+
+        if (
+            v0 is None
+            or v1 is None
+            or np.isnan(v0)
+            or np.isnan(v1)
+        ):
             return np.nan
-            
+
         return v0 - v1
 
 
@@ -166,6 +173,7 @@ class pct_change(Node.Scalar_F64):
     4.74 0.3
     5.2 0.1
     """
+
     type: str
     #
     v: Ref.Scalar_F64
@@ -173,7 +181,7 @@ class pct_change(Node.Scalar_F64):
     @staticmethod
     def new(v: Ref.Scalar_F64, alias: str | None = None):
         return pct_change("pct_change", v=v)
-        
+
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     # @classmethod
@@ -188,13 +196,18 @@ class pct_change(Node.Scalar_F64):
         hist = self.v.history(graph)
 
         v0 = hist.last_before(event.t, strict=False)
-        v1 = hist.last_before(event.prev.t, allow_nan=False, strict=False)
-        
-        if v0 is None or v1 is None or np.isnan(v0) or np.isnan(v1):
+        v1 = hist.last_before(
+            event.prev.t, allow_nan=False, strict=False
+        )
+
+        if (
+            v0 is None
+            or v1 is None
+            or np.isnan(v0)
+            or np.isnan(v1)
+        ):
             return np.nan
         return (v0 / v1) - 1
-
-
 
 
 @dataclass(frozen=True)
@@ -269,6 +282,7 @@ class sq(Node.Scalar_F64):
     0.74 0.55
     0.2 0.04
     """
+
     type: str
     #
     v: Ref.Scalar_F64
@@ -284,7 +298,6 @@ class sq(Node.Scalar_F64):
         if v < 0:
             return -1 * (np.square(-1 * v))
         return np.square(v)
-
 
 
 @dataclass(frozen=True)
@@ -318,9 +331,11 @@ class cum_sum(Node.Scalar_F64):
     0.1 0.74
     -0.54 0.2
     """
+
     type: str
     #
     v: Ref.Scalar_F64
+
     @staticmethod
     def new(v: Ref.Scalar_F64):
         return cum_sum("cum_sum", v=v.select(4))
@@ -333,13 +348,14 @@ class cum_sum(Node.Scalar_F64):
         if event.prev is None:
             return v
         acc = cast(Ref.Scalar_F64, event.ref)
-        prev = acc.history(graph).last_before(event.prev.t, allow_nan=False)
+        prev = acc.history(graph).last_before(
+            event.prev.t, allow_nan=False
+        )
         if v is None or np.isnan(v):
             return np.nan
         if prev is None or np.isnan(prev):
             return v
         return prev + v
-
 
 
 @dataclass(frozen=True)
@@ -374,6 +390,7 @@ class cum_prod(Node.Scalar_F64):
     0.1 1.77
     -0.54 0.82
     """
+
     type: str
     #
     v: Ref.Scalar_F64

@@ -1,5 +1,3 @@
-
-
 # arrival process for orders
 # sometimes state change on process parameter (s)
 
@@ -13,7 +11,7 @@
 # and inventory holding
 
 # sale starts off as 100% probability given order, if inventory
-# later can make probabilistic 
+# later can make probabilistic
 
 # agent chooses production
 # starts off immediate arrival (?)
@@ -46,12 +44,8 @@
 # but then have to fit the params of the linear model by running many times
 
 
-
 # vs the parametric approach where the maximisation is determined each stype by the functional form, so there's not the same fitting
 # rather finding the right functional form for your future expected reward that you can optimise it directly (given arrival estimate)
-
-
-
 
 
 # what are the outputs?
@@ -68,8 +62,6 @@
 
 # agent new production decision time series
 # agent maximised estimated total future profit from here, time series
-
-
 
 
 # exactly the same graphs would also describe the model with lag between production decision and receipt

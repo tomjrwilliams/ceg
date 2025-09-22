@@ -29,12 +29,21 @@ from .refs import Ref, R, GraphInterface, Scope
 
 #  ------------------
 
-V = np.ndarray | bool | int | float | dt.date | dt.datetime | None
+V = (
+    np.ndarray
+    | bool
+    | int
+    | float
+    | dt.date
+    | dt.datetime
+    | None
+)
 
 F = ParamSpec("F")
 FRes = TypeVar("FRes")
 
 #  ------------------
+
 
 class Event(NamedTuple):
     """
@@ -42,6 +51,7 @@ class Event(NamedTuple):
     ref: Ref.Any
     prev: Event | None
     """
+
     t: float
     ref: Ref.Any
     prev: Event | None
@@ -57,7 +67,8 @@ class Event(NamedTuple):
 
     @classmethod
     def zero(cls, ref: Ref.Any, prev: Event | None = None):
-        return cls(0., ref, prev=prev)
+        return cls(0.0, ref, prev=prev)
+
 
 #  ------------------
 
@@ -67,7 +78,9 @@ class NodeInterface(abc.ABC, Generic[R]):
     type: str
 
     @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> R: ...
+    def ref(
+        cls, i: int | Ref.Any, slot: int | None = None
+    ) -> R: ...
 
     @abc.abstractmethod
     def __call__(
@@ -78,6 +91,7 @@ class NodeInterface(abc.ABC, Generic[R]):
 N = TypeVar("N", bound=NodeInterface)
 
 #  ------------------
+
 
 @dataclass(frozen=True)
 class Node_Null(NodeInterface[Ref.Any]):
@@ -92,7 +106,9 @@ class Node_Null(NodeInterface[Ref.Any]):
 
     @classmethod
     def ref(
-        cls, i: int | Ref.Any | Ref.Any, slot: int | None = None
+        cls,
+        i: int | Ref.Any | Ref.Any,
+        slot: int | None = None,
     ) -> Ref.Any:
         raise ValueError(cls)
 
@@ -101,6 +117,7 @@ class Node_Null(NodeInterface[Ref.Any]):
 
 
 #  ------------------
+
 
 @dataclass(frozen=True)
 class Node_D0_Date(NodeInterface[Ref.D0_Date]):
@@ -225,6 +242,7 @@ class Node_D2_F64(NodeInterface):
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class Node_D0_F64_3(NodeInterface):
 
@@ -246,6 +264,7 @@ class Node_D0_F64_3(NodeInterface):
     def __call__(
         self, event: Event, graph: GraphInterface
     ) -> tuple[float, float, float]: ...
+
 
 @dataclass(frozen=True)
 class Node_D0_F64_4(NodeInterface):

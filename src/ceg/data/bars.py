@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from typing import ClassVar, NamedTuple, Literal, overload, Annotated
+from typing import (
+    ClassVar,
+    NamedTuple,
+    Literal,
+    overload,
+    Annotated,
+)
 
 import os
 import datetime as dt
@@ -18,10 +24,12 @@ from ..fs import dates
 
 #  ------------------
 
+
 class Products:
     FUT = "FUT"
     FUTC = "FUTC"
     ETF = "ETF"
+
 
 #  ------------------
 
@@ -31,6 +39,7 @@ IB_BAR_METHOD = "IB_BAR_METHOD"
 IB_DATABASE = "IB_DATABASE"
 
 FRD_DIRECTORY = "FRD_DIRECTORY"
+
 
 def env(
     key: str,
@@ -47,10 +56,9 @@ def env(
         )
     elif key == FRD_DIRECTORY:
         # todo: mode prefixes
-        return os.environ.get(
-            FRD_DIRECTORY, "./__local__/frd"
-        )
+        return os.environ.get(FRD_DIRECTORY, "./__local__/frd")
     raise ValueError(key)
+
 
 #  ------------------
 
@@ -59,25 +67,26 @@ ADJUST_DEFAULTS = {
     # Products.FUT: frd.data.Suffix.ratio,
 }
 
+
 class Bar(NamedTuple):
     product: str
     symbol: str
     adjust: str | None
     expiry: str | None
-    fx: str | None # ccy to convert to
+    fx: str | None  # ccy to convert to
     source: str | None
     description: str | None
 
     @classmethod
     def new(
-        cls, 
+        cls,
         product: str,
         symbol: str,
-        adjust: str | None=None,
-        expiry: str | None=None,
-        fx: str | None=None,
-        source: str | None=None,
-        description: str | None=None,
+        adjust: str | None = None,
+        expiry: str | None = None,
+        fx: str | None = None,
+        source: str | None = None,
+        description: str | None = None,
     ) -> Bar:
         return Bar(
             product=product,
@@ -88,6 +97,7 @@ class Bar(NamedTuple):
             source=source,
             description=description,
         )
+
 
 # def bar_to_ib_contract(
 #     bar: Bar,
@@ -137,10 +147,10 @@ class Bar(NamedTuple):
 #     }
 #     return Contract.new(
 #         t,
-#         s, 
+#         s,
 #         **{
-#             k: v for k, v 
-#             in kwargs.items() 
+#             k: v for k, v
+#             in kwargs.items()
 #             if v is not None
 #         } # type: ignore
 #     )
@@ -158,10 +168,9 @@ BARS_SCHEMA = {
 }
 
 BAR_FIELD_INDICES = {
-    k: i - 1
-    for i, k in enumerate(BARS_SCHEMA)
-    if k != "date"
+    k: i - 1 for i, k in enumerate(BARS_SCHEMA) if k != "date"
 }
+
 
 class Fields:
     OPEN = BAR_FIELD_INDICES["open"]
@@ -171,7 +180,9 @@ class Fields:
     VOLUME = BAR_FIELD_INDICES["volume"]
     OPEN_INTEREST = BAR_FIELD_INDICES["open_interest"]
 
+
 #  ------------------
+
 
 def get_daily_level(
     bar: Bar,
@@ -191,7 +202,8 @@ def get_daily_level(
             at=at,
         ).select("date", field)
     i = (
-        field if isinstance(field, int)
+        field
+        if isinstance(field, int)
         else BAR_FIELD_INDICES[field]
     )
     return get_daily_bars(
@@ -202,41 +214,30 @@ def get_daily_level(
         at=at,
     )[:, i]
 
+
 get_daily_open = partial(
-    get_daily_level,
-    field=BAR_FIELD_INDICES["open"]
+    get_daily_level, field=BAR_FIELD_INDICES["open"]
 )
 get_daily_high = partial(
-    get_daily_level,
-    field=BAR_FIELD_INDICES["high"]
+    get_daily_level, field=BAR_FIELD_INDICES["high"]
 )
 get_daily_low = partial(
-    get_daily_level,
-    field=BAR_FIELD_INDICES["low"]
+    get_daily_level, field=BAR_FIELD_INDICES["low"]
 )
 get_daily_close = partial(
-    get_daily_level,
-    field=BAR_FIELD_INDICES["close"]
+    get_daily_level, field=BAR_FIELD_INDICES["close"]
 )
 get_daily_volume = partial(
-    get_daily_level,
-    field=BAR_FIELD_INDICES["volume"]
+    get_daily_level, field=BAR_FIELD_INDICES["volume"]
 )
 get_daily_open_interest = partial(
     get_daily_level,
-    field=BAR_FIELD_INDICES["open_interest"]
+    field=BAR_FIELD_INDICES["open_interest"],
 )
 
 #  ------------------
-    
-CACHE: dict[
-    Bar, 
-    tuple[
-        dt.date, 
-        dt.date,
-        np.ndarray # 2d
-    ]
-] = {}
+
+CACHE: dict[Bar, tuple[dt.date, dt.date, np.ndarray]] = {}  # 2d
 
 FRD_SCHEMA = {
     "date": pl.Date,
@@ -248,6 +249,7 @@ FRD_SCHEMA = {
     "open_interest": pl.Float64,
 }
 
+
 @overload
 def get_daily_bars(
     bar: Bar,
@@ -255,7 +257,8 @@ def get_daily_bars(
     end: dt.date,
     at: Literal[None] = None,
     df: Literal[False] = False,
-) -> np.ndarray: ... # 2d
+) -> np.ndarray: ...  # 2d
+
 
 @overload
 def get_daily_bars(
@@ -264,7 +267,8 @@ def get_daily_bars(
     end: dt.date,
     at: dt.date,
     df: Literal[False] = False,
-) -> np.ndarray: ... # 1d
+) -> np.ndarray: ...  # 1d
+
 
 @overload
 def get_daily_bars(
@@ -274,6 +278,7 @@ def get_daily_bars(
     at: dt.date | None = None,
     df: bool = True,
 ) -> pl.DataFrame: ...
+
 
 def get_daily_bars(
     bar: Bar,
@@ -303,11 +308,12 @@ def get_daily_bars(
             start,
             cache_start - ONE_DAY,
         )
-        res = np.vstack((
-            bars.select(*list(schema.keys())[1:])
-            .to_numpy(),
-            res,
-        ))
+        res = np.vstack(
+            (
+                bars.select(*list(schema.keys())[1:]).to_numpy(),
+                res,
+            )
+        )
         cache_start = start
     if end > cache_end:
         bars: pl.DataFrame = f_get(
@@ -315,16 +321,14 @@ def get_daily_bars(
             end + ONE_DAY,
             cache_end,
         )
-        res = np.vstack((
-            res,
-            bars.select(*list(schema.keys())[1:])
-            .to_numpy(),
-        ))
+        res = np.vstack(
+            (
+                res,
+                bars.select(*list(schema.keys())[1:]).to_numpy(),
+            )
+        )
         cache_end = end
-    if (
-        cache_start == start
-        or cache_end == end
-    ):
+    if cache_start == start or cache_end == end:
         CACHE[key] = (
             cache_start,
             cache_end,
@@ -339,24 +343,27 @@ def get_daily_bars(
     # TODO: pass back null mask as well, so dont have to infer by all nan
 
     if i_r > 0:
-        res = res[i_l:-i_r,:]
+        res = res[i_l:-i_r, :]
     else:
         res = res[i_l:]
-        
+
     if df:
-        return pl.DataFrame(
-            res.T,
-            schema = {
-                k: v for k, v in 
-                schema.items()
-                if k != "date"
-            }
-        ).with_columns(
-            pl.date_range(
-                start, end
-            ).alias("date")
-        ).select(*BARS_SCHEMA.keys())
+        return (
+            pl.DataFrame(
+                res.T,
+                schema={
+                    k: v
+                    for k, v in schema.items()
+                    if k != "date"
+                },
+            )
+            .with_columns(
+                pl.date_range(start, end).alias("date")
+            )
+            .select(*BARS_SCHEMA.keys())
+        )
     return res
+
 
 PRODUCT_FOLDERS = {
     Products.ETF: frd.data.Folders.ETF,
@@ -372,8 +379,9 @@ ADJUSTMENT_SUFFIXES = {
     #
     "ratio": "ratio",
     "abs": "abs",
-    "stitch": "stitch"
+    "stitch": "stitch",
 }
+
 
 def get_daily_bars_frd(
     bar: Bar,
@@ -391,6 +399,7 @@ def get_daily_bars_frd(
         start=start,
         end=end,
     )
+
 
 def get_daily_bars_ib(
     bar: Bar,
@@ -418,15 +427,17 @@ def get_daily_bars_ib(
     # )
     raise ValueError(bar)
 
+
 #  ------------------
 
 TBar = Annotated[Bar | None, define.annotation("internal")]
 TField = Annotated[str | int, define.annotation("internal")]
 
+
 def f_daily_bar(
     self: daily_bar | daily_level,
     event: core.Event,
-    graph: core.Graph
+    graph: core.Graph,
 ):
     assert self.bar is not None, self
     dx = self.d.history(graph).last_before(event.t)
@@ -443,6 +454,7 @@ def f_daily_bar(
         return None
     return res
 
+
 def new_bar(
     bar: Bar | None,
     product: str | None,
@@ -451,10 +463,9 @@ def new_bar(
     if bar is None:
         assert product is not None, product
         assert symbol is not None, symbol
-        bar = Bar.new(
-            product=product, symbol=symbol
-        )
+        bar = Bar.new(product=product, symbol=symbol)
     return bar, product, symbol
+
 
 @dataclass(frozen=True)
 class daily_bar(core.Node.D1_F64):
@@ -489,15 +500,15 @@ class daily_bar(core.Node.D1_F64):
     def new(
         cls,
         d: core.Ref.Scalar_Date,
-        product: str | None=None,
-        symbol: str | None=None,
-        bar: TBar=None,
+        product: str | None = None,
+        symbol: str | None = None,
+        bar: TBar = None,
     ):
         bar, product, symbol = new_bar(bar, product, symbol)
         return daily_bar(
             "daily_bar",
             d=d,
-            bar = bar,
+            bar=bar,
             product=product,
             symbol=symbol,
         )
@@ -507,12 +518,12 @@ class daily_bar(core.Node.D1_F64):
         core.Node.D1_F64.ref,
     )
 
-    def __call__(
-        self, event: core.Event, graph: core.Graph
-    ):
+    def __call__(self, event: core.Event, graph: core.Graph):
         return f_daily_bar(self, event, graph)
 
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class daily_level(core.Node.D0_F64):
@@ -524,16 +535,14 @@ class daily_level(core.Node.D0_F64):
     symbol: str | None
     field: TField
 
-    def __call__(
-        self, event: core.Event, graph: core.Graph
-    ):
+    def __call__(self, event: core.Event, graph: core.Graph):
         vs = f_daily_bar(self, event, graph)
-        
+
         if isinstance(self.field, str):
             fx = BAR_FIELD_INDICES[self.field]
         else:
             fx = self.field
-        
+
         if vs is None:
             return vs
 
@@ -542,8 +551,10 @@ class daily_level(core.Node.D0_F64):
         # if np.isnan(v):
         #     return None
         return v
-    
+
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class daily_open(daily_level):
@@ -592,6 +603,7 @@ class daily_open(daily_level):
         core.Node.D0_F64.ref,
     )
 
+
 #  ------------------
 
 
@@ -636,11 +648,13 @@ class daily_high(daily_level):
             symbol=symbol,
             field=field,
         )
+
     bind = define.bind_from_new(
         new,
         core.Node.D0_F64.ref,
     )
-    
+
+
 #  ------------------
 
 
@@ -685,14 +699,14 @@ class daily_low(daily_level):
             symbol=symbol,
             field=field,
         )
+
     bind = define.bind_from_new(
         new,
         core.Node.D0_F64.ref,
     )
-    
+
+
 #  ------------------
-
-
 
 
 @dataclass(frozen=True)
@@ -742,6 +756,7 @@ class daily_close(daily_level):
         core.Node.D0_F64.ref,
     )
 
+
 #  ------------------
 
 
@@ -771,9 +786,9 @@ class daily_volume(daily_level):
     def new(
         # cls,
         d: core.Ref.Scalar_Date,
-        product: str | None=None,
-        symbol: str | None=None,
-        bar: TBar=None,
+        product: str | None = None,
+        symbol: str | None = None,
+        bar: TBar = None,
         field: TField = "volume",
     ):
         assert field == "volume", field
@@ -786,10 +801,12 @@ class daily_volume(daily_level):
             symbol=symbol,
             field=field,
         )
+
     bind = define.bind_from_new(
         new,
         core.Node.D0_F64.ref,
     )
+
 
 #  ------------------
 
@@ -840,11 +857,13 @@ class daily_open_interest(daily_level):
         new,
         core.Node.D0_F64.ref,
     )
-    
+
 
 #  ------------------
 
-UNIVERSE = pl.DataFrame([
-    dict(product="FUT", symbol="ES"),
-    dict(product="FUT", symbol="CL"),
-])
+UNIVERSE = pl.DataFrame(
+    [
+        dict(product="FUT", symbol="ES"),
+        dict(product="FUT", symbol="CL"),
+    ]
+)

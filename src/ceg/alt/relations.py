@@ -1,4 +1,3 @@
-
 # relational query API to add meta data to the keys
 
 # and join to fixed universes eg. tickers, etc.
@@ -21,7 +20,6 @@
 # ideally the tags themselves are applied *as* relational joins
 
 # where the tag could be to a sepcific ticker, but we then pre load a join from the specific ticker to the chain (ES25 -> ES etc.), asset class, etc.
-
 
 
 # TODO: the tags you use for index path nodes can be richly interpreted as eg. a categorical (can even use the keyval API to store and get back an ID)

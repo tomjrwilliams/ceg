@@ -1,13 +1,11 @@
-
 class Alloc:
     # str - or identifier? probably identifier (in key val)
     asset: str
     scale: str
     signal: str
-    rebal: str # used for roll schedule?
-    quantum: float # what to multiply by scale and signal
+    rebal: str  # used for roll schedule?
+    quantum: float  # what to multiply by scale and signal
     # both value and units?
-
 
     # later on this might be some kind of constrained equaton and not just a single value?
     # that the scale and signal then multiply up or down?
@@ -32,7 +30,7 @@ class Alloc:
 
 
 class Strategy:
-    name: str # identifier path rather than string, really, but there is then a unique string key for the path
+    name: str  # identifier path rather than string, really, but there is then a unique string key for the path
     allocs: list[Alloc]
 
     def exposes(self):
@@ -49,11 +47,6 @@ class Strategy:
 # need ot be careful on timing: eg. pnl is onl avaialble t+1 etc. on an alloc t-1, so metric time alignemnt matters
 
 
-
-
-
-
-
 # NOTE: sounds like we're getting to a object based layer on top of the calc graph, where we build up the calc graph given the metrics etc. above
 
 # binding eg. nodes to particular fields on the objects for each alloc (scale,signal) (where that node might have several children for a complex calc)
@@ -67,16 +60,13 @@ class Strategy:
 # or when we bind, we do so with the relevant tag information, so that we can persist as the simulation proceeds
 
 
-
-
-
 # TODO: the ui would be
 
 # a table for the strategy
 
-# with id path 
+# with id path
 
-# and then each alloc is a sub table with rows for 
+# and then each alloc is a sub table with rows for
 
 # the asset id path
 
@@ -89,9 +79,7 @@ class Strategy:
 # quantum expression (could just be a value and unit)
 
 
-
 # buttons to edit existing, copy and create new, add / remove alloc etc.
-
 
 
 # TODO: so the grpah engine needs a way of ingesting arbitrary path value time series
@@ -109,7 +97,6 @@ class Strategy:
 # the serialisation points, where we write the graph back to the persistence with an id path
 
 # so the next job can just read the id path and not re-calc
-
 
 
 # TODO: it sounds like each node needs a way of describing what it returns
@@ -139,4 +126,4 @@ class Strategy:
 # or it should be a dynamically created node, that should be able to calc its signature given those of inputs (other dynamically created, or identifier store that should have it stored)
 
 
-# 
+#

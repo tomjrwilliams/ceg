@@ -1,4 +1,17 @@
-from typing import cast, Iterable, Callable, get_type_hints, get_args, get_origin, Type, NamedTuple, Union, Optional, Any, Annotated
+from typing import (
+    cast,
+    Iterable,
+    Callable,
+    get_type_hints,
+    get_args,
+    get_origin,
+    Type,
+    NamedTuple,
+    Union,
+    Optional,
+    Any,
+    Annotated,
+)
 import types
 import datetime as dt
 import math
@@ -26,6 +39,7 @@ TYPES = {
     "float": float,
 }
 
+
 def repr_type(t: Type):
     s = str(t)
     if s.endswith(".args"):
@@ -44,6 +58,7 @@ def repr_type(t: Type):
     )
     return s.split(".")[-1].replace("Ref_", "").strip()
 
+
 class Annot(NamedTuple):
     t: Type | tuple[Type, ...]
     optional: bool
@@ -59,6 +74,7 @@ class Annot(NamedTuple):
             return f"{s}|N"
         return s
 
+
 class Signature(NamedTuple):
     annots: frozendict[str, Annot]
     depth: int
@@ -68,12 +84,12 @@ class Signature(NamedTuple):
     # and in construction allow masking certain kwargs
     # eg. field for daily_close, bar etc.
 
+
 Universe = frozendict[str, ceg.Node.Any | Callable]
 Signatures = frozendict[str, Signature]
 
-def signatures(
-    universe: Universe
-) -> Signatures:
+
+def signatures(universe: Universe) -> Signatures:
     # TODO: drop keep? that's purely representational
     res = cast(Signatures, frozendict())
     for key, f in universe.items():
@@ -97,61 +113,68 @@ def signatures(
                 args = get_args(extra)
                 origin = args[0]
                 annots = args[1:]
-            if (
-                origin is types.UnionType
-                or origin is Union
-            ):
+            if origin is types.UnionType or origin is Union:
                 args = get_args(h)
                 if type(None) in args:
-                    args = tuple((
-                        a for a in args if a is not type(None)
-                    ))
+                    args = tuple(
+                        (a for a in args if a is not type(None))
+                    )
                     if len(args) == 1:
                         sig[k] = Annot(
                             args[0],
                             optional=True,
                             union=False,
-                            annots=annots
+                            annots=annots,
                         )
                     else:
                         sig[k] = Annot(
                             args,
                             optional=True,
                             union=True,
-                            annots=annots
+                            annots=annots,
                         )
                 else:
                     sig[k] = Annot(
                         args,
                         optional=False,
                         union=True,
-                        annots=annots
+                        annots=annots,
                     )
             else:
                 sig[k] = Annot(h, False, False, annots)
-        res = res.set(key, Signature(
-            cast(frozendict[str, Annot], frozendict(sig)),
-            depth,
-            f
-        ))
+        res = res.set(
+            key,
+            Signature(
+                cast(frozendict[str, Annot], frozendict(sig)),
+                depth,
+                f,
+            ),
+        )
     return cast(Signatures, res)
 
+
 def signatures_df(sigs: Signatures) -> pl.DataFrame:
-    return pl.DataFrame([
-        {
-            **{"func": k},
-            **{
-                f"kw-{i}": f"{k}:{annot.repr()}"
-                for i, (k, annot)
-                in enumerate(sig.annots.items())
-                if not any([
-                    ann.type == "internal"
-                    for ann in annot.annots
-                ])
+    return pl.DataFrame(
+        [
+            {
+                **{"func": k},
+                **{
+                    f"kw-{i}": f"{k}:{annot.repr()}"
+                    for i, (k, annot) in enumerate(
+                        sig.annots.items()
+                    )
+                    if not any(
+                        [
+                            ann.type == "internal"
+                            for ann in annot.annots
+                        ]
+                    )
+                },
             }
-        }
-        for k, sig in sigs.items()
-    ])
+            for k, sig in sigs.items()
+        ]
+    )
+
 
 def empty_cell(cell):
     if cell is None:
@@ -160,17 +183,18 @@ def empty_cell(cell):
         return len(cell) == 0
     return False
 
+
 def empty_row(
-    row: dict, 
-    *keys: str, 
-    method: Callable[[Iterable[bool]], bool] = any
+    row: dict,
+    *keys: str,
+    method: Callable[[Iterable[bool]], bool] = any,
 ):
     return method([empty_cell(row[k]) for k in keys])
 
+
 def label_padding(df: pl.DataFrame):
-    return (
-        0 if not len(df) else 2 + int(math.log(len(df), 10))
-    )
+    return 0 if not len(df) else 2 + int(math.log(len(df), 10))
+
 
 def parse_date(v: str | int):
     if isinstance(v, int):
@@ -197,13 +221,14 @@ def parse_date(v: str | int):
     else:
         raise ValueError(v)
 
+
 def parse_kwarg(
     g: ceg.Graph,
     i: int,
-    kw: str, 
+    kw: str,
     annots: frozendict[str, Annot],
     ks: list[str],
-    label: str
+    label: str,
 ):
     if "=" in kw:
         k, v = kw.split("=")
@@ -219,7 +244,7 @@ def parse_kwarg(
                 if label == v:
                     return None
                 else:
-                    raise ValueError((k, label))  
+                    raise ValueError((k, label))
         elif t == "date":
             v = parse_date(v)
         else:
@@ -249,24 +274,27 @@ def parse_kwarg(
         v = float(v)
     return k, v
 
+
 def kwargs_ready(
-    vs: list[str | None]
+    vs: list[str | None],
 ) -> tuple[bool, list[str]]:
     try:
         end = vs.index(".")
-        return True, cast(list[str], [
-            v for v in vs[:end] if v is not None
-        ])
+        return True, cast(
+            list[str],
+            [v for v in vs[:end] if v is not None],
+        )
     except:
         if all([v is not None for v in vs]):
             return True, cast(list[str], vs)
         return False, []
 
+
 def parse_kwargs(
     g: ceg.Graph,
     row: dict[str, str | None],
     sig: Signature,
-    label: str
+    label: str,
 ):
     # TODO: pass in the type so we can infer from sig
     vs = [v for k, v in row.items() if k.startswith("kw-")]
@@ -275,19 +303,21 @@ def parse_kwargs(
         return {}
     ks = list(sig.annots.keys())
     res = (
-        parse_kwarg(g, 1+i, v, sig.annots, ks, label)
+        parse_kwarg(g, 1 + i, v, sig.annots, ks, label)
         for i, v in enumerate(vs)
     )
     return dict((kv for kv in res if kv is not None))
 
+
 #  ------------------
+
 
 def rows_to_refs(
     g: ceg.Graph,
     df: pl.DataFrame,
     universe: Universe,
     sigs: Signatures,
-    keep: dict[str, int] = {}
+    keep: dict[str, int] = {},
 ):
     """
     >>> steps = 100
@@ -309,11 +339,11 @@ def rows_to_refs(
     ...     "kw=3": [None, "."]
     ... })
     >>> g, refs, es = ceg.Graph.new().pipe(
-    ...     rows_to_refs, 
-    ...     df, 
-    ...     {}, 
-    ...     universe, 
-    ...     sigs, 
+    ...     rows_to_refs,
+    ...     df,
+    ...     {},
+    ...     universe,
+    ...     sigs,
     ...     keep = {"date": 100, "ES": 100}
     ... )
     >>> g, es, ts = ceg.batches(
@@ -348,11 +378,11 @@ def rows_to_refs(
 
         if label in keep:
             kwargs["keep"] = keep[label]
-        
+
         if sig.depth:
-            res = func(g)(**kwargs, alias=label) # type: ignore
+            res = func(g)(**kwargs, alias=label)  # type: ignore
         else:
-            res = func(g, **kwargs, alias=label) # type: ignore
+            res = func(g, **kwargs, alias=label)  # type: ignore
 
         g, r = cast(tuple[ceg.Graph, ceg.Ref.Any], res)
 
@@ -361,32 +391,54 @@ def rows_to_refs(
 
     return g, es
 
+
 import plotly
 import plotly.express
+
 
 def nan_map(e: pl.Expr, v: pl.Expr):
     return pl.when(e.is_null()).then(None).otherwise(v)
 
-def cumsum(e, trim: int| str | None = None, LEN: int | None = None):
+
+def cumsum(
+    e, trim: int | str | None = None, LEN: int | None = None
+):
     if trim:
-        e = pl.when(pl.int_range(0, LEN) < int(trim)).then(None).otherwise(e)
+        e = (
+            pl.when(pl.int_range(0, LEN) < int(trim))
+            .then(None)
+            .otherwise(e)
+        )
     return e.fill_nan(None).pipe(
         nan_map, e.fill_nan(0).fill_null(0).cum_sum()
     )
 
-def identity(e, trim: int| str | None = None, LEN: int | None = None):
+
+def identity(
+    e, trim: int | str | None = None, LEN: int | None = None
+):
     if trim:
-        e = pl.when(pl.int_range(0, LEN) < int(trim)).then(None).otherwise(e)
+        e = (
+            pl.when(pl.int_range(0, LEN) < int(trim))
+            .then(None)
+            .otherwise(e)
+        )
     return e.fill_nan(None)
+
 
 EXPR_MAP: dict[str, Callable[[pl.Expr], pl.Expr]] = {
     "cumsum": cumsum,
     "identity": identity,
 }
+
+
 def expr_params(e):
     if ":" not in e:
         return {}
-    return dict((kv.split("=") for kv in e.split(":")[1].split(",")))
+    return dict(
+        (kv.split("=") for kv in e.split(":")[1].split(","))
+    )
+
 
 def df_to_line_plot(
     df: pl.DataFrame,
@@ -400,35 +452,38 @@ def df_to_line_plot(
         steps = ref.history(g).mut.occupied
 
     assert steps is not None, steps
-    
-    data = pl.DataFrame({
-        label: (
-            g.aliased(label).history(g)
-            # , **(
-            #     {} if slot is None else dict(slot=slot)
-            # ))
-            .last_n_before(steps, t)
-        )
-        for label, slot in zip(
-            df.get_column("label"),
-            df.get_column("slot")
-        )
-    })
 
-    df_exprs = df.filter(
-        pl.col("expr").is_not_null()
+    data = pl.DataFrame(
+        {
+            label: (
+                g.aliased(label).history(g)
+                # , **(
+                #     {} if slot is None else dict(slot=slot)
+                # ))
+                .last_n_before(steps, t)
+            )
+            for label, slot in zip(
+                df.get_column("label"),
+                df.get_column("slot"),
+            )
+        }
     )
 
+    df_exprs = df.filter(pl.col("expr").is_not_null())
+
     exprs = {
-        label: EXPR_MAP[
-            e.split(":")[0]
-        ](pl.col(label), **expr_params(e), **dict(LEN=len(data))) for label, e in zip(
+        label: EXPR_MAP[e.split(":")[0]](
+            pl.col(label),
+            **expr_params(e),
+            **dict(LEN=len(data)),
+        )
+        for label, e in zip(
             df_exprs.get_column("label"),
             df_exprs.get_column("expr"),
         )
     }
 
-    # TODO: optionally take transform col 
+    # TODO: optionally take transform col
     # simple one col polars expr, or can be easily cast as such eg. log(2)
 
     x_label = df.filter(pl.col("x")).get_column("label")
@@ -438,7 +493,7 @@ def df_to_line_plot(
 
         x_min = data.select(pl.col(x).min()).item()
         x_max = data.select(pl.col(x).max()).item()
-        
+
         slider_key = f"date-slider"
 
         if slider_key not in st.session_state:
@@ -447,7 +502,7 @@ def df_to_line_plot(
                 min_value=x_min,
                 max_value=x_max,
                 value=(x_min, x_max),
-                key=slider_key
+                key=slider_key,
             )
         else:
             x_l, x_r = st.session_state[slider_key]
@@ -455,18 +510,24 @@ def df_to_line_plot(
         plot = plotly.express.line(
             data.filter(
                 (pl.col(x) >= x_l) & (pl.col(x) <= x_r)
-            ).with_columns(**exprs), x=x, y = [
+            ).with_columns(**exprs),
+            x=x,
+            y=[
                 k for k in data.schema.keys() if k not in x_label
-            ]
+            ],
         )
-        st.plotly_chart(plot, key = id)
+        st.plotly_chart(plot, key=id)
     elif not len(x_label):
-        plot = plotly.express.line(data, y = list(data.schema.keys()))
-        st.plotly_chart(plot, key = id)
+        plot = plotly.express.line(
+            data, y=list(data.schema.keys())
+        )
+        st.plotly_chart(plot, key=id)
     else:
         raise ValueError(df)
 
+
 #  ------------------
+
 
 class ModelKW(NamedTuple):
     name: str
@@ -478,15 +539,16 @@ class ModelKW(NamedTuple):
 
     universe: Universe = cast(Universe, frozendict())
     signatures: Signatures = cast(Signatures, frozendict())
-    
+
     def with_universe(self, universe: pl.DataFrame):
         return self._replace(
-            dfs=self.dfs + (
+            dfs=self.dfs
+            + (
                 DataFrame.new(
-                    self.name, 
-                    "universe", 
-                    data=universe, 
-                    label="available universe"
+                    self.name,
+                    "universe",
+                    data=universe,
+                    label="available universe",
                 ),
             )
         )
@@ -494,47 +556,53 @@ class ModelKW(NamedTuple):
     def with_functions(self, universe: Universe):
         sigs = signatures(universe)
         sig_df = signatures_df(sigs)
-        dfs = tuple((
-            df for df in self.dfs
-            if df.page != self.name or df.name != "sigs"
-        ))
+        dfs = tuple(
+            (
+                df
+                for df in self.dfs
+                if df.page != self.name or df.name != "sigs"
+            )
+        )
         return self._replace(
             universe=universe,
             signatures=sigs,
-            dfs=dfs + (
+            dfs=dfs
+            + (
                 DataFrame.new(
-                    self.name, 
-                    "sigs", 
-                    data=sig_df, 
-                    label="available functions"
+                    self.name,
+                    "sigs",
+                    data=sig_df,
+                    label="available functions",
                 ),
-            )
+            ),
         )
 
     def expand_functions(
-        self, aliasing: dict[Callable | Type[ceg.Node.Any], str] = {}
+        self,
+        aliasing: dict[Callable | Type[ceg.Node.Any], str] = {},
     ):
         universe = self.universe
         for f_or_node_t, alias in aliasing.items():
             if isinstance(f_or_node_t, type):
                 # TODO: assert is subclass node (and all nodes have bind)
-                universe = universe.set(alias, (
-                    f_or_node_t.bind # type: ignore
-                ))
+                universe = universe.set(
+                    alias,
+                    (f_or_node_t.bind),  # type: ignore
+                )
             else:
-                universe = universe.set(alias, (
-                    f_or_node_t
-                ))
+                universe = universe.set(alias, (f_or_node_t))
         if len(universe) > len(self.universe):
             return self.with_functions(universe)
-        return self            
+        return self
 
     def with_graph(
-        self, 
-        nodes: ceg.Graph | pl.DataFrame | list[dict] | None=None,
+        self,
+        nodes: (
+            ceg.Graph | pl.DataFrame | list[dict] | None
+        ) = None,
         using: dict[ceg.Ref.Any, Callable] = {},
         aliasing: dict[Callable | Type[ceg.Node.Any], str] = {},
-        init: dict[ceg.Ref.Any, bool]={},
+        init: dict[ceg.Ref.Any, bool] = {},
     ):
         if isinstance(nodes, ceg.Graph):
             nodes = graph_to_model(nodes, using, aliasing, init)
@@ -542,49 +610,60 @@ class ModelKW(NamedTuple):
 
         i_schema = None
         for i, df in enumerate(self.dfs):
-            if df.name == "sigs": # signatures
+            if df.name == "sigs":  # signatures
                 i_schema = i
         if i_schema is None:
             raise ValueError(self)
 
         # TODO: make all the meta keys upper case so no conflicts
 
-        empty = pl.DataFrame(schema={
-            "label": pl.String,
-            "I": pl.Boolean,
-            **self.dfs[i_schema].schema,
-            # TODO: or signatures explicitly?
-        })
+        empty = pl.DataFrame(
+            schema={
+                "label": pl.String,
+                "I": pl.Boolean,
+                **self.dfs[i_schema].schema,
+                # TODO: or signatures explicitly?
+            }
+        )
         k_last = list(empty.schema.keys())[-1]
         c_last = pl.col(k_last)
 
         if nodes is None:
             nodes = empty
         elif isinstance(nodes, pl.DataFrame):
-            assert all([
-                k in nodes for k in ("label", "func")
-            ]), nodes.schema
+            assert all(
+                [k in nodes for k in ("label", "func")]
+            ), nodes.schema
             nodes = nodes.select(
-                pl.col(k) 
-                if k in nodes.schema 
-                else pl.lit(None).alias(k).cast(empty.schema[k])
+                (
+                    pl.col(k)
+                    if k in nodes.schema
+                    else pl.lit(None)
+                    .alias(k)
+                    .cast(empty.schema[k])
+                )
                 for k in empty.schema.keys()
             )
         elif isinstance(nodes, list):
-            nodes = pl.DataFrame([
-                {
-                    "label": r["label"],
-                    "I": r.get("I", None),
-                    "func": r["func"],
-                    **{
-                        f"kw-{i}": v
-                        for i, v in enumerate(list(r.values())[(
-                            2 if "I" not in r else 3
-                        ):])
+            nodes = pl.DataFrame(
+                [
+                    {
+                        "label": r["label"],
+                        "I": r.get("I", None),
+                        "func": r["func"],
+                        **{
+                            f"kw-{i}": v
+                            for i, v in enumerate(
+                                list(r.values())[
+                                    (2 if "I" not in r else 3) :
+                                ]
+                            )
+                        },
                     }
-                }
-                for r in nodes
-            ], schema=empty.schema)
+                    for r in nodes
+                ],
+                schema=empty.schema,
+            )
         else:
             raise ValueError(nodes)
 
@@ -597,29 +676,35 @@ class ModelKW(NamedTuple):
 
         # TODO: rename model -> graph
         df = DataFrame.new(
-            self.name, "model", data=nodes, editable=True, label="model"
+            self.name,
+            "model",
+            data=nodes,
+            editable=True,
+            label="model",
         )
         return self._replace(
             dfs=self.dfs + (df,),
-            tfs = self.tfs + (RunGraph(),)
+            tfs=self.tfs + (RunGraph(),),
             # TODO: callback
         )
 
     def with_plot(
-        self, 
-        init: pl.DataFrame | list[dict] | None=None, 
+        self,
+        init: pl.DataFrame | list[dict] | None = None,
         name: str = "plot",
         g: ceg.Graph | None = None,
     ):
-        empty = pl.DataFrame(schema={
-            "label": pl.String,
-            "x": pl.Boolean,
-            "y": pl.Boolean,
-            "y2": pl.Boolean,
-            "align": pl.String,
-            "expr": pl.String,
-            "slot": pl.Int32,
-        })
+        empty = pl.DataFrame(
+            schema={
+                "label": pl.String,
+                "x": pl.Boolean,
+                "y": pl.Boolean,
+                "y2": pl.Boolean,
+                "align": pl.String,
+                "expr": pl.String,
+                "slot": pl.Int32,
+            }
+        )
         if init is None:
             init = empty
         elif isinstance(init, pl.DataFrame):
@@ -631,20 +716,28 @@ class ModelKW(NamedTuple):
                 if not isinstance(label, str):
                     assert g is not None, dict(r=r, g=g)
                     r["label"] = g.aliased(label)
-                if align is not None and not isinstance(align, str):
+                if align is not None and not isinstance(
+                    align, str
+                ):
                     assert g is not None, dict(r=r, g=g)
                     r["align"] = g.aliased(align)
             init = pl.DataFrame(init, schema=empty.schema)
         df = DataFrame.new(
-            self.name, name, data=init, editable=True, label=name
+            self.name,
+            name,
+            data=init,
+            editable=True,
+            label=name,
         )
         return self._replace(
             dfs=self.dfs + (df,),
-            tfs=self.tfs + (AddPlot(name=name),)
+            tfs=self.tfs + (AddPlot(name=name),),
         )
+
 
 class Model(ModelKW, Dynamic):
     pass
+
 
 # TODO: add param objects
 
@@ -657,8 +750,9 @@ class Model(ModelKW, Dynamic):
 
 #  ------------------
 
+
 class RunGraph(Transformation):
-    
+
     def apply(
         self,
         page: Model,
@@ -667,12 +761,14 @@ class RunGraph(Transformation):
         dfs: dict[str, pl.DataFrame],
         shared: frozendict[str, Any],
     ):
-        plots = [tf for tf in page.tfs if isinstance(tf, AddPlot)]
-        df_plot = pl.concat([
-            dfs[tf.name] for tf in plots
-        ])
+        plots = [
+            tf for tf in page.tfs if isinstance(tf, AddPlot)
+        ]
+        df_plot = pl.concat([dfs[tf.name] for tf in plots])
 
-        align_label = (pl.col("align") == pl.lit("")) | pl.col("align").is_null()
+        align_label = (pl.col("align") == pl.lit("")) | pl.col(
+            "align"
+        ).is_null()
 
         df_align = df_plot.filter(align_label.not_())
         df_keep = df_plot.filter(align_label)
@@ -681,14 +777,14 @@ class RunGraph(Transformation):
         align_labels = df_align.get_column("label")
 
         g, es = g.pipe(
-            rows_to_refs, 
+            rows_to_refs,
             dfs["model"],
             universe=page.universe,
             sigs=page.signatures,
             keep={
                 **{label: True for label in keep_labels},
                 **{label: 8 for label in align_labels},
-            }
+            },
         )
 
         aligned = {}
@@ -702,7 +798,10 @@ class RunGraph(Transformation):
             ref_align = g.aliased(align)
 
             if slot is not None:
-                ref = cast(ceg.Ref.Scalar_F64, ref.select_slot(slot))
+                ref = cast(
+                    ceg.Ref.Scalar_F64,
+                    ref.select_slot(slot),
+                )
 
             g, ref = g.bind(
                 ceg.fs.align.scalar_f64.new(ref, ref_align),
@@ -710,7 +809,7 @@ class RunGraph(Transformation):
                 when=ceg.Ready.ref(ref_align),
                 alias=label,
             )
-            
+
             aligned[label] = ref
 
         # TODO: for keep, iter tfs for add_plot, get name
@@ -722,11 +821,12 @@ class RunGraph(Transformation):
 
         e = es[-1]
         for g, e, t in ceg.steps(
-            g, *es, n = int(10e6), iter=True
+            g, *es, n=int(10e6), iter=True
         )():
             continue
 
         return g, [e], shared
+
 
 @dataclass(frozen=True)
 class AddPlot(Transformation):
@@ -744,33 +844,31 @@ class AddPlot(Transformation):
     ):
 
         df_plot = dfs[self.name]
-        df_plot.filter(
-            pl.col("label").is_not_null()
-        )
+        df_plot.filter(pl.col("label").is_not_null())
 
         if not len(es) or len(df_plot) < 2:
             return g, es, shared
-        
+
         df_plot.pipe(
             df_to_line_plot,
             g,
             t=es[-1].t,
-            id=f"{page.name}.{self.name}"
+            id=f"{page.name}.{self.name}",
         )
         return g, es, shared
 
+
 #  ------------------
 
+
 def graph_to_model(
-    g: ceg.Graph, 
+    g: ceg.Graph,
     using: dict[ceg.Ref.Any, Callable],
     aliasing: dict[Callable | Type[ceg.Node.Any], str],
-    init: dict[ceg.Ref.Any, bool]
+    init: dict[ceg.Ref.Any, bool],
 ):
     i_init = {ref.i: b for ref, b in init.items()}
-    using_i = {
-        ref.i: f for ref, f in using.items()
-    }
+    using_i = {ref.i: f for ref, f in using.items()}
 
     res = []
     for i, node in enumerate(g.nodes):
@@ -788,15 +886,17 @@ def graph_to_model(
         # TODO: drop scope from universe keys
         r = {
             "label": label,
-            "I":  i_init.get(ref.i, False),
+            "I": i_init.get(ref.i, False),
             "func": func,
         }
-        
+
         # hints = get_type_hints(f)
-        hints_extra = get_type_hints(type(node), include_extras=True)
+        hints_extra = get_type_hints(
+            type(node), include_extras=True
+        )
 
         for fld in fields(node):
-            
+
             extra = hints_extra[fld.name]
 
             if get_origin(extra) is Annotated:
@@ -815,10 +915,11 @@ def graph_to_model(
                 v = g.aliases[v.i]
             else:
                 t = repr_type(type(v))
-            
+
             r[fld.name] = f"{fld.name}:{t}={v}"
-        
+
         res.append(r)
     return res
+
 
 #  ------------------

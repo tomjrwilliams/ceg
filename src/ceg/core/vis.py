@@ -10,32 +10,41 @@ import plotly.express
 
 T = TypeVar("T")
 
+
 def not_none(*vs: T | None) -> list[T]:
     return [v for v in vs if v is not None]
 
-def choice_single(*args, f = "segmented_control", **kwargs):
-    # or f=pills
-    return getattr(st, f)(*args, **kwargs, selection_mode="single")
 
-def choice_multi(*args, f = "segmented_control", **kwargs):
+def choice_single(*args, f="segmented_control", **kwargs):
     # or f=pills
-    return getattr(st, f)(*args, **kwargs, selection_mode="multi")
+    return getattr(st, f)(
+        *args, **kwargs, selection_mode="single"
+    )
+
+
+def choice_multi(*args, f="segmented_control", **kwargs):
+    # or f=pills
+    return getattr(st, f)(
+        *args, **kwargs, selection_mode="multi"
+    )
+
 
 def is_categorical(dt: pl.DataType):
     return isinstance(dt, (pl.Categorical, pl.Enum))
 
+
 @dataclass(frozen=True)
 class Options:
     col: str | None = None
-    
+
     @classmethod
     def add(
-        cls, 
-        mp: MultiPivot, 
-        dim: str, 
+        cls,
+        mp: MultiPivot,
+        dim: str,
         col: str,
         col_type: pl.DataType,
-    ):  
+    ):
         if col_type == pl.String or is_categorical(col_type):
             # TODO: or boolean?
             mp = OptionsCategorical.add(mp, dim, col)
@@ -44,11 +53,9 @@ class Options:
         elif col_type.is_numeric():
             mp = OptionsNumeric.add(mp, dim, col)
         else:
-            raise ValueError(dict(
-                dim=dim,
-                col=col,
-                col_type=col_type
-            ))
+            raise ValueError(
+                dict(dim=dim, col=col, col_type=col_type)
+            )
         return mp
 
     def is_categorical(self):
@@ -68,15 +75,14 @@ class Options:
     def agg_expr(self) -> pl.Expr | None:
         return None
 
+
 @dataclass(frozen=True)
 class OptionsCategorical(Options):
     col: str | None = None
 
     @classmethod
     def add(cls, mp: MultiPivot, dim: str, col: str):
-        return replace(mp, **{
-            dim: cls(col)
-        })
+        return replace(mp, **{dim: cls(col)})
 
     def is_categorical(self):
         return True
@@ -93,13 +99,15 @@ class OptionsCategorical(Options):
         assert self.col is not None, self
         return pl.col(self.col)
 
+
 TEMP_FREQ = ["w", "m", "q", "y"]
 TEMP_AGG = [
-    "first", "last",
+    "first",
+    "last",
     # "mid"
+    "count",  # eg. if categorical on x (index) on table?
+]  # etc.
 
-    "count", # eg. if categorical on x (index) on table?
-] # etc.
 
 @dataclass(frozen=True)
 class OptionsTemporal(Options):
@@ -112,7 +120,7 @@ class OptionsTemporal(Options):
     def add(cls, mp: MultiPivot, dim: str, col: str):
         # TODO: eg. transform can be top level date filtering without needing to add a slider
         transform = st.text_input(
-            "transform:", key = f"{dim}.transform"
+            "transform:", key=f"{dim}.transform"
         )
         l, r = st.columns([0.5, 0.5])
         with l:
@@ -127,16 +135,19 @@ class OptionsTemporal(Options):
                 "custom:", key=f"{dim}.freq.txt"
             )
             agg_custom = st.text_input(
-                "custom:", key = f"{dim}.agg.txt"
+                "custom:", key=f"{dim}.agg.txt"
             )
-        return replace(mp, **{
-            dim: cls(
-                col, 
-                transform=transform,
-                freq=freq_choice or freq_custom,
-                agg=agg_choice or agg_custom,
-            )
-        })
+        return replace(
+            mp,
+            **{
+                dim: cls(
+                    col,
+                    transform=transform,
+                    freq=freq_choice or freq_custom,
+                    agg=agg_choice or agg_custom,
+                )
+            },
+        )
 
     def is_temporal(self):
         return True
@@ -166,7 +177,7 @@ class OptionsTemporal(Options):
                 pl.col(self.col)
                 .dt.week()
                 .cast(pl.String)
-                .str.pad_start(2, "0")
+                .str.pad_start(2, "0"),
             )
         elif self.freq == "m":
             return pl.concat_str(
@@ -183,8 +194,10 @@ class OptionsTemporal(Options):
         else:
             raise ValueError(self)
 
+
 NUM_AGG = ["mean", "stdev"]
 NUM_BUCKETS = ["quartile", "decile", "sigmas"]
+
 
 @dataclass(frozen=True)
 class OptionsNumeric(Options):
@@ -196,7 +209,7 @@ class OptionsNumeric(Options):
     @classmethod
     def add(cls, mp: MultiPivot, dim: str, col: str):
         transform = st.text_input(
-            "transform:", key = f"{dim}.transform"
+            "transform:", key=f"{dim}.transform"
         )
         # arguably pipe syntax is easier to parse than brackets?
         # clip etc. via the transform
@@ -221,7 +234,9 @@ class OptionsNumeric(Options):
         l, r = st.columns([0.5, 0.5])
         with l:
             buckets_choice = choice_single(
-                "buckets:", NUM_BUCKETS, key=f"{dim}.buckets"
+                "buckets:",
+                NUM_BUCKETS,
+                key=f"{dim}.buckets",
             )
             agg_choice = choice_single(
                 "agg:", NUM_AGG, key=f"{dim}.agg"
@@ -231,16 +246,19 @@ class OptionsNumeric(Options):
                 "custom:", key=f"{dim}.buckets.txt"
             )
             agg_custom = st.text_input(
-                "custom:", key = f"{dim}.agg.txt"
+                "custom:", key=f"{dim}.agg.txt"
             )
-        return replace(mp, **{
-            dim: cls(
-                col, 
-                transform=transform,
-                buckets=buckets_choice or buckets_custom,
-                agg=agg_choice or agg_custom,
-            )
-        })
+        return replace(
+            mp,
+            **{
+                dim: cls(
+                    col,
+                    transform=transform,
+                    buckets=buckets_choice or buckets_custom,
+                    agg=agg_choice or agg_custom,
+                )
+            },
+        )
 
     def is_numeric(self):
         return True
@@ -248,7 +266,7 @@ class OptionsNumeric(Options):
     def group_expr(self):
         # TODO: buckets
         return None
-    
+
     def agg_expr(self):
         if self.agg is None:
             return None
@@ -265,7 +283,9 @@ class OptionsNumeric(Options):
         assert self.agg is not None, self
         raise ValueError(self)
 
+
 DF_REPR = ["table", "chart"]
+
 
 @dataclass(frozen=True)
 class MultiPivot:
@@ -288,29 +308,17 @@ class MultiPivot:
         # TODO: pre create options 1, 2, etc. rows
         # so the shape doesnt change on the page post-select
 
-        cols_x = choice_multi(
-            "x:", 
-            cols, 
-            key="x.cols"
-        )
+        cols_x = choice_multi("x:", cols, key="x.cols")
         # on_change=f
         for col in cols_x:
             self = Options.add(self, "x", col, schema[col])
 
-        cols_y = choice_multi(
-            "y:", 
-            cols, 
-            key="y.cols"
-        )
+        cols_y = choice_multi("y:", cols, key="y.cols")
         # on_change=f
         for col in cols_y:
             self = Options.add(self, "y", col, schema[col])
 
-        cols_v = choice_multi(
-            "v:", 
-            cols, 
-            key="v.cols"
-        )
+        cols_v = choice_multi("v:", cols, key="v.cols")
         # on_change=f
         for col in cols_v:
             self = Options.add(self, "v", col, schema[col])
@@ -321,11 +329,7 @@ class MultiPivot:
 
         # TODO: v2, secondary axis
 
-        cols_z = choice_multi(
-            "z:", 
-            cols, 
-            key="z.cols"
-        )
+        cols_z = choice_multi("z:", cols, key="z.cols")
         # on_change=f
         for col in cols_z:
             self = Options.add(self, "z", col, schema[col])
@@ -351,7 +355,6 @@ class MultiPivot:
         else:
             dfs = {"data": self.df}
 
-        
         for df_k, df in dfs.items():
 
             df_repr = choice_single(
@@ -363,7 +366,7 @@ class MultiPivot:
                     if isinstance(self.x, OptionsTemporal)
                     and self.x.freq is None
                     else "table"
-                )
+                ),
             )
 
             if df_repr == "chart":
@@ -385,7 +388,7 @@ class MultiPivot:
                         ),
                         x=self.x.col,
                         y=self.v.col,
-                        color=self.y.col, # used for legend
+                        color=self.y.col,  # used for legend
                         # also see symbol and line_group
                         # eg. if many y passed?
                     )
@@ -401,9 +404,8 @@ class MultiPivot:
                         self.v.agg_expr(),
                     )
                     if len(group_exprs):
-                        df = (
-                            df.group_by(*group_exprs)
-                            .agg(*agg_exprs)
+                        df = df.group_by(*group_exprs).agg(
+                            *agg_exprs
                         )
                     else:
                         df = df.select(self.x.col, self.v.col)
@@ -418,36 +420,43 @@ class MultiPivot:
                     y_group = self.y.group_expr()
                     assert y_group is not None, self
                     if len(group_exprs):
-                        group_exprs.append(y_group.alias(".cols"))
+                        group_exprs.append(
+                            y_group.alias(".cols")
+                        )
                         # TODO: the agg needs to go into the pivot?
                         df = (
-                            df.group_by(*group_exprs)
-                            .agg(*agg_exprs)
+                            df.group_by(*group_exprs).agg(
+                                *agg_exprs
+                            )
                         ).pivot(
                             on=".cols",
                             index=self.x.col,
-                            values = self.v.col,
+                            values=self.v.col,
                             maintain_order=True,
                         )
                     else:
                         df = (
                             # TODO: if agg required - ie pivot not unique?
-                            df.with_columns(y_group.alias(".cols"))
-                            .pivot(
+                            df.with_columns(
+                                y_group.alias(".cols")
+                            ).pivot(
                                 on=".cols",
                                 index=self.x.col,
-                                values = self.v.col,
+                                values=self.v.col,
                                 maintain_order=True,
                             )
                         )
                     st.table(df)
             else:
-                raise ValueError(dict(
-                    df=df_k,
-                    repr=df_repr,
-                ))
+                raise ValueError(
+                    dict(
+                        df=df_k,
+                        repr=df_repr,
+                    )
+                )
 
         return
+
 
 # TODO: i think if you have a relational query db over the col keys
 

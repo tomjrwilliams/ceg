@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 from .indices import (
     cartesian_enumeration,
-    Key, 
-    Tags, 
+    Key,
+    Tags,
     Index,
 )
 
@@ -19,15 +19,19 @@ from .indices import (
 
 # on recalc, we can fire events, but the logic to do so sits at teh event layer, not the storage layer
 
+
 class Event:
     pass
+
 
 class Log:
     index: Index
 
+
 # persist somewhere (possibly namespaced? with the same name spacing as the indices?)
 def publish(self, event: Event):
     return
+
 
 # arguably if you persist event log (but prune) can then just loop through looking for stuff to do
 # use the snap to decide if need to update or not
@@ -44,10 +48,6 @@ def listen(self):
 # target based on prefix (?) with optional json map
 
 # and then what they do depends on the actual event json (eg. prefix match on the data source, and then what they do depends on the ticker in the json)
-
-
-
-
 
 
 # TODO: need a write time, json blob
@@ -67,13 +67,8 @@ def listen(self):
 # ie. we overwrite, and trigger downstrem overwrites?
 
 
-
-
 # the listen relationship then sits at app level
 # as well as any local aliasing
-
-
-
 
 
 # should the even thave the snap as well?
@@ -95,7 +90,6 @@ def listen(self):
 
 # eg. so no-op still implies checking all downstream ?
 # and then its ultimately up to the snap, the values code, to actualyl decide to calc or not
-
 
 
 # TODO: so just need to be able to design an ordered persistent event log data structure?

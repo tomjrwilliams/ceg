@@ -65,8 +65,8 @@ class sum(Node.Scalar_F64):
             )
         )
 
-#  ------------------
 
+#  ------------------
 
 
 @dataclass(frozen=True)
@@ -146,8 +146,10 @@ class mean_w(Node.Scalar_F64):
 
 #  ------------------
 
+
 def alpha(span: float):
     return 2 / (span + 1)
+
 
 def ewm_kwargs(
     span: float | None,
@@ -165,6 +167,7 @@ def ewm_kwargs(
     if 2 / (span + 1) != alpha:
         raise ValueError(kw)
     return dict(span=span, alpha=alpha)
+
 
 @dataclass(frozen=True)
 class mean_ew(Node.Scalar_F64):
@@ -195,6 +198,7 @@ class mean_ew(Node.Scalar_F64):
     4.74 3.3
     5.2 4.06
     """
+
     type: str
     #
     v: Ref.Scalar_F64
@@ -205,20 +209,27 @@ class mean_ew(Node.Scalar_F64):
     def new(
         # cls,
         v: Ref.Scalar_F64,
-        span: float | None=None,
-        alpha: float | None=None,
+        span: float | None = None,
+        alpha: float | None = None,
     ):
-        return mean_ew("mean_ew", v=v, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
+        return mean_ew(
+            "mean_ew",
+            v=v,
+            **ewm_kwargs(span=span, alpha=alpha),
+        )
+
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
-        v = self.v.history(graph).last_before(event.t, strict=False)
+        v = self.v.history(graph).last_before(
+            event.t, strict=False
+        )
         if event.prev is None:
             return v
         rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
-        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False, strict=False)
+        prev = rf.history(graph).last_before(
+            event.prev.t, allow_nan=False, strict=False
+        )
         if prev is None or np.isnan(prev):
             return v
         elif v is None or np.isnan(v):
@@ -230,8 +241,6 @@ class mean_ew(Node.Scalar_F64):
 
 
 #  ------------------
-
-
 
 
 @dataclass(frozen=True)
@@ -287,7 +296,6 @@ class std(Node.Scalar_F64):
 #  ------------------
 
 
-
 @dataclass(frozen=True)
 class std_w(Node.Scalar_F64):
     type: str
@@ -309,7 +317,6 @@ class std_w(Node.Scalar_F64):
 
 
 #  ------------------
-
 
 
 @dataclass(frozen=True)
@@ -358,23 +365,33 @@ class std_ew(Node.Scalar_F64):
         # cls,
         v: Ref.Scalar_F64,
         mu: Ref.Scalar_F64,
-        span: float | None=None,
-        alpha: float | None=None,
+        span: float | None = None,
+        alpha: float | None = None,
     ):
-        return std_ew("std_ew", v=v, mu=mu, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
+        return std_ew(
+            "std_ew",
+            v=v,
+            mu=mu,
+            **ewm_kwargs(span=span, alpha=alpha),
+        )
+
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
-        v = self.v.history(graph).last_before(event.t, strict=False)
-        mu = self.mu.history(graph).last_before(event.t, strict=False)
+        v = self.v.history(graph).last_before(
+            event.t, strict=False
+        )
+        mu = self.mu.history(graph).last_before(
+            event.t, strict=False
+        )
         if v is None or mu is None:
             return v
         if event.prev is None:
             return v - mu
         rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
-        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False, strict=False)
+        prev = rf.history(graph).last_before(
+            event.prev.t, allow_nan=False, strict=False
+        )
         if prev is None or np.isnan(prev):
             return v
         alpha = self.alpha
@@ -382,9 +399,7 @@ class std_ew(Node.Scalar_F64):
             raise ValueError(self)
         v = np.square(v - mu)
         prev = np.square(prev)
-        return np.sqrt(
-            ((1 - alpha) * prev) + (alpha * v)
-        )
+        return np.sqrt(((1 - alpha) * prev) + (alpha * v))
 
 
 #  ------------------
@@ -500,6 +515,7 @@ class rms_ew(Node.Scalar_F64):
     4.74 3.61
     5.2 4.32
     """
+
     type: str
     #
     v: Ref.Scalar_F64
@@ -511,26 +527,38 @@ class rms_ew(Node.Scalar_F64):
     def new(
         # cls,
         v: Ref.Scalar_F64,
-        span: float | None=None,
-        alpha: float | None=None,
-        b: float = 1.,
+        span: float | None = None,
+        alpha: float | None = None,
+        b: float = 1.0,
         alias: str | None = None,
     ):
-        return rms_ew("rms_ew", v=v, b=b, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
+        return rms_ew(
+            "rms_ew",
+            v=v,
+            b=b,
+            **ewm_kwargs(span=span, alpha=alpha),
+        )
 
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
-        v = self.v.history(graph).last_before(event.t, strict=False)
+        v = self.v.history(graph).last_before(
+            event.t, strict=False
+        )
         if event.prev is None:
             if v is None:
                 return v
             return np.abs(v) * self.b
         rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
-        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False, strict=False)
-        if prev is None or np.isnan(prev) or v is None or np.isnan(v):
+        prev = rf.history(graph).last_before(
+            event.prev.t, allow_nan=False, strict=False
+        )
+        if (
+            prev is None
+            or np.isnan(prev)
+            or v is None
+            or np.isnan(v)
+        ):
             if v is None:
                 return v
             return np.abs(v) * self.b
@@ -544,18 +572,18 @@ class rms_ew(Node.Scalar_F64):
             return prev
         prev_sq = np.square(prev / self.b)
         v_sq = np.square(v)
-        
-        return np.sqrt(
-            ((1 - alpha) * prev_sq) + (alpha * v_sq)
-        ) * self.b
+
+        return (
+            np.sqrt(((1 - alpha) * prev_sq) + (alpha * v_sq))
+            * self.b
+        )
+
 
 #  ------------------
 
 
-
-
 @dataclass(frozen=True)
-class max( Node.Scalar_F64):
+class max(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -583,6 +611,7 @@ class max( Node.Scalar_F64):
     1.54 1.54
     1.2 1.54
     """
+
     type: str
     #
     v: Ref.Scalar_F64
@@ -593,13 +622,14 @@ class max( Node.Scalar_F64):
         return max("max", v=v, window=window)
 
     def __call__(self, event: Event, graph: Graph):
-        return np.nanmax(self.v.history(graph).last_n_before(
-            self.window, event.t
-        ))
+        return np.nanmax(
+            self.v.history(graph).last_n_before(
+                self.window, event.t
+            )
+        )
 
 
 #  ------------------
-
 
 
 @dataclass(frozen=True)
@@ -624,7 +654,6 @@ class max_w(Node.Scalar_F64):
 
 
 #  ------------------
-
 
 
 @dataclass(frozen=True)
@@ -673,24 +702,29 @@ class max_ew(Node.Scalar_F64):
         # cls,
         v: Ref.Scalar_F64,
         mu: Ref.Scalar_F64 | None = None,
-        span: float | None=None,
-        alpha: float | None=None,
+        span: float | None = None,
+        alpha: float | None = None,
     ):
-        return max_ew("max_ew", v=v, mu=mu, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
+        return max_ew(
+            "max_ew",
+            v=v,
+            mu=mu,
+            **ewm_kwargs(span=span, alpha=alpha),
+        )
 
-    bind = define.bind_from_new(
-        new, Node.Scalar_F64.ref
-    )
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         alpha = self.alpha
-        v = self.v.history(graph).last_before(event.t, strict=False)
+        v = self.v.history(graph).last_before(
+            event.t, strict=False
+        )
         if event.prev is None:
             return v
         rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
-        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False, strict=False)
+        prev = rf.history(graph).last_before(
+            event.prev.t, allow_nan=False, strict=False
+        )
         if v is None or np.isnan(v):
             return np.nan
         if prev is None or np.isnan(prev):
@@ -702,14 +736,15 @@ class max_ew(Node.Scalar_F64):
             return v
         if self.mu is None:
             return (1 - alpha) * prev
-        mu = self.mu.history(graph).last_before(event.t, allow_nan=False)
+        mu = self.mu.history(graph).last_before(
+            event.t, allow_nan=False
+        )
         if mu is None or np.isnan(mu):
             return (1 - alpha) * prev
         return ((1 - alpha) * prev) + (alpha * mu)
 
+
 #  ------------------
-
-
 
 
 @dataclass(frozen=True)
@@ -758,8 +793,8 @@ class min(Node.Scalar_F64):
             )
         )
 
-#  ------------------
 
+#  ------------------
 
 
 @dataclass(frozen=True)
@@ -783,7 +818,6 @@ class min_w(Node.Scalar_F64):
 
 
 #  ------------------
-
 
 
 @dataclass(frozen=True)
@@ -832,23 +866,29 @@ class min_ew(Node.Scalar_F64):
         # cls,
         v: Ref.Scalar_F64,
         mu: Ref.Scalar_F64 | None = None,
-        span: float | None=None,
-        alpha: float | None=None,
+        span: float | None = None,
+        alpha: float | None = None,
     ):
-        return min_ew("min_ew", v=v, mu=mu, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
-    bind = define.bind_from_new(
-        new, Node.Scalar_F64.ref
-    )
+        return min_ew(
+            "min_ew",
+            v=v,
+            mu=mu,
+            **ewm_kwargs(span=span, alpha=alpha),
+        )
+
+    bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
-        v = self.v.history(graph).last_before(event.t, strict=False)
+        v = self.v.history(graph).last_before(
+            event.t, strict=False
+        )
         if event.prev is None:
             return v
         rf: Ref.Scalar_F64 = cast(Ref.Scalar_F64, event.ref)
         # TODO: fix allow nan......
-        prev = rf.history(graph).last_before(event.prev.t, allow_nan=False, strict=False)
+        prev = rf.history(graph).last_before(
+            event.prev.t, allow_nan=False, strict=False
+        )
         if v is None or np.isnan(v):
             return np.nan
         if prev is None or np.isnan(prev):
@@ -860,10 +900,13 @@ class min_ew(Node.Scalar_F64):
             return v
         if self.mu is None:
             return (1 - alpha) * prev
-        mu = self.mu.history(graph).last_before(event.t, allow_nan=False)
+        mu = self.mu.history(graph).last_before(
+            event.t, allow_nan=False
+        )
         if mu is None or np.isnan(mu):
             return (1 - alpha) * prev
         return ((1 - alpha) * prev) + (alpha * mu)
+
 
 #  ------------------
 
@@ -877,7 +920,6 @@ class min_ew(Node.Scalar_F64):
 # levy
 
 #  ------------------
-
 
 
 @dataclass(frozen=True)
@@ -926,6 +968,7 @@ class skew(Node.Scalar_F64):
             )
         )
 
+
 @dataclass(frozen=True)
 class kurtosis(Node.Scalar_F64):
     """
@@ -972,6 +1015,7 @@ class kurtosis(Node.Scalar_F64):
             )
         )
 
+
 #  ------------------
 
 
@@ -1013,18 +1057,18 @@ class quantile(Node.Scalar_F64):
 
     @staticmethod
     def new(v: Ref.Scalar_F64, q: float, window: int):
-        return quantile("quantile", v=v,q=q, window=window)
+        return quantile("quantile", v=v, q=q, window=window)
 
     def __call__(self, event: Event, graph: Graph):
         return np.nanquantile(
             self.v.history(graph).last_n_before(
                 self.window, event.t
             ),
-            self.q
+            self.q,
         )
 
-#  ------------------
 
+#  ------------------
 
 
 @dataclass(frozen=True)
@@ -1051,7 +1095,6 @@ class quantile_w(Node.Scalar_F64):
 #  ------------------
 
 
-
 @dataclass(frozen=True)
 class quantile_ew(Node.Scalar_F64):
     type: str
@@ -1064,20 +1107,22 @@ class quantile_ew(Node.Scalar_F64):
     def new(
         # cls,
         v: Ref.Scalar_F64,
-        span: float | None=None,
-        alpha: float | None=None,
+        span: float | None = None,
+        alpha: float | None = None,
     ):
-        return quantile_ew("quantile_ew", v=v, **ewm_kwargs(
-            span=span, alpha=alpha
-        ))
+        return quantile_ew(
+            "quantile_ew",
+            v=v,
+            **ewm_kwargs(span=span, alpha=alpha),
+        )
 
     def __call__(self, event: Event, graph: Graph):
         raise ValueError(self)
 
+
 # TODO: manually generate our own exp weights
 
 #  ------------------
-
 
 
 @dataclass(frozen=True)
@@ -1155,34 +1200,28 @@ class cov(Node.Scalar_F64):
         # TODO: if only one observation, return nan?
         mu_1 = None
         if self.mu_1 is not None:
-            mu_1 = self.mu_1.history(graph).last_before(
-                event.t
-            )
+            mu_1 = self.mu_1.history(graph).last_before(event.t)
         if mu_1 is None:
             mu_1 = np.nanmean(v1)
 
         if self.mu_2 is not None:
-            mu_2 = self.mu_2.history(graph).last_before(
-                event.t
-            )
+            mu_2 = self.mu_2.history(graph).last_before(event.t)
         mu_2 = None
         if mu_2 is None:
             mu_2 = np.nanmean(v2)
 
-        res = np.nanmean(
-            (v1 - float(mu_1)) * (v2 - float(mu_2))
-        )
+        res = np.nanmean((v1 - float(mu_1)) * (v2 - float(mu_2)))
 
         return res
+
 
 # TODO: cov ew
 
 #  ------------------
 
 
-
 @dataclass(frozen=True)
-class corr( Node.Scalar_F64):
+class corr(Node.Scalar_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -1225,8 +1264,8 @@ class corr( Node.Scalar_F64):
     type: str
     #
     cov: Ref.Scalar_F64
-    v1: Ref.Scalar_F64 # vol
-    v2: Ref.Scalar_F64 # vol
+    v1: Ref.Scalar_F64  # vol
+    v2: Ref.Scalar_F64  # vol
 
     @staticmethod
     def new(
@@ -1248,9 +1287,16 @@ class corr( Node.Scalar_F64):
         v2 = self.v2.history(graph).last_before(event.t)
         if cov is None or v1 is None or v2 is None:
             return None
-        if v1 == 0 or v2 == 0 or np.isnan(v1) or np.isnan(v2) or np.isnan(cov):
+        if (
+            v1 == 0
+            or v2 == 0
+            or np.isnan(v1)
+            or np.isnan(v2)
+            or np.isnan(cov)
+        ):
             return np.nan
         return cov / (v1 * v2)
+
 
 # /TODO: corr ew
 
@@ -1259,8 +1305,8 @@ class beta_kw(NamedTuple):
     type: str
     #
     corr: Ref.Scalar_F64
-    v1: Ref.Scalar_F64 # vol
-    v2: Ref.Scalar_F64 # vol
+    v1: Ref.Scalar_F64  # vol
+    v2: Ref.Scalar_F64  # vol
 
 
 @dataclass(frozen=True)
@@ -1308,8 +1354,8 @@ class beta(Node.Scalar_F64):
     type: str
     #
     corr: Ref.Scalar_F64
-    v1: Ref.Scalar_F64 # vol
-    v2: Ref.Scalar_F64 # vol
+    v1: Ref.Scalar_F64  # vol
+    v2: Ref.Scalar_F64  # vol
 
     @staticmethod
     def new(
@@ -1334,9 +1380,9 @@ class beta(Node.Scalar_F64):
         # v1 = stock, v2 = market
         return (corr * v1) / v2
 
+
 # TODO; beta  ew
 
 # TODO: spearman
 
 #  ------------------
-

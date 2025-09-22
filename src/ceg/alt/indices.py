@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from .keyval import KeyVal
 
+
 def cartesian_enumeration(
     filters: list[Callable[..., bool]] = [],
     **iterables: list,
@@ -17,14 +18,16 @@ def cartesian_enumeration(
     for i, prod in enumerate(prods):
         yield i, dict(zip(ks, prod))
 
+
 @dataclass(frozen=True)
 class Tags:
     data: dict
 
+
 @dataclass(frozen=True)
 class Key:
     s: str
-    
+
     def segments(self):
         segs = self.s.split(".")
         s = segs[0]
@@ -32,6 +35,7 @@ class Key:
         for ss in segs[1:]:
             s += f".{ss}"
             yield Key(s)
+
 
 class KeyTags(KeyVal[Key, str, Tags, str]):
     pass
@@ -42,7 +46,9 @@ class KeyTags(KeyVal[Key, str, Tags, str]):
 
 @dataclass(frozen=True)
 class Index:
-    tags: KeyTags # user mixin with backend (sqlite) at call time
+    tags: (
+        KeyTags  # user mixin with backend (sqlite) at call time
+    )
 
     # TODO: some kind of value mask?
     # ie. so that you can force a certain path (and descendants)
@@ -111,8 +117,6 @@ class Index:
 # and then you just need to clear the old version (s)
 
 
-
-
 # arbitrary key value mapping, eg. for universe meta data
 def load_index():
     return
@@ -125,6 +129,7 @@ def save_index():
 
 def with_header():
     return
+
 
 # replace certain prefixes with others, eg. for app local column storage (include an app in the col series)
 def with_prefix():

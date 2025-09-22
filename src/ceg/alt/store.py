@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 from .indices import (
     cartesian_enumeration,
-    Key, 
-    Tags, 
+    Key,
+    Tags,
     Index,
 )
 
@@ -27,26 +27,25 @@ from .indices import (
 
 # storage col headers are contextual to app, but you can obviously share schemas across apps for global series
 
+
 class Snap:
     # used to decide when work needs to be done, summary of value state (eg. start / end)
     pass
 
+
 class Value:
     # this is the col value, for time series often presumably chunked
     pass
+
 
 class Signature:
     # describes what kind of values it holds: eg. time series, daily
     # 1d float
     # no null etc.
 
-
     # each node implementation should be able to calc its own signature given those of input nodes, and its args
     # every stored needs a signature, every dynamic can then calc (and hence has as well)
     pass
-
-
-
 
 
 @dataclass(frozen=True)

@@ -83,9 +83,11 @@ def history(
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class Scope:
     required: bool | int
+
 
 @dataclass(frozen=True)
 class RefInterface(abc.ABC):
@@ -133,7 +135,8 @@ class RefInterface(abc.ABC):
 
     def _select(self, last: bool | int):
         return replace(
-            self, scope=Scope(required=0 if not last else last)
+            self,
+            scope=Scope(required=0 if not last else last),
         )
 
     def select_slot(self, slot: int) -> RefInterface:
@@ -141,6 +144,7 @@ class RefInterface(abc.ABC):
 
     @abc.abstractmethod
     def select(self, last: bool | int) -> RefInterface: ...
+
 
 R = TypeVar("R", bound=RefInterface)
 
@@ -201,7 +205,9 @@ class Ref_D0_F64(RefInterface):
             g, self.i, History.D0_F64, strict, self.slot
         )
 
-    def last_before(self, g: GraphInterface, t: float) -> float | None:
+    def last_before(
+        self, g: GraphInterface, t: float
+    ) -> float | None:
         return self.history(g).last_before(t)
 
 
@@ -287,6 +293,8 @@ class Ref_D2_F64(RefInterface):
         return history(
             g, self.i, History.D2_F64, strict, self.slot
         )
+
+
 #  ------------------
 
 
@@ -306,7 +314,9 @@ class Ref_D1_F64_D2_F64(RefInterface):
 
     @overload
     def history(
-        self, g: GraphInterface, strict: Literal[False],
+        self,
+        g: GraphInterface,
+        strict: Literal[False],
         slot: Literal[0] = 0,
     ) -> History.D1_F64 | None: ...
 
@@ -320,13 +330,17 @@ class Ref_D1_F64_D2_F64(RefInterface):
 
     @overload
     def history(
-        self, g: GraphInterface, strict: Literal[False],
+        self,
+        g: GraphInterface,
+        strict: Literal[False],
         slot: Literal[1] = 1,
     ) -> History.D2_F64 | None: ...
 
     def history(
-        self, 
-        g: GraphInterface, strict: bool = True, slot: int | None = None,
+        self,
+        g: GraphInterface,
+        strict: bool = True,
+        slot: int | None = None,
     ) -> History.D1_F64 | History.D2_F64 | None:
         assert slot is not None, self
         if slot == 0:
@@ -339,6 +353,7 @@ class Ref_D1_F64_D2_F64(RefInterface):
             )
         else:
             raise ValueError(self)
+
 
 @dataclass(frozen=True)
 class Ref_D0_F64_3(RefInterface):
@@ -359,8 +374,9 @@ class Ref_D0_F64_3(RefInterface):
 
     @overload
     def history(
-        self, 
-        g: GraphInterface, strict: Literal[False],
+        self,
+        g: GraphInterface,
+        strict: Literal[False],
         slot: Literal[0] = 0,
     ) -> History.D0_F64 | None: ...
 
@@ -374,7 +390,9 @@ class Ref_D0_F64_3(RefInterface):
 
     @overload
     def history(
-        self, g: GraphInterface, strict: Literal[False],
+        self,
+        g: GraphInterface,
+        strict: Literal[False],
         slot: Literal[1] = 1,
     ) -> History.D0_F64 | None: ...
 
@@ -388,13 +406,17 @@ class Ref_D0_F64_3(RefInterface):
 
     @overload
     def history(
-        self, g: GraphInterface, strict: Literal[False],
+        self,
+        g: GraphInterface,
+        strict: Literal[False],
         slot: Literal[2] = 2,
     ) -> History.D0_F64 | None: ...
 
     def history(
-        self, 
-        g: GraphInterface, strict: bool = True, slot: int | None = None,
+        self,
+        g: GraphInterface,
+        strict: bool = True,
+        slot: int | None = None,
     ) -> History.D0_F64 | None:
         slot = self.slot if slot is None else slot
         assert slot is not None, self
@@ -412,6 +434,7 @@ class Ref_D0_F64_3(RefInterface):
             )
         else:
             raise ValueError(self)
+
 
 @dataclass(frozen=True)
 class Ref_D0_F64_4(RefInterface):
@@ -432,8 +455,9 @@ class Ref_D0_F64_4(RefInterface):
 
     @overload
     def history(
-        self, 
-        g: GraphInterface, strict: Literal[False],
+        self,
+        g: GraphInterface,
+        strict: Literal[False],
         slot: Literal[0] = 0,
     ) -> History.D0_F64 | None: ...
 
@@ -447,7 +471,9 @@ class Ref_D0_F64_4(RefInterface):
 
     @overload
     def history(
-        self, g: GraphInterface, strict: Literal[False],
+        self,
+        g: GraphInterface,
+        strict: Literal[False],
         slot: Literal[1] = 1,
     ) -> History.D0_F64 | None: ...
 
@@ -461,7 +487,9 @@ class Ref_D0_F64_4(RefInterface):
 
     @overload
     def history(
-        self, g: GraphInterface, strict: Literal[False],
+        self,
+        g: GraphInterface,
+        strict: Literal[False],
         slot: Literal[2] = 2,
     ) -> History.D0_F64 | None: ...
 
@@ -475,13 +503,17 @@ class Ref_D0_F64_4(RefInterface):
 
     @overload
     def history(
-        self, g: GraphInterface, strict: Literal[False],
+        self,
+        g: GraphInterface,
+        strict: Literal[False],
         slot: Literal[3] = 3,
     ) -> History.D0_F64 | None: ...
 
     def history(
-        self, 
-        g: GraphInterface, strict: bool = True, slot: int | None = None,
+        self,
+        g: GraphInterface,
+        strict: bool = True,
+        slot: int | None = None,
     ) -> History.D0_F64 | None:
         slot = self.slot if slot is None else slot
         assert slot is not None, self
@@ -503,6 +535,7 @@ class Ref_D0_F64_4(RefInterface):
             )
         else:
             raise ValueError(self)
+
 
 #  ------------------
 
@@ -539,16 +572,20 @@ class Ref:
     ) -> History.Any | tuple[History.Any, ...]:
         if not required:
             return History.null
-        
+
         #
-        if isinstance(ref, Ref_D0_F64) and isinstance(required, bool):
+        if isinstance(ref, Ref_D0_F64) and isinstance(
+            required, bool
+        ):
             return Unbounded.D0_F64.new(v, 32, 1)
         elif isinstance(ref, Ref_D0_F64) and required > 1:
             return History.D0_F64.new(v, required, limit)
         elif isinstance(ref, Ref_D0_F64) and required == 1:
             return Last.D0_F64.new(v, required, 1)
 
-        elif isinstance(ref, Ref_D0_Date) and isinstance(required, bool):
+        elif isinstance(ref, Ref_D0_Date) and isinstance(
+            required, bool
+        ):
             return Unbounded.D0_Date.new(v, 32, 1)
         elif isinstance(ref, Ref_D0_Date) and required > 1:
             return History.D0_Date.new(v, required, limit)
@@ -574,10 +611,12 @@ class Ref:
                 History.D1_F64.new(v, required, limit),
                 History.D2_F64.new(v, required, limit),
             )
-        elif isinstance(ref, Ref_D1_F64_D2_F64) and required == 1:
+        elif (
+            isinstance(ref, Ref_D1_F64_D2_F64) and required == 1
+        ):
             return (
                 Last.D1_F64.new(v, required, 1),
-                Last.D2_F64.new(v, required, 1)
+                Last.D2_F64.new(v, required, 1),
             )
         #
         elif isinstance(ref, Ref_D0_F64_3) and required > 1:
@@ -612,12 +651,10 @@ class Ref:
             )
         #
         raise ValueError(ref)
-    
+
     @classmethod
     def d0_f64(
-        cls,
-        i: int | Ref.Any,
-        slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref_D0_F64:
         if isinstance(i, Ref.Any):
             return cast(Ref.D0_F64, i)
@@ -625,9 +662,7 @@ class Ref:
 
     @classmethod
     def d1_f64(
-        cls,
-        i: int | Ref.Any,
-        slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref_D1_F64:
         if isinstance(i, Ref.Any):
             return cast(Ref.D1_F64, i)
@@ -635,9 +670,7 @@ class Ref:
 
     @classmethod
     def d2_f64(
-        cls,
-        i: int | Ref.Any,
-        slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref_D2_F64:
         if isinstance(i, Ref.Any):
             return cast(Ref.D2_F64, i)
@@ -645,9 +678,7 @@ class Ref:
 
     @classmethod
     def d0_date(
-        cls,
-        i: int | Ref.Any,
-        slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref_D0_Date:
         if isinstance(i, Ref.Any):
             return cast(Ref.D0_Date, i)
@@ -655,9 +686,7 @@ class Ref:
 
     @classmethod
     def d1_date(
-        cls,
-        i: int | Ref.Any,
-        slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref_D1_Date:
         if isinstance(i, Ref.Any):
             return cast(Ref.D1_Date, i)
@@ -665,9 +694,7 @@ class Ref:
 
     @classmethod
     def d0_f64_4(
-        cls,
-        i: int | Ref.Any,
-        slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref_D0_F64_4:
         if isinstance(i, Ref.Any):
             return cast(Ref.D0_F64_4, i)
@@ -675,9 +702,7 @@ class Ref:
 
     @classmethod
     def d0_f64_3(
-        cls,
-        i: int | Ref.Any,
-        slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref_D0_F64_3:
         if isinstance(i, Ref.Any):
             return cast(Ref.D0_F64_3, i)
@@ -685,12 +710,11 @@ class Ref:
 
     @classmethod
     def d1_f64_d2_f64(
-        cls,
-        i: int | Ref.Any,
-        slot: int | None = None
+        cls, i: int | Ref.Any, slot: int | None = None
     ) -> Ref_D1_F64_D2_F64:
         if isinstance(i, Ref.Any):
             return cast(Ref.D1_F64_D2_F64, i)
         return Ref.D1_F64_D2_F64.new(i, slot)
+
 
 #  ------------------

@@ -19,8 +19,10 @@ from pprint import pp
 
 TEST_DB = "./__local__/test.db"
 
+
 def identity(v):
     return v
+
 
 def types(d):
     if isinstance(d, dict):
@@ -30,6 +32,7 @@ def types(d):
     elif isinstance(d, list):
         return [types(v) for v in d]
     return type(d)
+
 
 # INT
 # INTEGER
@@ -92,11 +95,10 @@ TYPE_PARSE = {
 }
 
 
-
 #  ------------------
 
 
-@dataclass(frozen=True, eq = False)
+@dataclass(frozen=True, eq=False)
 class Column:
     table: TTable
     key: str
@@ -109,14 +111,19 @@ class Column:
 
     def __eq__(self, val) -> Comparator:
         return eq(self, val)
+
     def __neq__(self, val) -> Comparator:
         return ne(self, val)
+
     def __gt__(self, val) -> Comparator:
         return gt(self, val)
+
     def __lt__(self, val) -> Comparator:
         return lt(self, val)
+
     def __ge__(self, val) -> Comparator:
         return ge(self, val)
+
     def __le__(self, val) -> Comparator:
         return le(self, val)
 
@@ -138,54 +145,55 @@ class Comparator:
 
 @dataclass(frozen=True)
 class eq(Comparator):
-    
+
     def fval(self):
         return f"={self.val}"
 
 
 @dataclass(frozen=True)
 class ne(Comparator):
-    
+
     def fval(self):
         return f"!={self.val}"
 
 
 @dataclass(frozen=True)
 class gt(Comparator):
-    
+
     def fval(self):
         return f">{self.val}"
 
 
 @dataclass(frozen=True)
 class lt(Comparator):
-    
+
     def fval(self):
         return f"<{self.val}"
 
 
 @dataclass(frozen=True)
 class ge(Comparator):
-    
+
     def fval(self):
         return f">={self.val}"
 
 
 @dataclass(frozen=True)
 class le(Comparator):
-    
+
     def fval(self):
         return f"<={self.val}"
 
 
 class where:
     str = Comparator
-    eq=eq
-    ne=ne
-    gt=gt
-    lt=lt
-    ge=ge
-    le=le
+    eq = eq
+    ne = ne
+    gt = gt
+    lt = lt
+    ge = ge
+    le = le
+
 
 @dataclass(frozen=True)
 class Order:
@@ -195,10 +203,12 @@ class Order:
     def sql(self):
         return f"{self.col} {self.direction}"
 
+
 @dataclass(frozen=True)
 class asc(Order):
     direction = "ASC"
-    
+
+
 @dataclass(frozen=True)
 class desc(Order):
     direction = "DESC"
@@ -207,7 +217,6 @@ class desc(Order):
 class order:
     asc = asc
     desc = desc
-
 
 
 #  ------------------
@@ -255,9 +264,7 @@ class Table(NamedTuple):
         cls,
         name: str,
         primary_key: str | tuple[str, ...] = "id",
-        unique: (
-            tuple[str | tuple[str, ...], ...] | None
-        ) = None,
+        unique: tuple[str | tuple[str, ...], ...] | None = None,
         not_null: tuple[str, ...] | None = None,
         flags: dict | None = None,
         # id: str | None = None,
@@ -270,14 +277,10 @@ class Table(NamedTuple):
                 pass
             else:
                 # assume auto increment
-                flag = {
-                    primary_key: "PRIMARY KEY AUTOINCREMENT"
-                }
-                schema={primary_key: int} | schema
-                flags=(
-                    flag | flags
-                    if flags is not None 
-                    else flag
+                flag = {primary_key: "PRIMARY KEY AUTOINCREMENT"}
+                schema = {primary_key: int} | schema
+                flags = (
+                    flag | flags if flags is not None else flag
                 )
             id = primary_key
             primary_key = (primary_key,)
@@ -288,9 +291,7 @@ class Table(NamedTuple):
             unique=unique,
             not_null=not_null,
             flags=(
-                flags
-                if flags is None
-                else frozendict(flags)
+                flags if flags is None else frozendict(flags)
             ),
             id=id,
             db=None,
@@ -303,7 +304,7 @@ class Table(NamedTuple):
 
     def col(self, k: str, t: Type | Callable | None = None):
         assert k in self.schema, (self, k)
-        return Column(self, k, t = t)
+        return Column(self, k, t=t)
 
     def create(self, db: str):
         (
@@ -338,7 +339,7 @@ class Table(NamedTuple):
         values: list[dict] = [],
         if_exists: str | None = None,
         format: dict[str, Callable] | None = None,
-        **value
+        **value,
     ):
         """
         >>> t = Table.new("tab", val=float).create(TEST_DB)
@@ -368,7 +369,7 @@ class Table(NamedTuple):
         """
         >>> t = Table.new("tab", val=float).create(TEST_DB)
         >>> rs = t.select(
-        ...     t.col("id"), 
+        ...     t.col("id"),
         ...     where=t.col("val")==1.
         ... )
         >>> types(rs)
@@ -387,7 +388,7 @@ class Table(NamedTuple):
         self,
         joins: Comparator | list[Comparator] | None = None,
         where: Comparator | list[Comparator] | None = None,
-        **values: Any
+        **values: Any,
     ):
         """
         >>> t = Table.new("tab", val=float).create(TEST_DB)
@@ -396,7 +397,7 @@ class Table(NamedTuple):
         >>> ids_1 = t.update(val=5.0, where=val==4.)
         >>> assert ids_0 == ids_1
         >>> rs = t.select(
-        ...     t.col("id"), 
+        ...     t.col("id"),
         ...     where=val==5.
         ... )
         >>> types(rs)
@@ -435,8 +436,8 @@ class Table(NamedTuple):
             joins=joins,
             where=where,
             id=id,
-
         )
+
 
 #  ------------------
 
@@ -525,9 +526,7 @@ def create_table(
             raise ValueError(s)
     cols = parse_table_info(cols)
     if len(cols) >= len(schema):
-        return {
-            k: c for k, c in cols.items() if k in schema
-        }
+        return {k: c for k, c in cols.items() if k in schema}
     for k, t in schema.items():
         if k not in cols:
             s = f"ALTER TABLE {table} "
@@ -585,29 +584,31 @@ def format_values(
         )
     return tuple(
         (
-            format.get(
-                k, TYPE_FORMAT.get(type(v), identity)
-            )(v)
+            format.get(k, TYPE_FORMAT.get(type(v), identity))(v)
             for k, v in d.items()
         )
     )
 
 
-def fields_parser(fields: list[Column]) -> dict[
-    str, Type | Callable
-]:
+def fields_parser(
+    fields: list[Column],
+) -> dict[str, Type | Callable]:
     return {
         str(f): (
-            f.t if f.t is not None
-            else TYPE_PARSE[None]
-            if isinstance(f.table, str)
-            else TYPE_PARSE.get(
-                f.table.schema.get(f.key),
-                f.table.schema.get(f.key),
+            f.t
+            if f.t is not None
+            else (
+                TYPE_PARSE[None]
+                if isinstance(f.table, str)
+                else TYPE_PARSE.get(
+                    f.table.schema.get(f.key),
+                    f.table.schema.get(f.key),
+                )
             )
         )
         for f in fields
     }
+
 
 # for select / delete
 def add_fields_str(
@@ -641,17 +642,12 @@ def add_where_str(
     where: Comparator | list[Comparator] | None = None,
 ):
     if isinstance(where, Comparator):
-        s = (
-            s
-            + f" WHERE {where.sql()}"
-        )
+        s = s + f" WHERE {where.sql()}"
     elif isinstance(where, list):
         s = (
             s
             + " WHERE "
-            + "\n AND ".join([
-                cond.sql() for cond in where
-            ])
+            + "\n AND ".join([cond.sql() for cond in where])
         )
     return s
 
@@ -739,14 +735,12 @@ def select(
 
     parser = fields_parser(fields)
     parser_keys = list(parser.keys())
-    
+
     return [
-        {
-            k: parser[k](v)
-            for k, v in zip(parser_keys, r)
-        }
+        {k: parser[k](v) for k, v in zip(parser_keys, r)}
         for r in res
     ]
+
 
 def update(
     db: str,

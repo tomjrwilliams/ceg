@@ -17,4 +17,4 @@
 
 # signed: say 5 per sign
 
-# signed, generalise: correlation is over both signs, binary in both directions, rather than just > to  > or < to < 
+# signed, generalise: correlation is over both signs, binary in both directions, rather than just > to  > or < to <

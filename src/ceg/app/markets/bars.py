@@ -1,4 +1,3 @@
-
 from typing import Any, cast, Callable
 import datetime as dt
 
@@ -16,29 +15,30 @@ OHLC = {
     "close": data.bars.daily_close,
 }
 
+
 def lines(
     symbol: str,
     product: str = "FUT",
     start: str = "2024",
     end: str = "2025",
-    shared: app.Shared = cast(app.Shared, frozendict())
+    shared: app.Shared = cast(app.Shared, frozendict()),
 ):
     ident = f"{product}-{symbol}"
     g = ceg.Graph.new()
     g, d = fs.dates.daily.loop(
-        g, 
-        app.model.parse_date(start), 
+        g,
+        app.model.parse_date(start),
         app.model.parse_date(end),
-        alias="date"
+        alias="date",
     )
     ohlc = {}
     for field, node in OHLC.items():
         g, ohlc[field] = node.bind(
             g,
-            d, 
-            product=product, 
-            symbol=symbol, 
-            alias=f"{ident}-{field[0].upper()}"
+            d,
+            product=product,
+            symbol=symbol,
+            alias=f"{ident}-{field[0].upper()}",
         )
     return (
         app.model.Model.new(f"bars: {ident}", shared)
@@ -46,16 +46,17 @@ def lines(
         .with_graph(
             nodes=g,
             init={d: True},
-            using = {d: fs.dates.daily.loop},
-            aliasing = {
+            using={d: fs.dates.daily.loop},
+            aliasing={
                 fs.dates.daily.loop: "date",
-                **{n: k for k, n in OHLC.items()}
-            }
+                **{n: k for k, n in OHLC.items()},
+            },
         )
-        .with_plot(init=[
-            dict(label="date", x=True)
-        ] + [
-            dict(label=ohlc[field], y=True)
-            for field in OHLC.keys()
-        ])
+        .with_plot(
+            init=[dict(label="date", x=True)]
+            + [
+                dict(label=ohlc[field], y=True)
+                for field in OHLC.keys()
+            ]
+        )
     )

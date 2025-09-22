@@ -12,11 +12,11 @@ from ..core import (
     dataclass,
     define,
     steps,
-    batches,batch_until
+    batches,
+    batch_until,
 )
 
 #  ------------------
-
 
 
 @dataclass(frozen=True)
@@ -63,13 +63,10 @@ class align_d0_date(Node.D0_Date):
 
     def __call__(self, event: Event, graph: Graph):
         if event.prev is None:
-            return self.v.history(graph).last_before(
-                event.t
-            )
+            return self.v.history(graph).last_before(event.t)
         return self.v.history(graph).last_between(
             event.prev.t + self.tx, event.t, strict=False
         )
-
 
 
 @dataclass(frozen=True)
@@ -115,9 +112,7 @@ class align_d0_f64(Node.D0_F64):
     def __call__(self, event: Event, graph: Graph):
         if event.prev is None:
             try:
-                return self.v.history(graph).last_before(
-                    event.t
-                )
+                return self.v.history(graph).last_before(event.t)
             except:
                 return np.nan
         return self.v.history(graph).last_between(
@@ -126,8 +121,6 @@ class align_d0_f64(Node.D0_F64):
 
 
 #  ------------------
-
-
 
 
 # NOTE: probably used after align
@@ -146,8 +139,6 @@ class lag_d0_f64(Node.Scalar_F64):
         return self.v.history(graph).last_n_before(
             self.w, event.t
         )[0]
-
-
 
 
 # NOTE: probably used after align

@@ -18,7 +18,6 @@ from ..core import (
 #  ------------------
 
 
-
 @dataclass(frozen=True)
 class vs_x_vec(Node.D0_F64):
     """
@@ -74,9 +73,7 @@ class vs_x_vec(Node.D0_F64):
     def __call__(self, event: Event, graph: Graph):
         vs = list(
             map(
-                lambda v: v.history(graph).last_before(
-                    event.t
-                ),
+                lambda v: v.history(graph).last_before(event.t),
                 self.vs,
             )
         )
@@ -92,9 +89,8 @@ class vs_x_vec(Node.D0_F64):
 #  ------------------
 
 
-
 @dataclass(frozen=True)
-class v_x_vec_i( Node.D0_F64):
+class v_x_vec_i(Node.D0_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -156,12 +152,12 @@ class v_x_vec_i( Node.D0_F64):
             return v
         return vec[self.i] * v
 
+
 #  ------------------
 
 
-
 @dataclass(frozen=True)
-class vec_x_mat_i( Node.D0_F64):
+class vec_x_mat_i(Node.D0_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -213,13 +209,17 @@ class vec_x_mat_i( Node.D0_F64):
         f: int,
         slot: int,
     ):
-        return vec_x_mat_i("vec_x_mat_i", v=v, vec=vec, f=f,slot=slot)
+        return vec_x_mat_i(
+            "vec_x_mat_i", v=v, vec=vec, f=f, slot=slot
+        )
 
     bind = define.bind_from_new(new, Node.D0_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.v.history(graph).last_before(event.t)
-        mat = self.vec.history(graph, slot=1).last_before(event.t)
+        mat = self.vec.history(graph, slot=1).last_before(
+            event.t
+        )
         vec = mat[:, self.f]
         all_null = np.all(np.isnan(vec))
         if all_null:

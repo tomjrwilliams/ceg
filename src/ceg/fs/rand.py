@@ -85,6 +85,7 @@ class gaussian(Node.D0_F64):
     -0.0064
     0.634
     """
+
     type: str
     #
     mean: float
@@ -100,8 +101,10 @@ class gaussian(Node.D0_F64):
         seed: int = 0,
         v: Ref.D0_F64 | None = None,
     ):
-        return gaussian("gaussian", mean=mean, std=std, seed=seed, v=v)
-    
+        return gaussian(
+            "gaussian", mean=mean, std=std, seed=seed, v=v
+        )
+
     @classmethod
     def walk(
         cls,
@@ -169,6 +172,7 @@ class gaussian_1d(Node.D1_F64):
     [ 0.7662 -0.0272]
     [0.2305 0.3344]
     """
+
     type: str
     #
     shape: tuple[int]
@@ -220,6 +224,7 @@ class gaussian_1d(Node.D1_F64):
             return step
         v = self.v.history(graph).last_before(event.t)
         return v + step
+
 
 gaussian_vec = gaussian_1d
 
@@ -320,5 +325,6 @@ class gaussian_2d(Node.D2_F64):
             return step
         v = self.v.history(graph).last_before(event.t)
         return v + step
+
 
 gaussian_mat = gaussian_2d

@@ -28,9 +28,7 @@ def frozendict_append_tuple(
 
 
 def fold_star(acc, f: Callable, it):
-    return functools.reduce(
-        lambda ac, v: f(ac, *v), it, acc
-    )
+    return functools.reduce(lambda ac, v: f(ac, *v), it, acc)
 
 
 def set_tuple(
@@ -40,9 +38,7 @@ def set_tuple(
     if i > len(t):
         t = (
             t
-            + tuple(
-                (default for _ in range(i - len(t) - 1))
-            )
+            + tuple((default for _ in range(i - len(t) - 1)))
             + (v,)
         )
     # elif t[i] is v or t[i] == v:
@@ -231,6 +227,7 @@ def last_before(
         return False, np.nan
     return True, v[ix]
 
+
 @nb.jit()
 def last_before_not_nan(
     v: np.ndarray,
@@ -283,7 +280,9 @@ def last_before_not_nan(
         return False, np.nan
     return True, v[ix]
 
+
 # TODO: parallel=true?
+
 
 @nb.jit()
 def last_between(
@@ -431,7 +430,6 @@ def last_before_equiv():
 #     return res
 
 
-
 @nb.jit()
 def last_n_before(
     v: np.ndarray,
@@ -577,7 +575,6 @@ def last_n_between(
     else:
         res[-ix:] = v[:ix]
         return ix, res
-        
 
 
 #  ------------------
@@ -841,5 +838,6 @@ def last_n_between_nd(
     else:
         res[-ix * size :] = v[: ix * size]
         return ix, res
+
 
 #  ------------------

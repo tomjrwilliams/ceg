@@ -1,5 +1,6 @@
 import os
 import sys
+
 sys.path.append("./src")
 
 import json
@@ -21,7 +22,7 @@ if (
 ):
     os.environ["DATA_SOURCE_FRD"] = "AWS"
 
-    with pathlib.Path("./__local__/aws.json").open('r') as f:
+    with pathlib.Path("./__local__/aws.json").open("r") as f:
         creds = json.load(f)
 
     os.environ["AWS_ACCESS_KEY_ID"] = creds["key_id"]
@@ -45,7 +46,7 @@ shared: app.Shared = cast(app.Shared, frozendict())
 
 pages: frozendict[
     str, tuple[app.nav.Page, ...]
-] = frozendict() # type: ignore
+] = frozendict()  # type: ignore
 
 # if os.environ.get("LOCAL", "true") == "false":
 #     universe = [
@@ -129,10 +130,13 @@ pages = (
     #     range_spectrum.decomp.lines(**product_symbol)
     #     for product_symbol in universe
     # ]))
-    pages.set("vis", (
-        vis.example("a", shared),
-        vis.example("b", shared),
-    ))
+    pages.set(
+        "vis",
+        (
+            vis.example("a", shared),
+            vis.example("b", shared),
+        ),
+    )
 )
 
 # TODO: try plot each element of the vectors on a single time series?
@@ -144,14 +148,12 @@ pages = (
 # FUT-G/
 # ETF-XLF/
 
-app.nav.page(pages, page_config=dict(
-    page_title="ceg",
-    layout="wide"
-)).run()
+app.nav.page(
+    pages, page_config=dict(page_title="ceg", layout="wide")
+).run()
 
 
 # TODO: oen way to deal with the near 0 for sx5e is a back adjust series so you add back the delta so each day is as if that was the last future
-
 
 
 # TODO: one issue with fitting a factor model from eg. oil stocks to just oil, is that growth will also place a role
@@ -168,14 +170,11 @@ app.nav.page(pages, page_config=dict(
 # you might even want to start by regressing the market and oil, so you can then regress the residual post market of the equities, against the reisudal post market of oil?
 
 
-
-
 # or, more abstractly, it's as if your outputs are under-parametrised
 
 # you could instead use a two layer model, into a shared factor and back up to the oil and (say) market
 
 # but if all linear that's redundant, so the inner factor has to go through a non linearity (eg. sigmoid, assuming all are vol adjusted first, so you're predicting pre-vol scaling back up)
-
 
 
 # interesting idea to do this for a few pairs, overlapping, and then sum back up the individual contributions to get your final predictions

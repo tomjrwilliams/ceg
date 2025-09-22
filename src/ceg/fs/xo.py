@@ -24,8 +24,6 @@ from .rolling import alpha
 #  ------------------
 
 
-
-
 @dataclass(frozen=True)
 class xo_mean_ew_rms_ew(Node.D0_F64_4):
     """
@@ -68,7 +66,7 @@ class xo_mean_ew_rms_ew(Node.D0_F64_4):
     """
 
     type: str
-    
+
     v: Ref.Scalar_F64
     span_f: float
     span_s: float
@@ -82,15 +80,15 @@ class xo_mean_ew_rms_ew(Node.D0_F64_4):
         span_f: float,
         span_s: float,
         span_v: float,
-        rx: str = "abs"
+        rx: str = "abs",
     ):
         return xo_mean_ew_rms_ew(
-            "xo_mean_ew_rms_ew", 
-            v=v, 
+            "xo_mean_ew_rms_ew",
+            v=v,
             span_f=span_f,
             span_s=span_s,
             span_v=span_v,
-            rx=rx
+            rx=rx,
         )
 
     bind = define.bind_from_new(new, Node.D0_F64_4.ref)
@@ -102,15 +100,21 @@ class xo_mean_ew_rms_ew(Node.D0_F64_4):
         if event.prev is None:
             if v is None:
                 return None
-            return 0., v, v, np.abs(v)
+            return 0.0, v, v, np.abs(v)
 
         rf: Ref.D0_F64_4 = cast(Ref.D0_F64_4, event.prev.ref)
 
         prev_v = self.v.history(graph).last_before(event.prev.t)
 
-        prev_f = rf.history(graph, slot = 1).last_before(event.prev.t)
-        prev_s = rf.history(graph, slot = 2).last_before(event.prev.t)
-        prev_vol = rf.history(graph, slot = 3).last_before(event.prev.t)
+        prev_f = rf.history(graph, slot=1).last_before(
+            event.prev.t
+        )
+        prev_s = rf.history(graph, slot=2).last_before(
+            event.prev.t
+        )
+        prev_vol = rf.history(graph, slot=3).last_before(
+            event.prev.t
+        )
 
         if v is None or prev_v is None:
             return None
@@ -122,20 +126,16 @@ class xo_mean_ew_rms_ew(Node.D0_F64_4):
         # and do on that in pct
         # it's the signal anyway, doesnt need to be in dollars
 
-        if (
-            prev_f is None
-            or prev_s is None
-            or prev_vol is None
-        ):
-            return 0., v, v, np.abs(v)
-        
+        if prev_f is None or prev_s is None or prev_vol is None:
+            return 0.0, v, v, np.abs(v)
+
         alpha_f = alpha(self.span_f)
         alpha_s = alpha(self.span_s)
         alpha_v = alpha(self.span_v)
 
         if np.isnan(v):
             return v, prev_f, prev_s, prev_vol
-    
+
         prev_sq = np.square(prev_vol)
 
         if self.rx == "pct":
@@ -155,5 +155,6 @@ class xo_mean_ew_rms_ew(Node.D0_F64_4):
         xo = (mu_f - mu_s) / vol
 
         return xo, mu_f, mu_s, vol
+
 
 #  ------------------

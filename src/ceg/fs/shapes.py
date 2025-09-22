@@ -18,9 +18,8 @@ from ..core import (
 #  ------------------
 
 
-
 @dataclass(frozen=True)
-class vs_to_vec( Node.D1_F64):
+class vs_to_vec(Node.D1_F64):
     """
     >>> g = Graph.new()
     >>> from . import rand
@@ -67,15 +66,16 @@ class vs_to_vec( Node.D1_F64):
         return vs_to_vec("vs_to_vec", vs=vs)
 
     def __call__(self, event: Event, graph: Graph):
-        return np.array(list(
-            map(
-                lambda v: v.history(graph).last_before(
-                    event.t
-                ),
-                self.vs,
+        return np.array(
+            list(
+                map(
+                    lambda v: v.history(graph).last_before(
+                        event.t
+                    ),
+                    self.vs,
+                )
             )
-        ))
-
+        )
 
 
 @dataclass(frozen=True)
@@ -153,7 +153,26 @@ class v_args_to_vec(Node.D1_F64):
         v14: Ref.Scalar_F64 | None = None,
         v15: Ref.Scalar_F64 | None = None,
     ):
-        return v_args_to_vec("v_args_to_vec", v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15)
+        return v_args_to_vec(
+            "v_args_to_vec",
+            v0,
+            v1,
+            v2,
+            v3,
+            v4,
+            v5,
+            v6,
+            v7,
+            v8,
+            v9,
+            v10,
+            v11,
+            v12,
+            v13,
+            v14,
+            v15,
+        )
+
     bind = define.bind_from_new(new, Node.D1_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
@@ -168,7 +187,12 @@ class v_args_to_vec(Node.D1_F64):
             self.v7,
             self.v8,
             self.v9,
-            self.v10, self.v11, self.v12, self.v13, self.v14, self.v15
+            self.v10,
+            self.v11,
+            self.v12,
+            self.v13,
+            self.v14,
+            self.v15,
         ]
         vs = [v for v in vs if v is not None]
         vals = list(
@@ -183,6 +207,7 @@ class v_args_to_vec(Node.D1_F64):
             return None
         return np.array(vals)
 
+
 #  ------------------
 
 # etc. stack vecs, index out entries
@@ -190,13 +215,12 @@ class v_args_to_vec(Node.D1_F64):
 #  ------------------
 
 
-
 @dataclass(frozen=True)
 class mat_tup_to_v(Node.D1_F64):
 
     type: str
     vec: Ref.D1_F64_D2_F64
-    i0:int
+    i0: int
     i1: int
     slot: int
 
@@ -206,16 +230,14 @@ class mat_tup_to_v(Node.D1_F64):
         vec: Ref.D1_F64_D2_F64,
         i0: int,
         i1: int,
-        slot: int=1,
+        slot: int = 1,
     ):
         return mat_tup_to_v("mat_tup_to_v", vec, i0, i1, slot)
+
     bind = define.bind_from_new(new, Node.D1_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
-        v = self.vec.history(
-            graph,
-            slot=1
-        ).last_before(event.t)
+        v = self.vec.history(graph, slot=1).last_before(event.t)
         if v is None:
             return None
         return v[self.i0][self.i1]

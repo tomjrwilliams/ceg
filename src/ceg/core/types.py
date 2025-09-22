@@ -1,4 +1,3 @@
-
 from typing import TYPE_CHECKING, Any, Iterable
 
 # TODO: typed replace
@@ -15,6 +14,7 @@ if TYPE_CHECKING:
     from dataclasses import dataclass
 else:
     from pydantic.dataclasses import dataclass
+
 
 class ndarray(np.ndarray):
     """

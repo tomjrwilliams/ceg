@@ -14,6 +14,7 @@ import ceg
 
 #  ------------------
 
+
 class DataFrame(NamedTuple):
     page: str
     name: str
@@ -28,7 +29,7 @@ class DataFrame(NamedTuple):
         page: str,
         name: str,
         data: pl.DataFrame,
-        editable: bool=False,
+        editable: bool = False,
         label: str | None = None,
     ):
         return cls(page, name, data, editable, label)
@@ -39,7 +40,7 @@ class DataFrame(NamedTuple):
         page: str,
         name: str,
         schema: dict[str, Type[pl.DataType]],
-        editable: bool=False,
+        editable: bool = False,
         label: str | None = None,
     ):
         return cls(
@@ -47,7 +48,7 @@ class DataFrame(NamedTuple):
             name=name,
             data=pl.DataFrame(schema=schema),
             editable=editable,
-            label=label
+            label=label,
         )
 
     @property
@@ -58,7 +59,11 @@ class DataFrame(NamedTuple):
     def full_name(self):
         return f"{self.page}-{self.name}"
 
-    def add(self, dfs: dict[str, pl.DataFrame], on_change: Callable | None = None):
+    def add(
+        self,
+        dfs: dict[str, pl.DataFrame],
+        on_change: Callable | None = None,
+    ):
         if self.label is not None:
             st.text(f"{self.label}:")
         if self.editable:
@@ -69,16 +74,17 @@ class DataFrame(NamedTuple):
                 st.data_editor(
                     st.session_state[self.full_name],
                     num_rows="dynamic",
-                    on_change=on_change
-                )
+                    on_change=on_change,
+                ),
             )
         else:
             st.dataframe(self.data)
             dfs[self.name] = self.data
         return dfs
 
+
 class Transformation:
-    
+
     def apply(
         self,
         page: Page,
@@ -124,7 +130,7 @@ class Dynamic(DynamicKw, Page):
             st.session_state[self.active] = False
 
         st.toggle(
-            "run", 
+            "run",
             st.session_state[self.active],
             key=self.active,
         )
@@ -142,11 +148,7 @@ class Dynamic(DynamicKw, Page):
 
             for tf in self.tfs:
                 g, es, shared = tf.apply(
-                    self,
-                    g,
-                    es,
-                    self.dfs_data,
-                    shared
+                    self, g, es, self.dfs_data, shared
                 )
 
 

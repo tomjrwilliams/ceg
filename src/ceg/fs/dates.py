@@ -22,7 +22,6 @@ from ..core import (
 import datetime as dt
 
 
-
 @dataclass(frozen=True)
 class daily(Node.Scalar_Date):
     """
@@ -51,12 +50,12 @@ class daily(Node.Scalar_Date):
         prev: Ref.Scalar_Date,
         start: dt.date,
         end: dt.date,
-        n: int = 1
+        n: int = 1,
     ):
         return daily(
             "daily", prev=prev, start=start, end=end, n=n
         )
-    
+
     @classmethod
     def loop(
         cls,
@@ -71,13 +70,17 @@ class daily(Node.Scalar_Date):
         g, r = g.bind(None, Ref.Scalar_Date)
         g, r = daily.new(
             r.select(last=keep), start, end, n=n
-        ).pipe(g.bind, r, Loop.UntilDate.new(step, end, r), alias=alias)
+        ).pipe(
+            g.bind,
+            r,
+            Loop.UntilDate.new(step, end, r),
+            alias=alias,
+        )
         return g, cast(Ref.Scalar_Date, r)
-
 
     def __call__(self, event: Event, graph: Graph):
         h = self.prev.history(graph)
-        d = h.last_before(event.t, strict = False)
+        d = h.last_before(event.t, strict=False)
         if d is None:
             if event.ref.eq(self.prev):
                 return self.start
@@ -87,6 +90,7 @@ class daily(Node.Scalar_Date):
         if d > self.end:
             raise ValueError(self, d)
         return d
+
 
 # NOTE: alt loop implementation that also type hints nicely : )
 # with g.implicit() as (bind, done):

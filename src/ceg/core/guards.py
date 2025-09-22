@@ -31,6 +31,7 @@ logger = logging.Logger(__file__)
 class GuardMutable:
     prev: Event | None = None
 
+
 @dataclass(frozen=True)
 class GuardInterface(abc.ABC, Generic[N]):
     mut: GuardMutable
@@ -101,9 +102,8 @@ class ReadyAll(GuardInterface[N]):
         ref: Ref.Any,
         params: frozendict[int, tuple[str, ...]],
     ) -> ReadyAll:
-        return replace(self, 
-            params=tuple(params.keys()),
-            counter={}
+        return replace(
+            self, params=tuple(params.keys()), counter={}
         )
 
     def next(
@@ -119,7 +119,11 @@ class ReadyAll(GuardInterface[N]):
         t = event.t
         c = self.counter.get(t, 0) + 1
         if c == 1 and len(self.counter):
-            pop = [prev_t for prev_t in self.counter.keys() if prev_t < t]
+            pop = [
+                prev_t
+                for prev_t in self.counter.keys()
+                if prev_t < t
+            ]
             for prev_t in pop:
                 self.counter.pop(prev_t)
         if c == len(self.params):
@@ -128,6 +132,7 @@ class ReadyAll(GuardInterface[N]):
             return self.set_prev(Event.new(t, ref), event)
         self.counter[t] = c
         return None
+
 
 @dataclass(frozen=True)
 class ReadyRef(GuardInterface[N]):
@@ -153,10 +158,11 @@ class ReadyRef(GuardInterface[N]):
         graph: GraphInterface,
     ) -> Event | None:
         if event.ref.i == self.ref.i:
-            return self.set_prev(event._replace(
-                ref=ref, prev=None
-            ), event)
+            return self.set_prev(
+                event._replace(ref=ref, prev=None), event
+            )
         return None
+
 
 @dataclass(frozen=True)
 class NotNaNRef(GuardInterface[N]):
@@ -185,12 +191,15 @@ class NotNaNRef(GuardInterface[N]):
             v = event.ref.history(graph).last_before(event.t)
             if v is None:
                 return None
-            if isinstance(v, (float, np.ndarray)) and np.isnan(v):
+            if isinstance(v, (float, np.ndarray)) and np.isnan(
+                v
+            ):
                 return None
-            return self.set_prev(event._replace(
-                ref=ref, prev=None
-            ), event)
+            return self.set_prev(
+                event._replace(ref=ref, prev=None), event
+            )
         return None
+
 
 #  ------------------
 
@@ -218,13 +227,23 @@ class LoopConst(GuardInterface[N]):
         node: N,
         graph: GraphInterface,
     ) -> Event | None:
-        assert event.ref.eq(ref), ("self", self, "node",  node, "ref",ref, "event",event)
+        assert event.ref.eq(ref), (
+            "self",
+            self,
+            "node",
+            node,
+            "ref",
+            ref,
+            "event",
+            event,
+        )
         return self.set_prev(
             event._replace(
                 t=event.t + self.step,
             ),
             event,
         )
+
 
 @dataclass(frozen=True)
 class LoopUntilDate(GuardInterface[N]):
@@ -240,9 +259,7 @@ class LoopUntilDate(GuardInterface[N]):
         until: dt.date,
         date: Ref.Scalar_Date,
     ) -> LoopUntilDate:
-        return LoopUntilDate(
-            GuardMutable(), step, until, date
-        )
+        return LoopUntilDate(GuardMutable(), step, until, date)
 
     def init(
         self,
@@ -258,7 +275,16 @@ class LoopUntilDate(GuardInterface[N]):
         node: N,
         graph: GraphInterface,
     ) -> Event | None:
-        assert event.ref.eq(ref), ("self", self, "node",  node, "ref",ref, "event",event)
+        assert event.ref.eq(ref), (
+            "self",
+            self,
+            "node",
+            node,
+            "ref",
+            ref,
+            "event",
+            event,
+        )
         h = self.date.history(graph, strict=False)
         if h is None:
             assert event.t == 0, event
@@ -272,6 +298,7 @@ class LoopUntilDate(GuardInterface[N]):
 
 
 rng = np.random.default_rng(66642666)
+
 
 @dataclass(frozen=True)
 class LoopRand(GuardInterface[N]):
@@ -299,7 +326,16 @@ class LoopRand(GuardInterface[N]):
         node: N,
         graph: GraphInterface,
     ) -> Event | None:
-        assert event.ref.eq(ref), ("self", self, "node",  node, "ref",ref, "event",event)
+        assert event.ref.eq(ref), (
+            "self",
+            self,
+            "node",
+            node,
+            "ref",
+            ref,
+            "event",
+            event,
+        )
         if self.dist == "normal":
             step = rng.normal(*self.params, size=None)
         else:
@@ -310,6 +346,7 @@ class LoopRand(GuardInterface[N]):
 
 
 #  ------------------
+
 
 @dataclass(frozen=True)
 class ByDateInterface(GuardInterface[N]):
@@ -333,17 +370,21 @@ class ByDateInterface(GuardInterface[N]):
         except:
             raise ValueError(params)
 
+
 @dataclass(frozen=True)
 class WeekStart(ByDateInterface[N]):
     pass
+
 
 @dataclass(frozen=True)
 class WeekEnd(ByDateInterface[N]):
     pass
 
+
 @dataclass(frozen=True)
 class MonthStart(ByDateInterface[N]):
     pass
+
 
 @dataclass(frozen=True)
 class MonthEnd(ByDateInterface[N]):
@@ -359,8 +400,8 @@ class MonthEnd(ByDateInterface[N]):
         #     self.last is not None
         #     # and self.last != event.ref.i
         # ):
-            # TODO: only fire on the last param (?) so we know all are ready? only works if all fire on all t?
-            # return None
+        # TODO: only fire on the last param (?) so we know all are ready? only works if all fire on all t?
+        # return None
         d = self.date.history(graph).last_before(event.t)
         assert isinstance(d, dt.date), d
         print(d)
@@ -368,22 +409,24 @@ class MonthEnd(ByDateInterface[N]):
             # if all_series(
             #     graph, params.keys(), lambda e: e.t.last == event.t
             # ):
-            return self.set_prev(
-                event._replace(ref=ref), event
-            )
+            return self.set_prev(event._replace(ref=ref), event)
         return None
+
 
 @dataclass(frozen=True)
 class QuarterStart(ByDateInterface[N]):
     pass
 
+
 @dataclass(frozen=True)
 class QuarterEnd(ByDateInterface[N]):
     pass
 
+
 @dataclass(frozen=True)
 class YearStart(ByDateInterface[N]):
     pass
+
 
 @dataclass(frozen=True)
 class YearEnd(ByDateInterface[N]):
@@ -408,6 +451,7 @@ class YearEnd(ByDateInterface[N]):
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class ByValueInterface(GuardInterface[N]):
     mut: GuardMutable
@@ -429,6 +473,7 @@ class ByValueInterface(GuardInterface[N]):
             return self
         return replace(self, last=max(params.keys()))
 
+
 @dataclass(frozen=True)
 class SignChange(ByValueInterface[N]):
 
@@ -439,28 +484,19 @@ class SignChange(ByValueInterface[N]):
         node: N,
         graph: GraphInterface,
     ) -> Event | None:
-        if (
-            self.last is not None
-            and self.last != event.ref.i
-        ):
+        if self.last is not None and self.last != event.ref.i:
             # TODO: only fire on the last param (?) so we know all are ready? only works if all fire on all t?
             return None
-        vs = self.value.history(graph).last_n_before(
-            2, event.t
-        )
+        vs = self.value.history(graph).last_n_before(2, event.t)
         v0 = vs[-1]
         v1 = vs[0]
         # assume we dont emit nan
         if np.isnan(v0) or np.isnan(v1):
             return None
         elif v0 > 0 and v1 < 0:
-            return self.set_prev(
-                event._replace(ref=ref), event
-            )
+            return self.set_prev(event._replace(ref=ref), event)
         elif v1 > 0 and v0 < 0:
-            return self.set_prev(
-                event._replace(ref=ref), event
-            )
+            return self.set_prev(event._replace(ref=ref), event)
         return None
 
 
@@ -471,6 +507,7 @@ class SignChange(ByValueInterface[N]):
 
 class Guard:
     Any = GuardInterface
+
 
 class Ready:
     All = ReadyAll
@@ -484,6 +521,7 @@ class Ready:
     @classmethod
     def ref_not_nan(cls, ref: Ref.Any):
         return NotNaNRef.new(ref)
+
 
 class Loop:
     Const = LoopConst

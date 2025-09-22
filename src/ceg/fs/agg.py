@@ -20,7 +20,9 @@ from ..core import (
     steps,
     batches,
 )
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class mean_vec(Node.Scalar_F64):
@@ -62,10 +64,10 @@ class mean_vec(Node.Scalar_F64):
 
     @staticmethod
     def new(
-        # cls, 
+        # cls,
         vec: Ref.Vector_F64,
-        a: float = 0.,
-        b: float = 1.,
+        a: float = 0.0,
+        b: float = 1.0,
     ):
         return mean_vec("mean_vec", vec=vec, a=a, b=b)
 
@@ -74,6 +76,7 @@ class mean_vec(Node.Scalar_F64):
     def __call__(self, event: Event, graph: Graph):
         v = self.vec.history(graph).last_before(event.t)
         return np.mean(self.b * v) + self.a
+
 
 #  ------------------
 
@@ -118,24 +121,29 @@ class sum_vec(Node.Scalar_F64):
 
     @staticmethod
     def new(
-        # cls, 
+        # cls,
         vec: Ref.Vector_F64,
-        a: float = 0.,
-        b: float = 1.,
+        a: float = 0.0,
+        b: float = 1.0,
     ):
         return sum_vec("sum_vec", vec=vec, a=a, b=b)
+
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.vec.history(graph).last_before(event.t)
         return np.sum(self.b * v) + self.a
 
+
 #  ------------------
+
 
 class sum_mat_i_kw(NamedTuple):
 
     @classmethod
-    def ref(cls, i: int | Ref.Any, slot: int | None = None) -> Ref.Scalar_F64:
+    def ref(
+        cls, i: int | Ref.Any, slot: int | None = None
+    ) -> Ref.Scalar_F64:
         return Ref.d0_f64(i, slot=slot)
 
 
@@ -153,20 +161,29 @@ class sum_mat_i(Node.Scalar_F64):
 
     @staticmethod
     def new(
-        # cls, 
+        # cls,
         mat: Ref.D1_F64_D2_F64,
         slot: int,
         i: int,
-        t: bool=False,
-        a: float = 0.,
-        b: float = 1.,
+        t: bool = False,
+        a: float = 0.0,
+        b: float = 1.0,
     ):
-        return sum_mat_i("sum_mat_i", mat=mat,slot=slot,i=i,t=t, a=a, b=b)
+        return sum_mat_i(
+            "sum_mat_i",
+            mat=mat,
+            slot=slot,
+            i=i,
+            t=t,
+            a=a,
+            b=b,
+        )
+
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         v = self.mat.history(
-            graph, slot=1 # TODO fix
+            graph, slot=1  # TODO fix
         ).last_before(event.t)
         if self.t:
             v = v[:, self.i]

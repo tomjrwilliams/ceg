@@ -46,6 +46,7 @@ from .guards import Guard, Ready, Loop
 
 from functools import wraps
 from inspect import Parameter, signature, Signature
+
 logger = logging.Logger(__file__)
 
 #  ------------------
@@ -62,6 +63,7 @@ T = TypeVar("T")
 # with new nodes, guards
 
 # discriminate easily enough on type field, add to guard, similar new and define syntax
+
 
 class Key(NamedTuple):
     pass
@@ -99,6 +101,7 @@ class Graph(NamedTuple):
     data: Data
     state: State
     """
+
     queue: list[Event]  # heapify
     nodes: TNodes
     guards: TGuards
@@ -111,7 +114,9 @@ class Graph(NamedTuple):
     data: Data
     state: State
 
-    def aliased(self, alias: str, slot: int | None = None) -> Ref.Any:
+    def aliased(
+        self, alias: str, slot: int | None = None
+    ) -> Ref.Any:
         i = self.index_aliases.get(alias)
         if i is None:
             raise ValueError((alias, i))
@@ -148,7 +153,9 @@ class Graph(NamedTuple):
             guards=(),
             aliases=(),
             index=index,
-            index_aliases=cast(frozendict[str, int], frozendict()),
+            index_aliases=cast(
+                frozendict[str, int], frozendict()
+            ),
             ustream=(),
             dstream=dstream,
             required=frozendict(),  # type: ignore
@@ -157,9 +164,7 @@ class Graph(NamedTuple):
         )
 
     def with_state(self, key: Key, value: Value) -> Graph:
-        return self._replace(
-            state=self.state.set(key, value)
-        )
+        return self._replace(state=self.state.set(key, value))
 
     def bind(
         self,
@@ -170,13 +175,16 @@ class Graph(NamedTuple):
         alias: str | None = None,
     ) -> tuple[Graph, R]:
         return bind(
-            self, node=node, ref=ref, when=when, keep=keep, alias=alias
+            self,
+            node=node,
+            ref=ref,
+            when=when,
+            keep=keep,
+            alias=alias,
         )
 
     @contextlib.contextmanager
-    def mutable(
-        self, partition: bool | Ref.Any | None = None
-    ):
+    def mutable(self, partition: bool | Ref.Any | None = None):
         ctxt, is_done = graph_context(
             self, partition=partition, mutable=True
         )
@@ -186,9 +194,7 @@ class Graph(NamedTuple):
             assert is_done(), ctxt
 
     @contextlib.contextmanager
-    def implicit(
-        self, partition: bool | Ref.Any | None = None
-    ):
+    def implicit(self, partition: bool | Ref.Any | None = None):
         ctxt, is_done = graph_context(
             self, partition=partition, mutable=False
         )
@@ -275,7 +281,11 @@ def graph_context(
         assert not DONE, (node, ref)
         # TODO: partition
         g, res = g.bind(
-            node=node, ref=ref, when=when, keep=keep, alias=alias
+            node=node,
+            ref=ref,
+            when=when,
+            keep=keep,
+            alias=alias,
         )
         return res
 
@@ -325,7 +335,13 @@ def init_node(
     when: Guard.Any[N] | None = None,
     alias: str | None = None,
 ) -> tuple[
-    TNodes, TGuards, TAliases, UStream, DStream, Data, dict[int, int]
+    TNodes,
+    TGuards,
+    TAliases,
+    UStream,
+    DStream,
+    Data,
+    dict[int, int],
 ]:
     i = ref.i
     nodes = set_tuple(nodes, i, node, Node.null)
@@ -367,16 +383,22 @@ def init_node(
     )
     data = set_tuple(data, i, History.null, History.null)
     # init is on first value (need to know shape, not necessarily fixed at runtime)
-    
+
     if when is None:
         when = Ready.All.new().init(ref, params)
     else:
         when = when.init(ref, params)
 
-    guards = set_tuple(
-        guards, i, when, Ready.All.new()
+    guards = set_tuple(guards, i, when, Ready.All.new())
+    return (
+        nodes,
+        guards,
+        aliases,
+        ustream,
+        dstream,
+        data,
+        required,
     )
-    return nodes, guards, aliases, ustream, dstream, data, required
 
 
 #  ------------------
@@ -459,9 +481,7 @@ def bind(
                 when=when,
                 alias=alias,
             )  # type: ignore
-    elif isinstance(node, Node.Any) and isinstance(
-        ref, Ref.Any
-    ):
+    elif isinstance(node, Node.Any) and isinstance(ref, Ref.Any):
         i = index.get(node, ref.i)
         assert i == ref.i, (node, ref, i)
         res = ref
@@ -531,13 +551,16 @@ def bind(
 
 P = ParamSpec("P")
 PRes = TypeVar("PRes")
-O = TypeVar("O", bound = Node.Any)
-R = TypeVar("R", bound = Ref.Any)
+O = TypeVar("O", bound=Node.Any)
+R = TypeVar("R", bound=Ref.Any)
+
 
 class fs:
     pass
 
+
 Fs = TypeVar("Fs", bound=fs)
+
 
 # TODO: rename, this is not a general prepend? specific to bind
 def prepend_argument(
@@ -547,27 +570,46 @@ def prepend_argument(
     t: Type,
 ) -> Callable[P, PRes]:
     sig = signature(f)
-    params = [
-        Parameter(
-            name,
-            Parameter.POSITIONAL_OR_KEYWORD,
-            annotation=t
+    params = (
+        [
+            Parameter(
+                name,
+                Parameter.POSITIONAL_OR_KEYWORD,
+                annotation=t,
+            )
+        ]
+        + list(sig.parameters.values())
+        + [
+            Parameter(
+                "keep",
+                Parameter.KEYWORD_ONLY,
+                annotation=int | None,
+            ),
+        ]
+        + (
+            []
+            if "alias" in sig.parameters.keys()
+            else [
+                Parameter(
+                    "alias",
+                    Parameter.KEYWORD_ONLY,
+                    annotation=str | None,
+                )
+            ]
         )
-    ] + list(sig.parameters.values()) + [
-        Parameter("keep", Parameter.KEYWORD_ONLY, annotation=int | None),
-    ] + ([] if "alias" in sig.parameters.keys() else [
-        Parameter("alias", Parameter.KEYWORD_ONLY, annotation=str | None)
-    ])
+    )
     f_wrapped.__signature__ = sig.replace(parameters=params)
     f_wrapped.__annotations__ = {
         **{name: t},
         **f_wrapped.__annotations__,
-        **{"keep": int | None, "alias": str | None}
+        **{"keep": int | None, "alias": str | None},
     }
     return f_wrapped
 
+
 class Annotation(NamedTuple):
     type: str
+
 
 class define:
 
@@ -585,38 +627,39 @@ class define:
         new: Callable[P, Node.Any],
         ref: Callable[..., R],
         keep: int = 8,
-    ) -> Callable[
-        Concatenate[Graph, P], 
-        tuple[Graph, R]
-    ]:
+    ) -> Callable[Concatenate[Graph, P], tuple[Graph, R]]:
         if isinstance(new, classmethod):
             new = new.__func__
 
         @wraps(new)
         def bind(
             # cls,
-            g: Graph, 
-            *args: P.args, 
+            g: Graph,
+            *args: P.args,
             **kwargs: P.kwargs,
         ) -> tuple[Graph, R]:
             keep_ = kwargs.pop("keep", keep)
             alias_ = kwargs.pop("alias", None)
-            alias_kw = {} if alias_ is None else dict(alias=alias_)
+            alias_kw = (
+                {} if alias_ is None else dict(alias=alias_)
+            )
             g, r = g.bind(
                 node=new(
                     # cls,
-                    *args, 
-                    **kwargs
+                    *args,
+                    **kwargs,
                 ),
-                keep=keep_, # type: ignore
-                **alias_kw, # type: ignore
+                keep=keep_,  # type: ignore
+                **alias_kw,  # type: ignore
             )
             return g, ref(r)
+
         return prepend_argument(
             new,
             bind,
             "g",
             Graph,
         )
+
 
 #  ------------------
