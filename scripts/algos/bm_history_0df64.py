@@ -5,7 +5,7 @@ import numpy as np
 import numba as nb
 
 sys.path.append("./src")
-from ceg.core.histories import History
+from ceg.graph.histories import History
 
 variants = {
     "py": History.D0_F64,

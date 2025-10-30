@@ -5,7 +5,7 @@ import numpy as np
 import numba as nb
 
 sys.path.append("./src")
-from ceg.core import algos
+from ceg.graph import algos
 
 variants = {
     "loop": algos.last_before_naive,

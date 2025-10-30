@@ -1,0 +1,461 @@
+
+from typing import Any, cast, Callable
+from functools import wraps
+
+from frozendict import frozendict
+
+import ceg
+import ceg.func as func
+import ceg.data as data
+import ceg.app as app
+
+OHLC = {
+    "open": data.bars.daily_open,
+    "high": data.bars.daily_high,
+    "low": data.bars.daily_low,
+    "close": data.bars.daily_close,
+}
+BOUNDS = {
+    "high": func.rolling.max_ew,
+    "low": func.rolling.min_ew,
+}
+
+# TOOD: rename contour rather than spectrum (that implies fourier, decomp)
+
+# range-contours? hl contours? minmax contours?
+
+def lines(
+    symbol: str,
+    product: str = "FUT",
+    start: str = "2008",
+    end: str = "2025",
+    shared: app.Shared = cast(app.Shared, frozendict()),
+    span: list[int] = [
+        # 4,
+        8, 
+        16, 
+        32, 
+        64,
+        128, 
+        256, 
+        512,
+    ],
+    truncate: float | None = None,
+    norm: bool = True,
+    relative: bool | str = False,
+    vol_span=64,
+):
+    ident = f"{product}-{symbol}"
+
+    labels_spectrum = [
+        f"H-max-{sp}" for sp in reversed(span)
+    ] + [
+        f"L-min-{sp}" for sp in span
+    ]
+    indices_spectrum = list(range(len(labels_spectrum)))
+
+    n_spreads = len(span) - 1
+
+    # truncate rel to rolling min / max as kwarg
+    # separate pages for each
+
+    b = [
+        -1 
+        for _ in range(n_spreads)
+    ] + [1] + [1 for _ in range(n_spreads)]
+
+    g = ceg.Graph.new()
+    g, d = func.dates.daily.loop(
+        g, 
+        app.model.parse_date(start), 
+        app.model.parse_date(end),
+        alias="date"
+    )
+
+    ohlc = {}
+    ohlc_chg = {}
+    ohlc_vol = {}
+    
+    for field, node in OHLC.items():
+        g, ohlc[field] = node.bind(
+            g,
+            d, 
+            product=product, 
+            symbol=symbol, 
+            alias=f"{ident}-{field[0].upper()}"
+        )
+        g, ohlc_chg[field] = func.unary.abs_change.bind(
+            g, 
+            ohlc[field],
+            alias=f"{ident}-{field[0].upper()}-rx"
+        )
+        g, ohlc_vol[field] = func.rolling.rms_ew.bind(
+            g, 
+            ohlc_chg[field], 
+            span=vol_span,
+            alias=f"{ident}-{field[0].upper()}-vol",
+        )
+
+    ohlc_mu = {}
+    ohlc_bound = {b: {} for b in BOUNDS.keys()}
+
+    for field, node in BOUNDS.items():
+        for sp in span:
+            g, ohlc_mu[field][sp] = func.rolling.mean_ew.bind(
+                g, 
+                ohlc[field],
+                span=sp,
+            )
+            g, ohlc_bound[field][sp] = node.bind(
+                g,
+                ohlc[field],
+                ohlc_mu[field][sp],
+                span=sp
+            )
+
+    g, spectrum = func.shapes.v_args_to_vec.bind(
+        g,
+        *reversed(ohlc_bound["high"].values()),
+        *ohlc_bound["low"].values()
+    )
+    g, spectrum_unit = (
+        func.norm.norm_mid_inner_vec.bind
+        if relative == "mid-inner"
+        else func.norm.norm_mid_pct_vec.bind
+        if relative == "mid-pct"
+        else func.norm.norm_mid_vec.bind
+    )(g, spectrum)
+    
+    if relative:
+        g, spreads = g.fold_map(
+            lambda g, tup: func.binary.subtract_vec_i.bind(
+                g, spectrum_unit, spectrum_unit, *tup[:-1], b=tup[-1]
+            ),
+            zip(
+                indices_spectrum[:-1],
+                indices_spectrum[1:],
+                b,
+            )
+        )
+    else:
+        g, spreads = g.fold_map(
+            lambda g, tup: func.binary.subtract.bind(
+                g, *tup[:-1], b=tup[-1]
+            ),
+            zip(
+                *reversed(ohlc_bound["high"].values()),
+                *ohlc_bound["low"].values(),
+                b,
+            )
+        )
+    
+    spreads_high = spreads[:len(span) - 1]
+    spreads_low = spreads[-(len(span) - 1):]
+
+    g, spread_sums = g.fold_map(
+        lambda g, tup: func.binary.add.bind(
+            g, *tup
+        ),
+        zip(
+            reversed(spreads_low),
+            spreads_high
+        )
+    )
+
+    rms_span = 512
+    g, spreads_rms = g.fold_map(
+        lambda g, tup: func.rolling.rms_ew.bind(
+            g, *tup, span=rms_span
+        ),
+        spread_sums
+    )
+    # 256 512 first
+
+    if truncate:
+        spread_labels = [spread["label"] for spread in spreads]
+        truncate_span = 1024
+        spread_abs = [
+            dict(label=f"{spread}-abs", func="abs", v=f"v:ref={spread}")
+            for spread in spread_labels
+        ]
+        spread_mu = [
+            dict(
+                label=f"{spread}-abs-mu",
+                func="mean_ew",
+                v=f"v:ref={spread}-abs",
+                span=1024, # type: ignore
+            )
+            for spread in spread_labels
+
+        ]
+        spread_max = [
+            dict(
+                label=f"{spread}-max",
+                func="max_ew",
+                v=f"v:ref={spread}-abs",
+                mu=f"mu:ref={spread}-abs-mu",
+                span=truncate_span, # type: ignore
+            )
+            for spread in spread_labels
+        ]
+        spread_truncate = [
+            dict(
+                label=f"{spread}-truncate",
+                func="truncate",
+                v=f"v:ref={spread}",
+                bound=f"bound:ref={spread}-max",
+                b=f"b:float={truncate}"
+            )
+            for spread in spread_labels
+        ]
+        spreads = ( # type: ignore
+            spreads
+            + spread_abs # type: ignore
+            + spread_mu # type: ignore
+            + spread_max
+            + spread_truncate
+        )
+        spread_high = spread_truncate[:len(span) - 1]
+        spread_low = spread_truncate[-(len(span) - 1):]
+        spread_suffixes = [
+            s["label"].replace(f"{ident}-", "") for s in spread_truncate
+        ]
+
+    spread_high_suffixes = [
+        s["label"].replace(f"{ident}-", "") for s in spread_high
+    ]
+    spread_low_suffixes = [
+        s["label"].replace(f"{ident}-", "") for s in spread_low
+    ]
+
+    spreads = (
+        spreads 
+        + spread_sums
+        + spread_sum_rms
+    )
+    
+    if norm:
+        spreads_normed = [
+            dict(
+                label=f"{ident}-{spread}-norm",
+                func="ratio",
+                l=f"l:ref={ident}-{spread}",
+                r=f"r:ref={rms['label']}",
+            )
+            for spread, rms in zip(
+                spread_high_suffixes,
+                spread_sum_rms,
+            )
+        ] + [
+            dict(
+                label=f"{ident}-{spread}-norm",
+                func="ratio",
+                l=f"l:ref={ident}-{spread}",
+                r=f"r:ref={rms['label']}",
+            )
+            for spread, rms in zip(
+                spread_low_suffixes,
+                reversed(spread_sum_rms),
+            )
+        ]
+        spread_suffixes = [
+            s["label"].replace(f"{ident}-", "") for s in spreads_normed
+        ]
+    
+        spreads = spreads + spreads_normed
+    # spread_suffixes = spread_suffixes + [
+    #     s["label"].replace(f"{ident}-", "") for s in spread_sums
+    # ]
+
+    name = f"range-spread"
+    if relative:
+        name += f"-{relative}"
+    if truncate:
+        name += f"-trunc({truncate})"
+    if norm:
+        name += f"-norm"
+    name += f": {ident}"
+
+    page = (
+        app.model.Model.new(name, shared)
+        .with_universe(data.bars.UNIVERSE)
+        .with_functions(cast(app.model.Universe, frozendict({
+            "date": func.dates.daily.loop,
+            "spread": func.binary.subtract.bind,
+            "spread_vec": func.binary.subtract_vec_i.bind,
+            "add": func.binary.add.bind,
+            "abs": func.unary.abs.bind,
+            "ratio": func.binary.ratio.bind,
+            "truncate": func.binary.truncate.bind,
+            "const": func.consts.const_float.bind,
+            "pct_chg": func.unary.pct_change.bind,  
+            "abs_chg": func.unary.abs_change.bind,  
+            "mean_ew": func.rolling.mean_ew.bind,
+            "max_ew": func.rolling.max_ew.bind,
+            "min_ew": func.rolling.min_ew.bind,
+            "rms_ew": func.rolling.rms_ew.bind,
+            "high": data.bars.daily_high.bind,
+            "low": data.bars.daily_low.bind,
+            "close": data.bars.daily_close.bind,
+            # "norm": fs.norm.norm_range_pct.bind,
+            "norm_mid": ,
+            "sum_mat": fs.agg.sum_mat_i.bind,
+            "mean_vec": fs.agg.mean_vec.bind,
+            "pos": fs.risk.pos_linear.bind,
+            "pnl": fs.risk.pnl_linear.bind,
+            "cum": fs.unary.cum_sum.bind,
+            "stack": fs.shapes.v_args_to_vec.bind,
+            "pca": fs.factors.pca_v.month_end,
+            "dot": fs.mm.vec_x_mat_i.bind,
+            "loading": fs.shapes.mat_tup_to_v.bind,
+        })))
+        .with_graph(nodes=[
+            dict(
+                label="date",
+                I=True,# type: ignore
+                func="date",
+                start=start,
+                end=end,
+            )
+        ] + 
+        + spreads
+        # + sum([
+        #     [
+        #         dict(
+        #             label=f"{ident}-{const}-pos",
+        #             func="pos",
+        #             # signal=f"signal:ref={const}",
+        #             scale=f"scale:ref={ident}-C-vol",
+        #             d=f"d:ref=date",
+        #             const=f"const:float={const_v}"
+        #             # delta=f"delta:float=0.5",
+        #             # lower=f"lower:float=-0.5",
+        #             # upper=f"upper:float=0.5",
+        #             # freq=f"freq:str=D15",
+        #         ),
+        #         dict(
+        #             label=f"{ident}-{const}-pnl",
+        #             func="pnl",
+        #             pos=f"pos:ref={ident}-{const}-pos",
+        #             px=f"px:ref={ident}-C",
+        #         )
+        #     ]
+        #     for const, const_v in consts.items()
+        # ], [])
+        + sum([
+            [
+                dict(
+                    label=f"{ident}-{spread}-pos",
+                    func="pos",
+                    signal=f"signal:ref={ident}-{spread}",
+                    scale=f"scale:ref={ident}-C-vol",
+                    d=f"d:ref=date",
+                    # delta=f"delta:float=0.5",
+                    # lower=f"lower:float=-0.5",
+                    # upper=f"upper:float=0.5",
+                    # freq=f"freq:str=D15",
+                ),
+                dict(
+                    label=f"{ident}-{spread}-pnl",
+                    func="pnl",
+                    pos=f"pos:ref={ident}-{spread}-pos",
+                    px=f"px:ref={ident}-C",
+                )
+            ]
+            for spread in spread_suffixes
+        ], [])
+    ))
+
+    # TODO: rolling max for pos, min for neg
+    # truncate to zero at say < 0.2 rolling min / max (relatively slow)
+
+    page = (
+        page
+        # .with_plot(init=[
+        #     dict(label="date", x=True),
+        # ] + [
+        #     dict(label=f"{ident}-f{fac}", y=True, align=f"{ident}-C")
+        #     for fac in factors
+        # ], name = "factors")
+        .with_plot(init=[
+            dict(label="date", x=True),
+        ] + [
+            dict(label=f"{ident}-H-max-{sp}", y=True, align=f"{ident}-H")
+            for sp in reversed(span)
+        ] + [
+            dict(label=f"{ident}-L-min-{sp}", y=True, align=f"{ident}-H")
+            for sp in span
+        ])
+        .with_plot(init=[
+            dict(label="date", x=True),
+        # ] + [
+        #     dict(
+        #         label=f"{ident}-{const}-pnl",
+        #         y=True,
+        #         align=f"{ident}-C",
+        #         expr="cumsum"
+        #     )
+        #     for const in consts
+        ] + [
+            dict(
+                label=f"{ident}-{spread}-pnl",
+                y=True,
+                align=f"{ident}-C",
+                expr="cumsum:trim=210"
+            )
+            for spread in spread_suffixes
+        ], name = "pnl")
+        .with_plot(init = [
+            dict(label="date", x=True)
+        ] + [
+            dict(
+                label=spread_sum["label"],
+                y=True,
+                align=f"{ident}-C",
+                expr="identity:trim=210"
+            )
+            for spread_sum in spread_sum_rms
+        ], name = "scaling")
+    )
+
+    page = (
+        page
+        .with_plot(init=[
+            dict(label="date", x=True),
+        ] + [
+            dict(
+                label=f"{ident}-{spread}", y=True, align=f"{ident}-C",
+                expr="identity:trim=210"
+            )
+            for spread in spread_suffixes
+        ], name = "signal")
+        .with_plot(init=[
+            dict(label="date", x=True),
+        ] + [
+            dict(
+                label=f"{ident}-{spread}-pos", 
+                slot= 0, # type: ignore
+                y=True, 
+                align=f"{ident}-C",
+                expr="identity:trim=210"
+            )
+            for spread in spread_suffixes
+        ], name = "pos")
+    )
+    return page
+
+# TODO: histogram
+
+# TODO: compare to just constant weights
+
+# signal in the compression / spread of the pc1?
+# signal in the weight sum of the pos vs negative ocmponents - more skew up or down (ie. that's the "base" you're "relative" to)
+
+
+# interesting idea to do a rolling regression against teh backward factor path
+# so you get updated poss exponentail weights each time, given the seed pca path
+
+# is there a way to add an orthogonality contsraints?
+# or is a linalg solution if multi variate, orthogonal?
+
+# is the weight in weighted reg on the features or the observations?

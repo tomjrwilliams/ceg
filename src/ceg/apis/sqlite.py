@@ -72,8 +72,8 @@ TYPE_NAME = {
     int: "INTEGER",
     float: "REAL",
     str: "TEXT",
+    datetime.datetime: "REAL", # DATETIME? NUMERIC?
     datetime.date: "INTEGER",
-    # datetime: text? ISO
     bytes: "BLOB",
 }
 TYPE_FORMAT = {
@@ -81,6 +81,7 @@ TYPE_FORMAT = {
     int: str,
     float: str,
     str: str,
+    datetime.datetime: lambda v: str(v.timestamp()),
     datetime.date: lambda v: str(v.toordinal()),
     bytes: lambda v: v,
 }
@@ -89,6 +90,7 @@ TYPE_PARSE = {
     int: int,
     float: float,
     str: str,
+    datetime.datetime: lambda v: datetime.datetime.fromtimestamp(v),
     datetime.date: lambda v: datetime.date.fromordinal(v),
     bytes: lambda v: v,
     None: lambda b: b,
@@ -133,56 +135,63 @@ class Comparator:
     col: Column
     val: str | Column | Any | None = None
 
-    def fval(self):
+    def comp(self):
         # used for custom string comparators
         assert isinstance(self.val, str), self
         return self.val
 
+    def fval(self):
+        if isinstance(self.val, bytes):
+            return memoryview(self.val)
+        if isinstance(self.val, str):
+            return f"'{self.val}'"
+        return self.val
+
     def sql(self):
         assert self.val is not None, self
-        return f"{self.col}{self.fval()}"
+        return f"{self.col}{self.comp()}"
 
 
 @dataclass(frozen=True)
 class eq(Comparator):
 
-    def fval(self):
-        return f"={self.val}"
+    def comp(self):
+        return f"={self.fval()}"
 
 
 @dataclass(frozen=True)
 class ne(Comparator):
 
-    def fval(self):
-        return f"!={self.val}"
+    def comp(self):
+        return f"!={self.fval()}"
 
 
 @dataclass(frozen=True)
 class gt(Comparator):
 
-    def fval(self):
-        return f">{self.val}"
+    def comp(self):
+        return f">{self.fval()}"
 
 
 @dataclass(frozen=True)
 class lt(Comparator):
 
-    def fval(self):
-        return f"<{self.val}"
+    def comp(self):
+        return f"<{self.fval()}"
 
 
 @dataclass(frozen=True)
 class ge(Comparator):
 
-    def fval(self):
-        return f">={self.val}"
+    def comp(self):
+        return f">={self.fval()}"
 
 
 @dataclass(frozen=True)
 class le(Comparator):
 
-    def fval(self):
-        return f"<={self.val}"
+    def comp(self):
+        return f"<={self.fval()}"
 
 
 class where:
@@ -206,12 +215,12 @@ class Order:
 
 @dataclass(frozen=True)
 class asc(Order):
-    direction = "ASC"
+    direction: str = "ASC"
 
 
 @dataclass(frozen=True)
 class desc(Order):
-    direction = "DESC"
+    direction: str = "DESC"
 
 
 class order:
@@ -365,6 +374,7 @@ class Table(NamedTuple):
         joins: Comparator | list[Comparator] | None = None,
         where: Comparator | list[Comparator] | None = None,
         order: Order | list[Order] | None = None,
+        limit: int | None = None,
     ):
         """
         >>> t = Table.new("tab", val=float).create(TEST_DB)
@@ -382,6 +392,7 @@ class Table(NamedTuple):
             joins=joins,
             where=where,
             order=order,
+            limit=limit,
         )
 
     def update(
@@ -511,8 +522,10 @@ def create_table(
         pk = ", ".join(primary_key)
         s = s + f", PRIMARY KEY({pk})"
     if unique is not None:
-        s = s + ", ".join(
-            [f"UNIQUE(" + ",".join(u) + ")" for u in unique]
+        s = s + ", " + ", ".join(
+            ["UNIQUE(" + (
+                u if isinstance(u, str) else ",".join(u)
+            ) + ")" for u in unique]
         )
     with connect(db) as cur:
         try:
@@ -643,7 +656,7 @@ def add_where_str(
 ):
     if isinstance(where, Comparator):
         s = s + f" WHERE {where.sql()}"
-    elif isinstance(where, list):
+    elif isinstance(where, list) and len(where):
         s = (
             s
             + " WHERE "
@@ -658,7 +671,7 @@ def add_order_str(
 ):
     if isinstance(order, Order):
         s += f" ORDER BY {order.sql()}"
-    elif isinstance(order, list):
+    elif isinstance(order, list) and len(order):
         s = (
             s
             + " ORDER BY "
@@ -712,6 +725,7 @@ def select(
     joins: Comparator | list[Comparator] | None = None,
     where: Comparator | list[Comparator] | None = None,
     order: Order | list[Order] | None = None,
+    limit: int | None = None,
 ):
     s = "SELECT "
 
@@ -725,6 +739,9 @@ def select(
     s = add_joins_str(s, joins)
     s = add_where_str(s, where)
     s = add_order_str(s, order)
+
+    if limit is not None:
+        s += f" LIMIT {limit}"
 
     with connect(db, read_only=True) as cur:
         try:
@@ -748,6 +765,7 @@ def update(
     values: dict[str, Any],
     joins: Comparator | list[Comparator] | None = None,
     where: Comparator | list[Comparator] | None = None,
+    format: dict[str, Callable] | None = None,
     id: str | None = None,
 ) -> list[int]:
     id = id if isinstance(table, str) else table.id
@@ -761,7 +779,8 @@ def update(
     s += " SET "
 
     for k, v in values.items():
-        s += f"{k} = {v}, "
+        s += f"{k}=?, "
+    vs = format_values(values, format)
 
     s = s[:-2]
 
@@ -775,7 +794,7 @@ def update(
 
     with connect(db, read_only=True) as cur:
         try:
-            q = cur.execute(s)
+            q = cur.execute(s, vs)
         except:
             raise ValueError(s)
         res = q.fetchall()
