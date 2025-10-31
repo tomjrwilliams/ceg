@@ -1,143 +1,151 @@
 from __future__ import annotations
-from typing import Callable
-import itertools
+from typing import (
+    TYPE_CHECKING,
+    Type,
+    TypeVar,
+    ClassVar,
+    Literal,
+    Protocol,
+    overload,
+    cast,
+    final,
+)
+import functools
+from dataclasses import replace
 
-from dataclasses import dataclass
+if TYPE_CHECKING:
+    from dataclasses import dataclass
+else:
+    from pydantic.dataclasses import dataclass
 
-from ..apis import kv
+from pydantic import (
+    TypeAdapter,
+    BaseModel,
+    Field,
+)
+from frozendict import frozendict
 
-
-
-class Event:
-    # type: define, change, create, update
-    object: Object
-
-
-
-class Queue:
-
-    # one per object, and then others by string
-
-    # object paths for their own define/change/update/create
-
-    # and then any others as per broadcast
-
-    pass
-
-
-
-def cartesian_enumeration(
-    filters: list[Callable[..., bool]] = [],
-    **iterables: list,
-):
-    ks = list(iterables.keys())
-    prods = itertools.product(*iterables.values())
-    for filt in filters:
-        prods = filter(filt, prods)
-    for i, prod in enumerate(prods):
-        yield i, dict(zip(ks, prod))
-
+from .events import *
+from .snaps import *
+from .values import *
 
 @dataclass(frozen=True)
-class Tags:
-    # sublcass for the relevant object tags as fields
-    # easy to go to and from the dict repr with pydnatic 
+class ObjectParser:
+    obj: Object
 
+    @classmethod
+    def ta(cls) -> TypeAdapter:
+        return TypeAdapter(cls)
 
-    # TODO: have some way of indicating which should be collapsed (overriding downward, eg. dev env variables lower down)
+    def dump_bytes(self) -> bytes:
+        return self.ta().dump_json(self)
 
-    # and which should be kept mapped to their [i, s] pair
-    # when consolidated
-
-    # with a lookup method on name, optionally pass i (path index) or first / last etc.
-
-    pass
-
+@functools.lru_cache(maxsize=128, typed=True)
+def object_parser(cls: Type[Object]) -> Type[ObjectParser]:
+    return dataclass(frozen=True)(type(
+        cls.__name__ + "Parser",
+        (ObjectParser,),
+        {
+            "obj": Field(discriminator="type"),
+            "__annotations__": {"obj": cls}
+        }
+    ))
 
 @dataclass(frozen=True)
 class Object:
-    parent: Object | None
-    s: str
-
+    """
+    >>> @dataclass(frozen=True)
+    ... class ObjectA(Object):
+    ...     type: Literal['A'] = Object.type_field("A")
+    >>> @dataclass(frozen=True)
+    ... class ObjectB(Object):
+    ...     parent: ObjectA
+    ...     type: Literal['B'] = Object.type_field("B")
+    >>> @dataclass(frozen=True)
+    ... class ObjectParserAB(ObjectParser):
+    ...     obj: ObjectA | ObjectB = Object.union_field()
+    >>> a = ObjectA("")
+    >>> b = ObjectB("", a)
+    >>> _ = ObjectParserAB(a) # init parser type
+    >>> Object.load_json(a.dump_bytes(), ObjectParserAB)
+    ObjectA(path='')
+    >>> Object.load_json(b.dump_bytes(), ObjectParserAB) 
+    ObjectB(path='', parent=ObjectA(path=''))
+    """
     path: str
+    parent: Object | None = Field(default=None, repr=False)
 
-    # TODO: tags as fields
-
-    # TODO: snap, values, etc. config references
-    # are probably tags of parent objects, so they can be shared
-
-    # ie. the root object is essentially an environment variable registry?
-
-    def broadcasts(self):
-        # boradcasts *to*
-        # return a queue (s?)
-        # eg. by traversing upwards until we find
-        # probably local to the domain?
-
-        # TODO: ideally the broadcasts and specific field values are filled in by the app logic, config (eg. from static data etc.), possibly env dependent
-
-        # TODO: not necessarily just a string, ie. can return subs that truncate the upward path, reinstate, etc.
-        # as we inherit (merging) from parents
-        # so cache this presumably after that merge op
-
-        # the upward path above being for definition change, not for create / update (as thats a value question not an object question)
-        return
+    @property
+    def type(self) -> str: ...
 
     @classmethod
-    def new(cls, parent: Object | None, s: str):
-        # fill in path str from parent.path
+    def union_field(cls):
+        return Field(discriminator="type")
 
-        # parent eg. could be module, root registry, etc.
-        return
+    @classmethod
+    def type_field(cls, name: str, repr: bool = False):
+        return Field(default=name, repr=repr)
 
-    def decode(self):
-        # used when loading from kv store
+    @classmethod
+    def parser(cls) -> Type[ObjectParser]:
+        return object_parser(cls)
 
-        # include cast parent, call decode (recursively)
-        return
+    def dump_bytes(self) -> bytes:
+        return self.parser()(self).dump_bytes()
 
-    # convenience method to return
-    def tags(self):
-        return
+    @classmethod
+    def load_json(
+        cls,
+        data: str | bytes | bytearray,
+        into: Type[ObjectParser]
+    ) -> Object:
+        parser: ObjectParser = into.ta().validate_json(data)
+        return parser.obj
 
-    def on_define(self, e: Event, obj: Object):
-        # if we have the depencies, run calc?
-        return
+    # -------------
+    
+    # NOTE: listen to any event for these objects
+    def depends(self) -> list[Dependency]: ...
 
-    def on_change(self, e: Event, obj: Object):
-        # of any node in the path - though we ideally dont need to actually bind all the intermediate
-        # but probably do have some caching so we dont repeat checks for those with shared parents
+    # NOTE: return the handlers to run for a given event
+    # versus having to init all up front, even if not used
+    def handlers(self, event: Event) -> list[Handler]: ...
 
-        # either run calc or err, obj dependent
-        return
+    # NOTE: override with more specific type return
+    # NOTE: contains last processed event
+    def snap(self) -> Snap: ...
 
-    def on_create(self, e: Event, obj: Object):
-        # this is presumably triggered by another object create, not this
-        return
+    # NOTE: override with more specific type return
+    def value(self) -> Value: ...
 
-    def on_update(self, e: Event, obj: Object):
-        # this is presumably triggered by another object update, not this
-        # presume update calc
-        return
+    # up through to root object as needed
+    def publish(self, event: Event) -> None: ...
 
-    def on_event(self, e: Event):
-        return
+    # -------------
+    
 
-    def sync(self):
-        # include snap guard that exits if not required?
+@dataclass(frozen=True)
+class Dependency:
+    obj: Object
+    depends: Object
+    active: bool = True
+    parent: bool = False
+    ancestor: bool = False
+    events: tuple[str, ...] | None = None
+    # NOTE: types, used to filter without .handlers()
 
-        # do the calc, store snap, etc.
+@dataclass(frozen=True)
+class Handler:
+    
+    def handle(
+        self,
+        obj: Object,
+        event: Event,
+    ) -> None: ... # publish via object itself
 
-        # using the given index, snap, values
-        # ie objects contain their own back-end references?
-
-        # TODO: those then presumably are part of the tags?
-        # to force re-calc on change
-
-        return
-
-
-class ObjectTags(kv.KeyValIO[kv.ID, str, str, Object, Tags]):
-    pass
-
-
+__all__ = [
+    "ObjectParser",
+    "Object",
+    "Dependency",
+    "Handler",
+]

@@ -1,66 +1,105 @@
 from __future__ import annotations
-from typing import Callable
-import itertools
-
-from dataclasses import dataclass
-
-from .objects import (
-    Object,
-    Tags,
-    # Index,
+from typing import (
+    TYPE_CHECKING,
+    Type,
+    TypeVar,
+    ClassVar,
+    Literal,
+    Protocol,
+    overload,
+    cast,
+    final,
+)
+import functools
+from pydantic import (
+    TypeAdapter,
+    BaseModel,
+    Field,
 )
 
-# just object state, doesnt track which global events have been handled yet?
+if TYPE_CHECKING:
+    from dataclasses import dataclass
+else:
+    from pydantic.dataclasses import dataclass
 
-# so no guarantee of object state relative to global event ordering?
+from frozendict import frozendict
 
-
-
-class Snap:
-    # used to decide when work needs to be done, summary of value state (eg. start / end)
-
-    # minimum: event id (ordered) and queue identifier (for that event?)
-
-    # ie. this is a subscription: it stores the latest processed (and other relevant data about the value series for deciding if work needs doing), given a queue
-
-    # but then we can only target one queue?
-
-    # so otherwise we need a mapping to each of the queues we subscribe to in the values? that's in theory fine as well
-    pass
-
-
-class Value:
-    # this is the col value, for time series often presumably chunked
-    pass
-
-
-class Signature:
-    # describes what kind of values it holds: eg. time series, daily
-    # 1d float
-    # no null etc.
-
-    # each node implementation should be able to calc its own signature given those of input nodes, and its args
-    # every stored needs a signature, every dynamic can then calc (and hence has as well)
-    pass
-
+from .events import *
 
 @dataclass(frozen=True)
-class Store:
-    # index: Index
+class SnapParser:
+    snap: Snap
 
-    def snap(self, obj: Object) -> Snap | None:
-        return
+    @classmethod
+    def ta(cls) -> TypeAdapter:
+        return TypeAdapter(cls)
 
-    def value(self, obj: Object) -> Value | None:
-        return
+    def dump_bytes(self) -> bytes:
+        return self.ta().dump_json(self)
 
+@functools.lru_cache(maxsize=128, typed=True)
+def snap_parser(cls: Type[Snap]) -> Type[SnapParser]:
+    return dataclass(frozen=True)(type(
+        cls.__name__ + "Parser",
+        (SnapParser,),
+        {
+            "snap": Field(discriminator="type"),
+            "__annotations__": {"snap": cls}
+        }
+    ))
 
-# for now, orthogonal to existing set up
-# eg. just load / save / update value series
+@dataclass(frozen=True)
+class Snap:
+    """
+    >>> @dataclass(frozen=True)
+    ... class SnapA(Snap):
+    ...     a: int
+    ...     type: Literal['A'] = Snap.typfield("A")
+    >>> @dataclass(frozen=True)
+    ... class SnapB(Snap):
+    ...     b: float
+    ...     type: Literal['B'] = Snap.typfield("B")
+    >>> @dataclass(frozen=True)
+    ... class SnapParserAB(SnapParser):
+    ...     snap: SnapA | SnapB = Snap.union_field()
+    >>> a, b = SnapA("a", 1), SnapB("b", 1.)
+    >>> _ = SnapParserAB(a) # init parser type
+    >>> Snap.load_json(a.dump_bytes(), SnapParserAB)
+    SnapA(obj='a', a=1)
+    >>> Snap.load_json(b.dump_bytes(), SnapParserAB) 
+    SnapB(obj='b', b=1.0)
+    """
+    event: Event
+    obj: str # NOTE: object path
 
+    @property
+    def type(self) -> str: ...
 
-# id generation given string is straight forward: unique index on string, to auto incr id
+    @classmethod
+    def union_field(cls):
+        return Field(discriminator="type")
 
-# then use id instead
+    @classmethod
+    def typfield(cls, name: str, repr: bool = False):
+        return Field(default=name, repr=repr)
 
-# then upsert id is get -> (insert if needed) -> return
+    @classmethod
+    def parser(cls) -> Type[SnapParser]:
+        return snap_parser(cls)
+
+    def dump_bytes(self) -> bytes:
+        return self.parser()(self).dump_bytes()
+
+    @classmethod
+    def load_json(
+        cls,
+        data: str | bytes | bytearray,
+        into: Type[SnapParser]
+    ) -> Snap:
+        parser: SnapParser = into.ta().validate_json(data)
+        return parser.snap
+
+__all__ = [
+    "SnapParser",
+    "Snap",
+]
