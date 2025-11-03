@@ -106,20 +106,20 @@ class Value:
     # TODO: parse_json_as, parse_json_as_self
     
     @classmethod
-    def get_json(
+    def get(
         cls,
         key: str,
-        kv: kv.KeyVal # TODO: type narrow?
-    ) -> str | bytes | bytearray | None:
-        # assert isinstance(kv, DependencyKeyVal)
+        kv: ValueKeyVal,
+    ) -> Value | None:
+        # TODO: iget
         return kv.get(key)
 
-    def set_json(
+    def set(
         self,
-        kv: kv.KeyVal # TODO: type narrow?
-    ) -> None:
-        # or return id?
-        return kv.set(self.obj, self.dump_bytes())
+        kv: ValueKeyVal,
+    ) -> Value:
+        # TODO: iset
+        return kv.set(self.obj, self)
 
 @dataclass(frozen=True)
 class ValueKeyVal(
@@ -131,9 +131,12 @@ class ValueKeyVal(
 
     parser: Type[ValueParser] | None = None
 
+    # TODO: need different set_x methods dpending on value type (time series, etc.?)
+    # called by local handle method, togethe rwith appropriate set_value event fire? (or rely on generic update snap?)3
+
 # TODO: possibly suffix with asbytes
 @dataclass(frozen=True)
-class JSONValueKeyVal(ValueKeyVal[bytes]):
+class ValueKeyValJSON(ValueKeyVal[bytes]):
 
     type_val_i: Type[bytes] = bytes
     
@@ -151,13 +154,44 @@ class JSONValueKeyVal(ValueKeyVal[bytes]):
         assert self.parser is not None, self
         return Value.parse_json(v, into=self.parser)
 
-# TODO: JSONValueKeyValSQlite per value type
+@dataclass(frozen=True)
+class ValueKeyValJSONSQLite(
+    ValueKeyValJSON,
+    kv.SQLiteKeyVal[int, str, bytes, str, Value]
+):
+    """
+    >>> k, j, updated = ("k", "j", [])
+    >>> kv = ValueKeyValJSONSQLite.new(
+    ...     TEST_DB,
+    ...     on_update = lambda k, v: updated.append((k, v))
+    ... ).prepare()
+    >>> kv.get(k)
+    >>> v = kv.set(k, 0.0)
+    >>> assert v == 0.0 == kv.get(k), kv.get(k)
+    >>> assert (1, 0.0) == kv.iget(k), kv.iget(k)
+    >>> v = kv.set(j, 1.0)
+    >>> v = kv.set(k, 2.0)
+    >>> assert (2, 1.0) == kv.iget(j)
+    >>> assert (1, 2.0) == kv.iget(k)
+    >>> assert updated == [(k, 2.0)]
+    """
 
+    @classmethod
+    def new(
+        cls, db: str, table: str = "ValuesJSON"
+    ) -> ValueKeyValJSONSQLite:
+        return cls(config=kv.SQLiteKeyValConfig(
+            db=db, name=table
+        ))
+
+# TODO: numpy chunked, etc.
+# time series? subtype of numpy, where either store 2d with a start point in snap, or store dense (flag in snap)
 # TODO: numpyValueKeyVal, ..sqlite etc.
 
 __all__ = [
     "ValueParser",
     "Value",
     "ValueKeyVal",
-    "JSONValueKeyVal",
+    "ValueKeyValJSON",
+    "ValueKeyValJSONSQLite",
 ]

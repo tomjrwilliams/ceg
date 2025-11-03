@@ -65,18 +65,18 @@ class Domain:
                 assert obj is not None, (o_path)
 
                 if not dep.active:
-                    dep_i = dep.set_json(
+                    dep = dep.set(
                         obj.dependency_key_val()
                     )
                     continue
 
-                blob = dep.get_json(
+                dep_prev = dep.get(
                     dep.key(),
                     obj.dependency_key_val()
                 )
 
                 events = []
-                if blob is None:
+                if dep_prev is None:
                     history = history or q.head(
                         n=-1,
                         where_i = [("le", curr.i)]
@@ -87,9 +87,7 @@ class Domain:
                         if e.obj == i_path
                     ]
                 elif dep.events is not None:
-                    blob_events = (
-                        dep.parse_json_as_self(blob).events
-                    ) or []
+                    blob_events = dep_prev.events or []
                     e_types = [
                         e_type for e_type in dep.events
                         if e_type not in blob_events
@@ -111,15 +109,16 @@ class Domain:
                     for handler in handlers:
                         handler.handle(obj, e)
 
-                dep_i = dep.set_json(
+                dep = dep.set(
                     obj.dependency_key_val()
                 )
 
         # TODO: publish self.domain_sync()
         # objects might also filter on their own snap for domain start, eg. if only has to run daily after a certain time, etc.
 
-        # TODO: detect object type / def change
-        # publish where required
+        # TODO: detect object change, whether it's a def change is entirely by version fields set on object as fields with default values
+        # handled client side: no separate event type (?), same logic as for other field changes
+        # maybe fire separate event? delegate to object? obj.difference() -> events
 
         events = q.head(
             n=-1,
@@ -158,7 +157,7 @@ class Domain:
             ) # type: ignore
 
         snap = replace(snap, event=curr)
-        snap.set_json(self.root.snap_key_val())
+        snap.set(self.root.snap_key_val())
         
         return self
 

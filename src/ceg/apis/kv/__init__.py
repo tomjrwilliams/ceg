@@ -56,4 +56,6 @@ from .sql.lite import (
     SQLiteKeyVal,
     SQLiteKeyChunkConfig,
     SQLiteKeyChunk,
+    SQLiteQueue,
+    SQLiteQueueConfig,
 )

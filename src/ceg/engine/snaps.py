@@ -101,20 +101,20 @@ class Snap:
         return parser.snap
 
     @classmethod
-    def get_json(
+    def get(
         cls,
         key: str,
-        kv: kv.KeyVal # TODO: type narrow?
-    ) -> str | bytes | bytearray | None:
-        # assert isinstance(kv, DependencyKeyVal)
+        kv: SnapKeyVal,
+    ) -> Snap | None:
+        # TODO: iget
         return kv.get(key)
 
-    def set_json(
+    def set(
         self,
-        kv: kv.KeyVal # TODO: type narrow?
-    ) -> None:
-        # or return id?
-        return kv.set(self.obj, self.dump_bytes())
+        kv: SnapKeyVal
+    ) -> Snap:
+        # TODO: iset
+        return kv.set(self.obj, self)
 
 # TODO: possibly suffix with asbytes
 @dataclass(frozen=True)
@@ -137,10 +137,39 @@ class SnapKeyVal(
         assert self.parser is not None, self
         return Snap.parse_json(v, into=self.parser)
 
-# TODO: SnapKeyValSQlite
+@dataclass(frozen=True)
+class SnapKeyValSQLite(
+    SnapKeyVal,
+    kv.SQLiteKeyVal[int, str, bytes, str, Snap]
+):
+    """
+    >>> k, j, updated = ("k", "j", [])
+    >>> kv = SnapKeyValSQLite.new(
+    ...     TEST_DB,
+    ...     on_update = lambda k, v: updated.append((k, v))
+    ... ).prepare()
+    >>> kv.get(k)
+    >>> v = kv.set(k, 0.0)
+    >>> assert v == 0.0 == kv.get(k), kv.get(k)
+    >>> assert (1, 0.0) == kv.iget(k), kv.iget(k)
+    >>> v = kv.set(j, 1.0)
+    >>> v = kv.set(k, 2.0)
+    >>> assert (2, 1.0) == kv.iget(j)
+    >>> assert (1, 2.0) == kv.iget(k)
+    >>> assert updated == [(k, 2.0)]
+    """
+
+    @classmethod
+    def new(
+        cls, db: str, table: str = "Snaps"
+    ) -> SnapKeyValSQLite:
+        return cls(config=kv.SQLiteKeyValConfig(
+            db=db, name=table
+        ))
 
 __all__ = [
     "SnapParser",
     "Snap",
     "SnapKeyVal",
+    "SnapKeyValSQLite",
 ]

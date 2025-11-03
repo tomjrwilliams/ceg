@@ -101,9 +101,9 @@ class Event:
         parser: EventParser = into.ta().validate_json(data)
         return parser.event
 
-    # TODO: or return ID?
-    def append_json(self, q: kv.Queue) -> None:
-        return q.append(self.dump_bytes())
+    def append(self, q: EventQueue) -> Event:
+        # TODO: iappend
+        return q.append(self)
 
 # TODO: possibly suffix with asbytes
 @dataclass(frozen=True)
@@ -127,10 +127,44 @@ class EventQueue(
         assert self.parser is not None, self
         return Event.parse_json(v, into=self.parser)
 
-# TODO: EventQueueSQlite
+@dataclass(frozen=True)
+class EventQueueSQLite(
+    EventQueue,
+    kv.SQLiteQueue[int, float, bytes, dt.datetime, Event]
+):
+    """
+    >>> import time
+    >>> k, j = ("k", "j")
+    >>> kv = EventQueueSQLite().new(TEST_DB).prepare()
+    >>> kv.head(1)
+    []
+    >>> kv.tail(1)
+    []
+    >>> v = kv.append(0.)
+    >>> assert v == 0.0 == kv.head(1)[0]
+    >>> assert ([1], [0.0]) == kv.ihead(1)[:2]
+    >>> time.sleep(0.1)
+    >>> dt = datetime.datetime.now()
+    >>> time.sleep(0.1)
+    >>> _ = kv.append(1.)
+    >>> _ = kv.append(2.)
+    >>> kv.tail(n=3, where_dt=[("gt", dt)])
+    [2.0, 1.0]
+    >>> kv.head(n=3, where_dt=[("gt", dt)])
+    [1.0, 2.0]
+    """
+
+    @classmethod
+    def new(
+        cls, db: str, table: str = "Events"
+    ) -> EventQueueSQLite:
+        return cls(config=kv.SQLiteQueueConfig(
+            db=db, name=table
+        ))
 
 __all__ = [
     "EventParser",
     "Event",
     "EventQueue",
+    "EventQueueSQLite",
 ]

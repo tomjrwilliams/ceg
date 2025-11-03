@@ -9,6 +9,7 @@ from .chunked import (
     SQLiteKeyChunkConfig,
     SQLiteKeyChunk,
 )
-# from .queue import (
-
-# )
+from .queue import (
+    SQLiteQueueConfig,
+    SQLiteQueue,
+)

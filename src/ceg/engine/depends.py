@@ -86,20 +86,20 @@ class Dependency:
     # TODO: call parse_json_as, override type return
 
     @classmethod
-    def get_json(
+    def get(
         cls,
         key: str,
-        kv: kv.KeyVal # TODO: type narrow?
-    ) -> str | bytes | bytearray | None:
-        # assert isinstance(kv, DependencyKeyVal)
+        kv: DependencyKeyVal
+    ) -> Dependency | None:
+        # TODO: iget
         return kv.get(key)
 
-    def set_json(
+    def set(
         self,
-        kv: kv.KeyVal # TODO: type narrow?
-    ) -> None:
-        # or return id?
-        return kv.set(self.key(), self.dump_bytes())
+        kv: DependencyKeyVal
+    ) -> Dependency:
+        # TODO: iset
+        return kv.set(self.key(), self)
 
 TDependency = TypeVar("TDependency", bound=Dependency)
 
@@ -148,7 +148,35 @@ class DependencyKeyVal(
         assert self.parser is not None, self
         return Dependency.parse_json(v, into=self.parser)
 
-# TODO: DependencyKeyValSQlite
+@dataclass(frozen=True)
+class DependencyKeyValSQLite(
+    DependencyKeyVal,
+    kv.SQLiteKeyVal[int, str, bytes, str, Dependency]
+):
+    """
+    >>> k, j, updated = ("k", "j", [])
+    >>> kv = DependencyKeyValSQLite.new(
+    ...     TEST_DB,
+    ...     on_update = lambda k, v: updated.append((k, v))
+    ... ).prepare()
+    >>> kv.get(k)
+    >>> v = kv.set(k, 0.0)
+    >>> assert v == 0.0 == kv.get(k), kv.get(k)
+    >>> assert (1, 0.0) == kv.iget(k), kv.iget(k)
+    >>> v = kv.set(j, 1.0)
+    >>> v = kv.set(k, 2.0)
+    >>> assert (2, 1.0) == kv.iget(j)
+    >>> assert (1, 2.0) == kv.iget(k)
+    >>> assert updated == [(k, 2.0)]
+    """
+
+    @classmethod
+    def new(
+        cls, db: str, table: str = "Depends"
+    ) -> DependencyKeyValSQLite:
+        return cls(config=kv.SQLiteKeyValConfig(
+            db=db, name=table
+        ))
 
 __all__ = [
     "Dependency",
