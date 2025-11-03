@@ -24,6 +24,9 @@ else:
 
 from frozendict import frozendict
 
+from ..apis import type_vars
+from ..apis import kv
+
 @dataclass(frozen=True)
 class ValueParser:
     value: Value
@@ -63,15 +66,15 @@ class Value:
     ...     value: ValueA | ValueB = Value.union_field()
     >>> a, b = ValueA("a", 1), ValueB("b", 1.)
     >>> _ = ValueParserAB(a) # init parser type
-    >>> Value.load_json(a.dump_bytes(), ValueParserAB)
+    >>> Value.parse_json(a.dump_bytes(), ValueParserAB)
     ValueA(obj='a', a=1)
-    >>> Value.load_json(b.dump_bytes(), ValueParserAB) 
+    >>> Value.parse_json(b.dump_bytes(), ValueParserAB) 
     ValueB(obj='b', b=1.0)
     """
     obj: str # NOTE: object path
 
-    # NOTE: value sub type fields for eg. time series, etc. config / meta information (calendar, etc.)
-    # store both the json via key_val and the actual value (s?) via key_val_chunked
+    # NOTE: can have other fields for json-type value objects
+    # NOTE: meta (calendar etc. for time series) should appear in snap instead
 
     @property
     def type(self) -> str: ...
@@ -92,7 +95,7 @@ class Value:
         return self.parser()(self).dump_bytes()
 
     @classmethod
-    def load_json(
+    def parse_json(
         cls,
         data: str | bytes | bytearray,
         into: Type[ValueParser]
@@ -100,12 +103,61 @@ class Value:
         parser: ValueParser = into.ta().validate_json(data)
         return parser.value
 
-# NOTE: sub types implement their respective set / get methods in such a way that they can run just given the object
-# ie. have methods to return a backend given the relevant parent / root objects (eg. env variables: db paths, etc.)
+    # TODO: parse_json_as, parse_json_as_self
+    
+    @classmethod
+    def get_json(
+        cls,
+        key: str,
+        kv: kv.KeyVal # TODO: type narrow?
+    ) -> str | bytes | bytearray | None:
+        # assert isinstance(kv, DependencyKeyVal)
+        return kv.get(key)
 
-# ie. switch on the backend from a flag in the env / root object (or object itself?) that is used by the object itself to decide what to load (given the other env / root object fields eg. db paths, etc.)
+    def set_json(
+        self,
+        kv: kv.KeyVal # TODO: type narrow?
+    ) -> None:
+        # or return id?
+        return kv.set(self.obj, self.dump_bytes())
+
+@dataclass(frozen=True)
+class ValueKeyVal(
+    kv.KeyValStrKeyI[int, type_vars.ValI, Value]
+):
+    
+    type_id: Type[int] = int
+    type_val_o: Type[Value] = Value
+
+    parser: Type[ValueParser] | None = None
+
+# TODO: possibly suffix with asbytes
+@dataclass(frozen=True)
+class JSONValueKeyVal(ValueKeyVal[bytes]):
+
+    type_val_i: Type[bytes] = bytes
+    
+    def encode_val_type(self, t: Type[Value]) -> Type[bytes]:
+        return bytes
+
+    def encode_val(self, v: Value) -> bytes:
+        # TODO: extract any non json vals?
+        # ie. if store numpy array directly?
+        return v.dump_bytes()
+
+    def decode_val(self, v: bytes) -> Value:
+        # TODO: extract any non json vals?
+        # ie. if store numpy array directly?
+        assert self.parser is not None, self
+        return Value.parse_json(v, into=self.parser)
+
+# TODO: JSONValueKeyValSQlite per value type
+
+# TODO: numpyValueKeyVal, ..sqlite etc.
 
 __all__ = [
     "ValueParser",
     "Value",
+    "ValueKeyVal",
+    "JSONValueKeyVal",
 ]

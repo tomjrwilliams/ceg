@@ -49,6 +49,9 @@ class SQLiteQueue(Queue[ID, DtI, ValI, DtO, ValO]):
     type_dt_o: Type[DtO]
     type_val_o: Type[ValO]
 
+    # TODO: other fields?
+    # so we can filter on query in where, rather than post load?
+
     def prepare(self) -> SQLiteQueue:
         # TODO astract out with the other sqlite
 

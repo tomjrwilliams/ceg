@@ -26,6 +26,10 @@ from .core import (
     KeyValIO,
     KeyVal,
     #
+    KeyValStrKeyI,
+    KeyValBytesValI,
+    KeyValStrKeyIBytesValI,
+    #
     MemoryKeyVal,
     ExampleKeyVal,
     #
@@ -45,6 +49,7 @@ from .core import (
     QueueStore,
     QueueIO,
     Queue,
+    QueueTimestampAsFloat,
 )
 from .sql.lite import (
     SQLiteKeyValConfig,

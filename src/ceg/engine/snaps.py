@@ -24,6 +24,7 @@ else:
 
 from frozendict import frozendict
 
+from ..apis import kv
 from .events import *
 
 @dataclass(frozen=True)
@@ -54,19 +55,19 @@ class Snap:
     >>> @dataclass(frozen=True)
     ... class SnapA(Snap):
     ...     a: int
-    ...     type: Literal['A'] = Snap.typfield("A")
+    ...     type: Literal['A'] = Snap.type_field("A")
     >>> @dataclass(frozen=True)
     ... class SnapB(Snap):
     ...     b: float
-    ...     type: Literal['B'] = Snap.typfield("B")
+    ...     type: Literal['B'] = Snap.type_field("B")
     >>> @dataclass(frozen=True)
     ... class SnapParserAB(SnapParser):
     ...     snap: SnapA | SnapB = Snap.union_field()
     >>> a, b = SnapA("a", 1), SnapB("b", 1.)
     >>> _ = SnapParserAB(a) # init parser type
-    >>> Snap.load_json(a.dump_bytes(), SnapParserAB)
+    >>> Snap.parse_json(a.dump_bytes(), SnapParserAB)
     SnapA(obj='a', a=1)
-    >>> Snap.load_json(b.dump_bytes(), SnapParserAB) 
+    >>> Snap.parse_json(b.dump_bytes(), SnapParserAB) 
     SnapB(obj='b', b=1.0)
     """
     event: Event
@@ -80,7 +81,7 @@ class Snap:
         return Field(discriminator="type")
 
     @classmethod
-    def typfield(cls, name: str, repr: bool = False):
+    def type_field(cls, name: str, repr: bool = False):
         return Field(default=name, repr=repr)
 
     @classmethod
@@ -91,7 +92,7 @@ class Snap:
         return self.parser()(self).dump_bytes()
 
     @classmethod
-    def load_json(
+    def parse_json(
         cls,
         data: str | bytes | bytearray,
         into: Type[SnapParser]
@@ -99,7 +100,47 @@ class Snap:
         parser: SnapParser = into.ta().validate_json(data)
         return parser.snap
 
+    @classmethod
+    def get_json(
+        cls,
+        key: str,
+        kv: kv.KeyVal # TODO: type narrow?
+    ) -> str | bytes | bytearray | None:
+        # assert isinstance(kv, DependencyKeyVal)
+        return kv.get(key)
+
+    def set_json(
+        self,
+        kv: kv.KeyVal # TODO: type narrow?
+    ) -> None:
+        # or return id?
+        return kv.set(self.obj, self.dump_bytes())
+
+# TODO: possibly suffix with asbytes
+@dataclass(frozen=True)
+class SnapKeyVal(
+    kv.KeyValStrKeyIBytesValI[int, Snap]
+):
+    
+    type_id: Type[int] = int
+    type_val_o: Type[Snap] = Snap
+
+    parser: Type[SnapParser] | None = None
+
+    def encode_val_type(self, t: Type[Snap]) -> Type[bytes]:
+        return bytes
+
+    def encode_val(self, v: Event) -> bytes:
+        return v.dump_bytes()
+
+    def decode_val(self, v: bytes) -> Snap:
+        assert self.parser is not None, self
+        return Snap.parse_json(v, into=self.parser)
+
+# TODO: SnapKeyValSQlite
+
 __all__ = [
     "SnapParser",
     "Snap",
+    "SnapKeyVal",
 ]

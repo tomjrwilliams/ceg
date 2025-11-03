@@ -288,6 +288,62 @@ class ExampleKeyVal(KeyVal[int, str, int, str, float]):
     def decode_val(self, v: int) -> float:
         return float(v)
 
+@dataclass(frozen=True)
+class KeyValStrKeyI(
+    KeyVal[ID, str, ValI, str, ValO]
+):
+    """KeyValStrKeyI[ID, ValI, ValO]"""
+
+    type_key_i: Type[str] = str
+    type_key_o: Type[str] = str
+
+    def encode_key_type(self, t: Type[str]) -> Type[str]:
+        return t
+
+    def encode_key(self, k: str) -> str:
+        return k
+
+    def decode_key(self, k: str) -> str:
+        return k
+
+@dataclass(frozen=True)
+class KeyValBytesValI(
+    KeyVal[ID, KeyI, bytes, KeyO, ValO]
+):
+    """KeyValBytesValI[ID, KeyI, KeyO, ValO]"""
+
+    type_key_i: Type[str] = str
+    type_val_i: Type[bytes] = bytes
+
+    def encode_key_type(self, t: Type[str]) -> Type[str]:
+        return t
+
+    def encode_key(self, k: str) -> str:
+        return k
+
+    def decode_key(self, k: str) -> str:
+        return k
+
+@dataclass(frozen=True)
+class KeyValStrKeyIBytesValI(
+    KeyValStrKeyI[ID, bytes, ValO],
+    KeyValBytesValI[ID, str, str, ValO]
+):
+    """KeyValStrKeyIBytesValI"""
+
+    type_key_i: Type[str] = str
+    type_val_i: Type[bytes] = bytes
+    type_key_o: Type[str] = str
+
+    def encode_key_type(self, t: Type[str]) -> Type[str]:
+        return t
+
+    def encode_key(self, k: str) -> str:
+        return k
+
+    def decode_key(self, k: str) -> str:
+        return k
+
 @final
 @dataclass(frozen=True)
 class ExampleMemoryKeyVal(
@@ -322,4 +378,7 @@ __all__ = [
     "KeyVal",
     "MemoryKeyVal",
     "ExampleKeyVal",
+    "KeyValStrKeyI",
+    "KeyValBytesValI",
+    "KeyValStrKeyIBytesValI",
 ]

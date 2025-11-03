@@ -320,9 +320,26 @@ class MemoryQueue(Queue[ID, DtI, ValI, DtO, ValO]):
 
 
 @dataclass(frozen=True)
-class ExampleQueue(
-    Queue[int, float, int, dt.datetime, float]
+class QueueTimestampAsFloat(
+    Queue[ID, float, ValI, dt.datetime, ValO],
+    # Generic[ID, ValI, ValO]
 ):
+    """QueueTimestampAsFloat[ID, ValI, ValO]"""
+
+    type_dt_i: Type[float] = float
+    type_dt_o: Type[dt.datetime] = dt.datetime
+
+    def encode_dt_type(self, t: Type[dt.datetime]) -> Type[float]:
+        return float
+
+    def encode_dt(self, dt: dt.datetime) -> float:
+        return dt.timestamp()
+
+    def decode_dt(self, dt: float) -> dt.datetime:
+        return datetime.datetime.fromtimestamp(dt)
+
+@dataclass(frozen=True)
+class ExampleQueue(QueueTimestampAsFloat[int, int, float]):
 
     type_id: Type[int] = int
     type_dt_i: Type[float] = float
@@ -404,6 +421,7 @@ __all__ = [
     "QueueStore",
     "QueueIO",
     "Queue",
+    "QueueTimestampAsFloat",
     "MemoryQueue",
     "ExampleQueue",
 ]
