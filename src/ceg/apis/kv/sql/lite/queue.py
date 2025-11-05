@@ -20,7 +20,8 @@ from ...core import (
 
 
 # TODO: env variable
-TEST_DB = "./__local__/test.db"
+import os
+TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
 
 
 
@@ -178,7 +179,7 @@ class ExampleSQLiteQueue(
 ):
     """
     >>> import time
-    >>> k, j = ("k", "j")
+    >>> j, k = ("j", "k")
     >>> kv = ExampleSQLiteQueue().prepare()
     >>> kv.head(1)
     []

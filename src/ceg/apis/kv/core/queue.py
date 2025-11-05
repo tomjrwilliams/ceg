@@ -326,8 +326,11 @@ class QueueTimestampAsFloat(
 ):
     """QueueTimestampAsFloat[ID, ValI, ValO]"""
 
-    type_dt_i: Type[float] = float
-    type_dt_o: Type[dt.datetime] = dt.datetime
+    type_dt_i: Type[float]
+    type_dt_o: Type[dt.datetime]
+
+    def init_dt(self) -> dt.datetime:
+        return dt.datetime.now()
 
     def encode_dt_type(self, t: Type[dt.datetime]) -> Type[float]:
         return float
@@ -346,9 +349,6 @@ class ExampleQueue(QueueTimestampAsFloat[int, int, float]):
     type_val_i: Type[int] = int
     type_dt_o: Type[dt.datetime] = dt.datetime
     type_val_o: Type[float] = float
-
-    def init_dt(self) -> dt.datetime:
-        return dt.datetime.now()
 
     def encode_dt_type(self, t: Type[dt.datetime]) -> Type[float]:
         return float
@@ -376,7 +376,7 @@ class ExampleMemoryQueue(
 ):
     """
     >>> import time
-    >>> k, j = ("k", "j")
+    >>> j, k = ("j", "k")
     >>> kv = ExampleMemoryQueue().prepare()
     >>> kv.head(1)
     []

@@ -593,7 +593,7 @@ class ExampleMemoryKeyChunk(
     MemoryKeyChunk[int, str, bytes, str, np.ndarray, float]
 ):
     """
-    >>> k, j, updated = ("k", "j", [])
+    >>> j, k, l, updated = ("j", "k", "l", [])
     >>> v_arr = lambda v: np.array([v])
     >>> kv = ExampleMemoryKeyChunk(
     ...     on_update = lambda k, v, c: updated.append((k, v))

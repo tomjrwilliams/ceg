@@ -6,6 +6,7 @@ from typing import (
     ClassVar,
     Literal,
     Protocol,
+    Callable,
     overload,
     cast,
     final,
@@ -26,6 +27,9 @@ from frozendict import frozendict
 
 from ..apis import type_vars
 from ..apis import kv
+
+import os
+TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
 
 @dataclass(frozen=True)
 class ValueParser:
@@ -102,8 +106,6 @@ class Value:
     ) -> Value:
         parser: ValueParser = into.ta().validate_json(data)
         return parser.value
-
-    # TODO: parse_json_as, parse_json_as_self
     
     @classmethod
     def get(
@@ -123,16 +125,17 @@ class Value:
 
 @dataclass(frozen=True)
 class ValueKeyVal(
-    kv.KeyValStrKeyI[int, type_vars.ValI, Value]
+    kv.KeyValStrKeyIO[int, type_vars.ValI, Value]
 ):
-    
     type_id: Type[int] = int
+    type_key_i: Type[str] = str
+    type_val_i: Type[bytes] = bytes
+    type_key_o: Type[str] = str
     type_val_o: Type[Value] = Value
 
     parser: Type[ValueParser] | None = None
 
-    # TODO: need different set_x methods dpending on value type (time series, etc.?)
-    # called by local handle method, togethe rwith appropriate set_value event fire? (or rely on generic update snap?)3
+    # TODO: get and set are generic, they just need the relevant encode and decode methods set in the types passed to the relevant key val for the value type
 
 # TODO: possibly suffix with asbytes
 @dataclass(frozen=True)
@@ -160,29 +163,39 @@ class ValueKeyValJSONSQLite(
     kv.SQLiteKeyVal[int, str, bytes, str, Value]
 ):
     """
-    >>> k, j, updated = ("k", "j", [])
+    >>> j, k, l, updated = ("j", "k", "l", [])
+    >>> @dataclass(frozen=True)
+    ... class ValueEx(Value):
+    ...     a: int
+    ...     type: Literal['Ex'] = Value.type_field("Ex")
     >>> kv = ValueKeyValJSONSQLite.new(
-    ...     TEST_DB,
+    ...     TEST_DB, 
+    ...     parser = ValueEx.parser(),
     ...     on_update = lambda k, v: updated.append((k, v))
-    ... ).prepare()
+    ... )
     >>> kv.get(k)
-    >>> v = kv.set(k, 0.0)
-    >>> assert v == 0.0 == kv.get(k), kv.get(k)
-    >>> assert (1, 0.0) == kv.iget(k), kv.iget(k)
-    >>> v = kv.set(j, 1.0)
-    >>> v = kv.set(k, 2.0)
-    >>> assert (2, 1.0) == kv.iget(j)
-    >>> assert (1, 2.0) == kv.iget(k)
-    >>> assert updated == [(k, 2.0)]
+    >>> v = kv.set(k, ValueEx(k, 0.0))
+    >>> assert v == ValueEx(k, 0.0) == kv.get(k), kv.get(k)
+    >>> assert (1, ValueEx(k, 0.0)) == kv.iget(k), kv.iget(k)
+    >>> v = kv.set(j, ValueEx(j, 1.0))
+    >>> v = kv.set(k, ValueEx(k, 2.0))
+    >>> assert (2, ValueEx(j, 1.0)) == kv.iget(j)
+    >>> assert (1, ValueEx(k, 2.0)) == kv.iget(k)
+    >>> assert updated == [(k, ValueEx(k, 2.0))]
     """
 
     @classmethod
     def new(
-        cls, db: str, table: str = "ValuesJSON"
+        cls,
+        db: str, 
+        parser: Type[ValueParser],
+        table: str = "ValuesJSON",
+        on_update: Callable[[str, Value], None] | None = None
     ) -> ValueKeyValJSONSQLite:
-        return cls(config=kv.SQLiteKeyValConfig(
+        self = cls(config=kv.SQLiteKeyValConfig(
             db=db, name=table
-        ))
+        ), on_update=on_update, parser=parser)
+        return cast(ValueKeyValJSONSQLite, self.prepare())
 
 # TODO: numpy chunked, etc.
 # time series? subtype of numpy, where either store 2d with a start point in snap, or store dense (flag in snap)

@@ -17,7 +17,8 @@ from pprint import pp
 
 #  ------------------
 
-TEST_DB = "./__local__/test.db"
+import os
+TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
 
 
 def identity(v):

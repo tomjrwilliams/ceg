@@ -1,4 +1,8 @@
 
+
+# NOTE: tbc how this maps onto the new denormalised, domain partitioned, approach
+
+
 # objects = object model onto the graph, pf = portfolio
 
 

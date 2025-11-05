@@ -28,7 +28,8 @@ from .key_val import (
 )
 
 # TODO: env variable
-TEST_DB = "./__local__/test.db"
+import os
+TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
 
 @dataclass(frozen=True)
 class SQLiteKeyChunkConfig(
@@ -217,7 +218,7 @@ class ExampleSQLiteKeyChunk(
     SQLiteKeyChunk[int, str, bytes, str, np.ndarray, float]
 ):
     """
-    >>> k, j, updated = ("k", "j", [])
+    >>> j, k, l, updated = ("j", "k", "l", [])
     >>> v_arr = lambda v: np.array([v])
     >>> kv = ExampleSQLiteKeyChunk(
     ...     on_update = lambda k, v, c: updated.append((k, v))

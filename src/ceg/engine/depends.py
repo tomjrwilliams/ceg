@@ -6,6 +6,7 @@ from typing import (
     ClassVar,
     Literal,
     Protocol,
+    Callable,
     overload,
     cast,
     final,
@@ -27,6 +28,9 @@ from frozendict import frozendict
 
 from ..apis import kv
 
+import os
+TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
+
 # TODO: string wrapper for path types
 
 @dataclass(frozen=True)
@@ -36,15 +40,18 @@ class Dependency:
     active: bool = True
     parent: bool = False
     ancestor: bool = False
+    
+    # NOTE: event types, used to filter without .handlers()
     events: tuple[str, ...] | None = None
-    # NOTE: types, used to filter without .handlers()
+
+    # NOTE: forward proofing if we eventually have diff fields
+    type: Literal["Dependency"] = "Dependency"
 
     def key(self) -> str:
         return f"{self.obj},{self.depends}"
 
-    # forward proofing if we eventually have diff fields
-    @property
-    def type(self) -> str: ...
+    # @property
+    # def type(self) -> str: ...
 
     @classmethod
     def union_field(cls):
@@ -130,10 +137,13 @@ def dependency_parser(
 # TODO: possibly suffix with asbytes
 @dataclass(frozen=True)
 class DependencyKeyVal(
-    kv.KeyValStrKeyIBytesValI[int, Dependency]
+    kv.KeyValStrKeyIOBytesValI[int, Dependency]
 ):
     
     type_id: Type[int] = int
+    type_key_i: Type[str] = str
+    type_val_i: Type[bytes] = bytes
+    type_key_o: Type[str] = str
     type_val_o: Type[Dependency] = Dependency
 
     parser: Type[DependencyParser] | None = None
@@ -154,32 +164,44 @@ class DependencyKeyValSQLite(
     kv.SQLiteKeyVal[int, str, bytes, str, Dependency]
 ):
     """
-    >>> k, j, updated = ("k", "j", [])
+    >>> j, k, l, updated = ("j", "k", "l", [])
     >>> kv = DependencyKeyValSQLite.new(
     ...     TEST_DB,
-    ...     on_update = lambda k, v: updated.append((k, v))
-    ... ).prepare()
+    ...     on_update = lambda k, v: updated.append((k, v)),
+    ...     parser=Dependency.parser()
+    ... )
     >>> kv.get(k)
-    >>> v = kv.set(k, 0.0)
-    >>> assert v == 0.0 == kv.get(k), kv.get(k)
-    >>> assert (1, 0.0) == kv.iget(k), kv.iget(k)
-    >>> v = kv.set(j, 1.0)
-    >>> v = kv.set(k, 2.0)
-    >>> assert (2, 1.0) == kv.iget(j)
-    >>> assert (1, 2.0) == kv.iget(k)
-    >>> assert updated == [(k, 2.0)]
+    >>> kk, jj, jk, kj = Dependency(k, k), Dependency(j, j), Dependency(j, k), Dependency(k, j)
+    >>> v = kv.set(k, kk)
+    >>> assert v == kk == kv.get(k), kv.get(k)
+    >>> assert (1, kk) == kv.iget(k), kv.iget(k)
+    >>> v = kv.set(j, jj)
+    >>> v = kv.set(k, kj)
+    >>> assert (2, jj) == kv.iget(j)
+    >>> assert (1, kj) == kv.iget(k)
+    >>> assert updated == [(k, kj)]
     """
 
     @classmethod
     def new(
-        cls, db: str, table: str = "Depends"
+        cls, 
+        db: str, 
+        parser: Type[DependencyParser],
+        table: str = "Depends",
+        on_update: Callable[[str, Dependency], None] | None = None
     ) -> DependencyKeyValSQLite:
-        return cls(config=kv.SQLiteKeyValConfig(
-            db=db, name=table
-        ))
+        self = cls(
+            config=kv.SQLiteKeyValConfig(
+                db=db, name=table
+            ), 
+            on_update=on_update,
+            parser=parser
+        )
+        return cast(DependencyKeyValSQLite, self.prepare())
 
 __all__ = [
     "Dependency",
     "DependencyParser",
     "DependencyKeyVal",
+    "DependencyKeyValSQLite",
 ]

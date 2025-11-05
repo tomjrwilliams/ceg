@@ -21,7 +21,8 @@ from ...core import (
 from .... import sqlite
 
 # TODO: env variable
-TEST_DB = "./__local__/test.db"
+import os
+TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
 
 
 @dataclass(frozen=True)
@@ -236,7 +237,7 @@ class ExampleSQLiteKeyVal(
     SQLiteKeyVal[int, str, int, str, float]
 ):
     """
-    >>> k, j, updated = ("k", "j", [])
+    >>> j, k, l, updated = ("j", "k", "l", [])
     >>> kv = ExampleSQLiteKeyVal(
     ...     on_update = lambda k, v: updated.append((k, v))
     ... ).prepare()

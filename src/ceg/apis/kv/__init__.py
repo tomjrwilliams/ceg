@@ -26,9 +26,9 @@ from .core import (
     KeyValIO,
     KeyVal,
     #
-    KeyValStrKeyI,
+    KeyValStrKeyIO,
     KeyValBytesValI,
-    KeyValStrKeyIBytesValI,
+    KeyValStrKeyIOBytesValI,
     #
     MemoryKeyVal,
     ExampleKeyVal,
@@ -45,6 +45,7 @@ from .core import (
     MemoryKeyChunk,
     ExampleKeyChunk,
     #
+    Comp,
     QueueConfig,
     QueueStore,
     QueueIO,

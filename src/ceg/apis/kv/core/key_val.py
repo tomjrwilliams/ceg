@@ -289,13 +289,13 @@ class ExampleKeyVal(KeyVal[int, str, int, str, float]):
         return float(v)
 
 @dataclass(frozen=True)
-class KeyValStrKeyI(
+class KeyValStrKeyIO(
     KeyVal[ID, str, ValI, str, ValO]
 ):
-    """KeyValStrKeyI[ID, ValI, ValO]"""
+    """KeyValStrKeyIO[ID, ValI, ValO]"""
 
-    type_key_i: Type[str] = str
-    type_key_o: Type[str] = str
+    type_key_i: Type[str]
+    type_key_o: Type[str]
 
     def encode_key_type(self, t: Type[str]) -> Type[str]:
         return t
@@ -312,8 +312,8 @@ class KeyValBytesValI(
 ):
     """KeyValBytesValI[ID, KeyI, KeyO, ValO]"""
 
-    type_key_i: Type[str] = str
-    type_val_i: Type[bytes] = bytes
+    type_key_i: Type[str]
+    type_val_i: Type[bytes]
 
     def encode_key_type(self, t: Type[str]) -> Type[str]:
         return t
@@ -325,15 +325,15 @@ class KeyValBytesValI(
         return k
 
 @dataclass(frozen=True)
-class KeyValStrKeyIBytesValI(
-    KeyValStrKeyI[ID, bytes, ValO],
+class KeyValStrKeyIOBytesValI(
+    KeyValStrKeyIO[ID, bytes, ValO],
     KeyValBytesValI[ID, str, str, ValO]
 ):
-    """KeyValStrKeyIBytesValI"""
+    """KeyValStrKeyIOBytesValI"""
 
-    type_key_i: Type[str] = str
-    type_val_i: Type[bytes] = bytes
-    type_key_o: Type[str] = str
+    type_key_i: Type[str]
+    type_val_i: Type[bytes]
+    type_key_o: Type[str]
 
     def encode_key_type(self, t: Type[str]) -> Type[str]:
         return t
@@ -351,7 +351,7 @@ class ExampleMemoryKeyVal(
     MemoryKeyVal[int, str, int, str, float]
 ):
     """
-    >>> k, j, updated = ("k", "j", [])
+    >>> j, k, l, updated = ("j", "k", "l", [])
     >>> kv = ExampleMemoryKeyVal(
     ...     on_update = lambda k, v: updated.append((k, v))
     ... ).prepare()
@@ -378,7 +378,7 @@ __all__ = [
     "KeyVal",
     "MemoryKeyVal",
     "ExampleKeyVal",
-    "KeyValStrKeyI",
+    "KeyValStrKeyIO",
     "KeyValBytesValI",
-    "KeyValStrKeyIBytesValI",
+    "KeyValStrKeyIOBytesValI",
 ]

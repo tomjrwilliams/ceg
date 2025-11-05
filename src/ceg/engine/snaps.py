@@ -6,6 +6,7 @@ from typing import (
     ClassVar,
     Literal,
     Protocol,
+    Callable,
     overload,
     cast,
     final,
@@ -26,6 +27,9 @@ from frozendict import frozendict
 
 from ..apis import kv
 from .events import *
+
+import os
+TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
 
 @dataclass(frozen=True)
 class SnapParser:
@@ -53,6 +57,10 @@ def snap_parser(cls: Type[Snap]) -> Type[SnapParser]:
 class Snap:
     """
     >>> @dataclass(frozen=True)
+    ... class EventEx(Event):
+    ...     i: int | None = Event.i_field()
+    ...     type: Literal['Ex'] = Event.type_field("Ex")
+    >>> @dataclass(frozen=True)
     ... class SnapA(Snap):
     ...     a: int
     ...     type: Literal['A'] = Snap.type_field("A")
@@ -63,12 +71,12 @@ class Snap:
     >>> @dataclass(frozen=True)
     ... class SnapParserAB(SnapParser):
     ...     snap: SnapA | SnapB = Snap.union_field()
-    >>> a, b = SnapA("a", 1), SnapB("b", 1.)
+    >>> a, b = SnapA(EventEx("a"), "a", 1), SnapB(EventEx("b"), "b", 1.)
     >>> _ = SnapParserAB(a) # init parser type
     >>> Snap.parse_json(a.dump_bytes(), SnapParserAB)
-    SnapA(obj='a', a=1)
+    SnapA(event=Event(obj='a'), obj='a', a=1)
     >>> Snap.parse_json(b.dump_bytes(), SnapParserAB) 
-    SnapB(obj='b', b=1.0)
+    SnapB(event=Event(obj='b'), obj='b', b=1.0)
     """
     event: Event
     obj: str # NOTE: object path
@@ -119,10 +127,12 @@ class Snap:
 # TODO: possibly suffix with asbytes
 @dataclass(frozen=True)
 class SnapKeyVal(
-    kv.KeyValStrKeyIBytesValI[int, Snap]
+    kv.KeyValStrKeyIOBytesValI[int, Snap]
 ):
-    
     type_id: Type[int] = int
+    type_key_i: Type[str] = str
+    type_val_i: Type[bytes] = bytes
+    type_key_o: Type[str] = str
     type_val_o: Type[Snap] = Snap
 
     parser: Type[SnapParser] | None = None
@@ -143,29 +153,43 @@ class SnapKeyValSQLite(
     kv.SQLiteKeyVal[int, str, bytes, str, Snap]
 ):
     """
-    >>> k, j, updated = ("k", "j", [])
+    >>> j, k, l, updated = ("j", "k", "l", [])
+    >>> @dataclass(frozen=True)
+    ... class EventEx(Event):
+    ...     i: int | None = Event.i_field()
+    ...     type: Literal['Ex'] = Event.type_field("Ex")
+    >>> @dataclass(frozen=True)
+    ... class SnapEx(Snap):
+    ...     event: EventEx
+    ...     type: Literal['A'] = Snap.type_field("A")
     >>> kv = SnapKeyValSQLite.new(
     ...     TEST_DB,
+    ...     SnapEx.parser(),
     ...     on_update = lambda k, v: updated.append((k, v))
     ... ).prepare()
     >>> kv.get(k)
-    >>> v = kv.set(k, 0.0)
-    >>> assert v == 0.0 == kv.get(k), kv.get(k)
-    >>> assert (1, 0.0) == kv.iget(k), kv.iget(k)
-    >>> v = kv.set(j, 1.0)
-    >>> v = kv.set(k, 2.0)
-    >>> assert (2, 1.0) == kv.iget(j)
-    >>> assert (1, 2.0) == kv.iget(k)
-    >>> assert updated == [(k, 2.0)]
+    >>> v = kv.set(k, SnapEx(EventEx(k), k))
+    >>> assert v == SnapEx(EventEx(k), k) == kv.get(k), kv.get(k)
+    >>> assert (1, SnapEx(EventEx(k), k)) == kv.iget(k), kv.iget(k)
+    >>> v = kv.set(j, SnapEx(EventEx(j), j))
+    >>> v = kv.set(k, SnapEx(EventEx(l), l))
+    >>> assert (2, SnapEx(EventEx(j), j)) == kv.iget(j)
+    >>> assert (1, SnapEx(EventEx(l), l)) == kv.iget(k)
+    >>> assert updated == [(k, SnapEx(EventEx(l), l))]
     """
 
     @classmethod
     def new(
-        cls, db: str, table: str = "Snaps"
+        cls, 
+        db: str, 
+        parser: Type[SnapParser], 
+        table: str = "Snaps",
+        on_update: Callable[[str, Snap], None] | None = None
     ) -> SnapKeyValSQLite:
-        return cls(config=kv.SQLiteKeyValConfig(
+        self = cls(config=kv.SQLiteKeyValConfig(
             db=db, name=table
-        ))
+        ), on_update=on_update, parser=parser)
+        return cast(SnapKeyValSQLite, self.prepare())
 
 __all__ = [
     "SnapParser",
