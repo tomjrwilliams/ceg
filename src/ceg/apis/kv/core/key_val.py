@@ -87,7 +87,7 @@ class KeyValIO(Generic[ID, KeyI, ValI, KeyO, ValO]):
     def encode_key(self, key: KeyO) -> KeyI: ...
 
     @abstractmethod
-    def encode_val(self, val: ValO) -> ValI: ...
+    def encode_val(self, key: KeyO, val: ValO) -> ValI: ...
 
     @abstractmethod
     def decode_key(
@@ -98,6 +98,7 @@ class KeyValIO(Generic[ID, KeyI, ValI, KeyO, ValO]):
     @abstractmethod
     def decode_val(
         self,
+        key: KeyO,
         val: ValI,
     ) -> ValO: ...
 
@@ -145,7 +146,9 @@ class KeyVal(
         if val_i is None:
             return val_i
         val_o = self.check_type_val_o(
-            self.decode_val(self.check_type_val_i(val_i))
+            self.decode_val(
+                key, self.check_type_val_i(val_i)
+            )
         )
         return val_o
 
@@ -161,7 +164,9 @@ class KeyVal(
             return i, val_i
         return (
             self.check_type_id(i), 
-            self.check_type_val_o(self.decode_val(val_i))
+            self.check_type_val_o(self.decode_val(
+                key, val_i
+            ))
         )
 
     def set(
@@ -186,7 +191,7 @@ class KeyVal(
             return i, val
 
         key_i = self.check_type_key_i(self.encode_key(key))
-        val_i = self.check_type_val_i(self.encode_val(val))
+        val_i = self.check_type_val_i(self.encode_val(key, val))
 
         if i is None:
             if self.on_create is not None:
@@ -279,13 +284,13 @@ class ExampleKeyVal(KeyVal[int, str, int, str, float]):
     def encode_key(self, k: str) -> str:
         return k.upper()
 
-    def encode_val(self, v: float) -> int:
+    def encode_val(self, k: str, v: float) -> int:
         return int(v)
 
     def decode_key(self, k: str) -> str:
         return k.lower()
 
-    def decode_val(self, v: int) -> float:
+    def decode_val(self, k: str, v: int) -> float:
         return float(v)
 
 @dataclass(frozen=True)

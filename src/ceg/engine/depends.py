@@ -151,10 +151,10 @@ class DependencyKeyVal(
     def encode_val_type(self, t: Type[Dependency]) -> Type[bytes]:
         return bytes
 
-    def encode_val(self, v: Dependency) -> bytes:
+    def encode_val(self, k: str, v: Dependency) -> bytes:
         return v.dump_bytes()
 
-    def decode_val(self, v: bytes) -> Dependency:
+    def decode_val(self, k: str, v: bytes) -> Dependency:
         assert self.parser is not None, self
         return Dependency.parse_json(v, into=self.parser)
 

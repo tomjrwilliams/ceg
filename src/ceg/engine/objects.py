@@ -265,10 +265,10 @@ class ObjectKeyVal(
     def encode_val_type(self, t: Type[Object]) -> Type[bytes]:
         return bytes
 
-    def encode_val(self, v: Object) -> bytes:
+    def encode_val(self, k: str, v: Object) -> bytes:
         return v.dump_bytes()
 
-    def decode_val(self, v: bytes) -> Object:
+    def decode_val(self, k: str, v: bytes) -> Object:
         assert self.parser is not None, self
         return Object.parse_json(v, into=self.parser)
 

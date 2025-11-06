@@ -12,6 +12,8 @@ from io import BytesIO
 from functools import wraps, lru_cache
 
 import polars
+import polars as pl
+
 import pathlib
 from pathlib import Path
 
@@ -212,7 +214,7 @@ def file_stem(
         file_stem = f"{file_stem}_{suffix_file}"
     
     return file_stem
-    
+
 def find_folder(
     dir: str,
     stem: str,
@@ -302,6 +304,27 @@ def parse_daily_file(
     assert "date_right" not in df.schema, df.schema
     return df.pipe(filter_start_end, start, end)
 
+SCHEMA = {
+    "date": pl.Date,
+    "open": pl.Float64,
+    "high": pl.Float64,
+    "low": pl.Float64,
+    "close": pl.Float64,
+    "volume": pl.Float64,
+    "open_interest": pl.Float64,
+}
+
+FIELD_INDICES = {
+    k: i - 1 for i, k in enumerate(SCHEMA) if k != "date"
+}
+
+class FieldIndices:
+    OPEN = FIELD_INDICES["open"]
+    HIGH = FIELD_INDICES["high"]
+    LOW = FIELD_INDICES["low"]
+    CLOSE = FIELD_INDICES["close"]
+    VOLUME = FIELD_INDICES["volume"]
+    OPEN_INTEREST = FIELD_INDICES["open_interest"]
 
 def filter_start_end(
     df: polars.DataFrame,
@@ -417,6 +440,7 @@ def read_file(
     #
     start: dt.date | None = None,
     end: dt.date | None = None,
+    fields: list[str] | None = None,
 ):
     if freq == "1day":
         if os.environ.get("DATA_SOURCE_FRD") == "AWS":

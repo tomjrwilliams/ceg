@@ -231,6 +231,30 @@ class order:
 
 #  ------------------
 
+from pydantic_core import CoreSchema, core_schema
+from pydantic import GetCoreSchemaHandler, TypeAdapter
+
+class Schema(frozendict[str, Type]):
+    
+    @classmethod
+    def validate(cls, v: Any, info: core_schema.ValidationInfo):
+        if isinstance(v, frozendict):
+            return v # TODO: type to string?
+        elif isinstance(v, dict):
+            return frozendict(v)
+        raise ValueError(v)
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: GetCoreSchemaHandler
+    ) -> CoreSchema:
+        return core_schema.chain_schema(
+            [
+                core_schema.with_info_plain_validator_function(
+                    cls.validate,
+                ),
+            ]
+        )
 
 class Table(NamedTuple):
     """
@@ -252,12 +276,12 @@ class Table(NamedTuple):
     """
 
     name: str
-    schema: frozendict[str, Type]
+    schema: Schema
     primary_key: tuple[str, ...]
     unique: tuple[str | tuple[str, ...], ...] | None
     # TODO: Default values
     not_null: tuple[str, ...] | None
-    flags: frozendict | None
+    flags: dict | None
     id: str | None
 
     db: str | None = None
@@ -301,7 +325,7 @@ class Table(NamedTuple):
             unique=unique,
             not_null=not_null,
             flags=(
-                flags if flags is None else frozendict(flags)
+                flags if flags is None else dict(flags)
             ),
             id=id,
             db=None,

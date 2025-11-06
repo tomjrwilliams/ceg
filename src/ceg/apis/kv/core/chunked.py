@@ -157,7 +157,7 @@ class KeyChunk(
         val_i = self.select(key_i, chunk)
         if val_i is None:
             return val_i
-        return self.decode_val(val_i)
+        return self.decode_val(key, val_i)
 
     def get_head(self, key: KeyO) -> ValO | None:
         return self.get(key, HEAD)
@@ -180,7 +180,7 @@ class KeyChunk(
         )
         if val_i is None:
             return i, val_i
-        return i, self.decode_val(val_i)
+        return i, self.decode_val(key, val_i)
 
     def iget_head(
         self, key: KeyO
@@ -243,7 +243,7 @@ class KeyChunk(
             return i, val
 
         key_i = self.encode_key(key)
-        val_i = self.encode_val(val)
+        val_i = self.encode_val(key, val)
 
         if i is None:
             if self.on_create is not None:
@@ -576,13 +576,13 @@ class ExampleKeyChunk(
     def encode_key(self, k: str) -> str:
         return k.upper()
 
-    def encode_val(self, v: np.ndarray) -> bytes:
+    def encode_val(self, k: str, v: np.ndarray) -> bytes:
         return v.tobytes()
 
     def decode_key(self, k: str) -> str:
         return k.lower()
 
-    def decode_val(self, v: bytes) -> np.ndarray:
+    def decode_val(self, k: str, v: bytes) -> np.ndarray:
         # NOTE: assumes 1d only
         return np.frombuffer(v)
 

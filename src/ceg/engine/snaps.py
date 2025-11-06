@@ -140,10 +140,10 @@ class SnapKeyVal(
     def encode_val_type(self, t: Type[Snap]) -> Type[bytes]:
         return bytes
 
-    def encode_val(self, v: Event) -> bytes:
+    def encode_val(self, k: str, v: Event) -> bytes:
         return v.dump_bytes()
 
-    def decode_val(self, v: bytes) -> Snap:
+    def decode_val(self, k: str, v: bytes) -> Snap:
         assert self.parser is not None, self
         return Snap.parse_json(v, into=self.parser)
 

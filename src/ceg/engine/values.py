@@ -7,6 +7,7 @@ from typing import (
     Literal,
     Protocol,
     Callable,
+    Any,
     overload,
     cast,
     final,
@@ -17,6 +18,8 @@ from pydantic import (
     BaseModel,
     Field,
 )
+import numpy as np
+import polars as pl
 
 if TYPE_CHECKING:
     from dataclasses import dataclass
@@ -26,6 +29,7 @@ else:
 from frozendict import frozendict
 
 from ..apis import type_vars
+from ..apis.type_vars import ndarray, pl as pl_types
 from ..apis import kv
 
 import os
@@ -146,12 +150,12 @@ class ValueKeyValJSON(ValueKeyVal[bytes]):
     def encode_val_type(self, t: Type[Value]) -> Type[bytes]:
         return bytes
 
-    def encode_val(self, v: Value) -> bytes:
+    def encode_val(self, k: Any, v: Value) -> bytes:
         # TODO: extract any non json vals?
         # ie. if store numpy array directly?
         return v.dump_bytes()
 
-    def decode_val(self, v: bytes) -> Value:
+    def decode_val(self, k: Any, v: bytes) -> Value:
         # TODO: extract any non json vals?
         # ie. if store numpy array directly?
         assert self.parser is not None, self
@@ -197,9 +201,128 @@ class ValueKeyValJSONSQLite(
         ), on_update=on_update, parser=parser)
         return cast(ValueKeyValJSONSQLite, self.prepare())
 
-# TODO: numpy chunked, etc.
-# time series? subtype of numpy, where either store 2d with a start point in snap, or store dense (flag in snap)
-# TODO: numpyValueKeyVal, ..sqlite etc.
+
+@dataclass(frozen=True)
+class ValueNumPy(Value):
+    arr: ndarray
+    # TODO: n dims?
+
+    @property
+    def size(self) -> int:
+        return self.arr.size
+
+    def __getitem__(self, sl: slice) -> ValueNumPy:
+        return ValueNumPy(self.obj, ndarray.cast(
+            self.arr[sl]
+        ))
+
+@dataclass(frozen=True)
+class ValueKeyChunkNumPyF64(
+    kv.KeyChunk[
+        int, str, bytes, str, ValueNumPy, float
+    ]
+):
+    type_id: Type[int] = int
+    type_key_i: Type[str] = str
+    type_val_i: Type[bytes]= bytes
+    type_key_o: Type[str] = str
+    type_val_o: Type[ValueNumPy] = ValueNumPy
+    type_val_t: Type[float] = float
+
+    def encode_key_type(self, t: Type[str]) -> Type[str]:
+        return t
+
+    def encode_val_type(self, t: Type[ValueNumPy]) -> Type[bytes]:
+        return bytes
+
+    def encode_key(self, k: str) -> str:
+        return k
+
+    def decode_key(self, k: str) -> str:
+        return k
+
+    def encode_val(self, k: str, v: ValueNumPy) -> bytes:
+        return v.arr.tobytes()
+
+    def decode_val(self, k: str, v: bytes) -> ValueNumPy:
+        return ValueNumPy(k, ndarray.cast(np.frombuffer(v)))
+    
+    def init_val(self) -> ValueNumPy:
+        return ValueNumPy("", ndarray.cast(np.zeros((1,))[1:]))
+
+    # TODO: generalise these out into numpy IO?
+    # implement in api core, not engine?
+
+    def chunk_val(self, acc: ValueNumPy, tail: bool = True) -> tuple[ValueNumPy, ValueNumPy | None]:
+        size = self.config.size
+        if acc.size >= size * 2:
+            if tail:
+                # tail, body
+                return acc[-size:], acc[:-size]
+            else:
+                # head, body
+                return acc[:size], acc[size:]
+        return acc, None
+
+    def append_val(
+        self, val: float, acc: ValueNumPy, tail: bool = True
+    ) -> tuple[ValueNumPy, ValueNumPy | None]:
+        acc = ValueNumPy(
+            acc.obj, 
+            ndarray.cast(np.concat(
+                (acc.arr, np.array([val]))
+                if tail
+                else (np.array([val]), acc.arr)
+            ))
+        )
+        return self.chunk_val(acc, tail=tail)
+
+    def extend_val(
+        self, val: ValueNumPy, acc: ValueNumPy, tail: bool = True
+    ) -> tuple[ValueNumPy, ValueNumPy | None]:
+        acc = ValueNumPy(acc.obj, ndarray.cast(np.concat(
+            (acc.arr, val.arr) if tail else (val.arr, acc.arr)
+        )))
+        return self.chunk_val(acc, tail=tail)
+
+    def concat_val(
+        self, val: ValueNumPy, acc: ValueNumPy, tail: bool = True
+    ) -> ValueNumPy:
+        return ValueNumPy(acc.obj, ndarray.cast(np.concat(
+            (acc.arr, val.arr) if tail else (val.arr, acc.arr)
+        )))
+
+@final
+@dataclass(frozen=True)
+class ValueKeyChunkNumPySQLite( # TODO: f64?
+    ValueKeyChunkNumPyF64,
+    kv.SQLiteKeyChunk[
+        int, str, bytes, str, ValueNumPy, float
+    ]
+):
+    
+    @classmethod
+    def new(
+        cls,
+        db: str,
+        size: int = 32,
+        table: str = "ChunksNumPyF64",
+    ) -> ValueKeyChunkNumPySQLite:
+        self = cls(config=kv.SQLiteKeyChunkConfig(
+             size=size, db=db,name=table
+        ))
+        return cast(ValueKeyChunkNumPySQLite, self.prepare())
+
+
+@dataclass(frozen=True)
+class ValuePlSeries(Value):
+    ser: pl_types.Series
+    
+# TODO: valuekeychunkplSeriesF64
+
+@dataclass(frozen=True)
+class ValueKeyChunkPlSeriesParq(kv.KeyChunk):
+    pass
 
 __all__ = [
     "ValueParser",
@@ -207,4 +330,8 @@ __all__ = [
     "ValueKeyVal",
     "ValueKeyValJSON",
     "ValueKeyValJSONSQLite",
+    "ValueKeyChunkNumPySQLite",
+    "ValueNumPy",
+    "ValueKeyChunkPlSeriesParq",
+    "ValuePlSeries",
 ]

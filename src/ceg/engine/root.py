@@ -78,9 +78,8 @@ class EngineRoot(Object):
         table = db.table or "Events"
         if db.type == SQLite:
             return EventQueueSQLite.new(
-                config=kv.SQLiteQueueConfig(
-                    db.conn, name=table
-                ),
+                db=db.conn,
+                table=table,
                 parser=domain.event_parser
             )
         raise ValueError(self, db)
@@ -90,9 +89,8 @@ class EngineRoot(Object):
         table = db.table or "Depends"
         if db.type == SQLite:
             return DependencyKeyValSQLite.new(
-                config=kv.SQLiteKeyValConfig(
-                    db.conn, name=table
-                ),
+                db=db.conn,
+                table=table,
                 parser=domain.depends_parser
             )
         raise ValueError(self, db)
@@ -102,9 +100,8 @@ class EngineRoot(Object):
         table = db.table or "Objects"
         if db.type == SQLite:
             return ObjectKeyValSQLite.new(
-                config=kv.SQLiteKeyValConfig(
-                    db.conn, name=table
-                ),
+                db=db.conn,
+                table=table,
                 parser=domain.object_parser
             )
         raise ValueError(self, db)
@@ -114,9 +111,8 @@ class EngineRoot(Object):
         table = db.table or "Snaps"
         if db.type == SQLite:
             return SnapKeyValSQLite.new(
-                config=kv.SQLiteKeyValConfig(
-                    db.conn, name=table
-                ),
+                db=db.conn,
+                table=table,
                 parser=domain.snap_parser
             )
         raise ValueError(self, db)
@@ -127,9 +123,8 @@ class EngineRoot(Object):
         table = db.table or "Values"
         if db.type == SQLite:
             return ValueKeyValJSONSQLite.new(
-                config=kv.SQLiteKeyValConfig(
-                    db.conn, name=table
-                ),
+                db=db.conn,
+                table=table,
                 parser=domain.value_parser
             )
         raise ValueError(self, db)

@@ -1,4 +1,21 @@
-from typing import TypeVar
+from __future__ import annotations
+from typing import TYPE_CHECKING, Any, Iterable, TypeVar, cast
+
+# TODO: typed replace
+from dataclasses import replace
+
+import numpy as np
+
+from frozendict import frozendict
+
+from pydantic_core import CoreSchema, core_schema
+from pydantic import GetCoreSchemaHandler, TypeAdapter
+
+if TYPE_CHECKING:
+    from dataclasses import dataclass
+else:
+    from pydantic.dataclasses import dataclass
+
 
 _ = TypeVar("_", bound=object)
 T = TypeVar("T")
@@ -14,3 +31,68 @@ ValT = TypeVar("ValT", covariant=False)
 def not_none(v: T | None) -> T:
     assert v is not None, v
     return v
+
+
+class ndarray(np.ndarray):
+    """
+    pydantic enhanced np.ndarray wrapper
+    """
+
+    @classmethod
+    def cast(cls, v: np.ndarray) -> ndarray:
+        return cast(ndarray, v)
+
+    @classmethod
+    def validate(cls, v: Any, info: core_schema.ValidationInfo):
+        if isinstance(v, np.ndarray):
+            return v
+        elif isinstance(v, Iterable):
+            return np.array(v)
+        else:
+            raise ValueError((v, type(v)))
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: GetCoreSchemaHandler
+    ) -> CoreSchema:
+        return core_schema.chain_schema(
+            [
+                core_schema.with_info_plain_validator_function(
+                    cls.validate,
+                ),
+            ]
+        )
+
+
+import polars
+class pl:
+    
+    class Series(polars.Series):
+        """
+        pydantic enhanced pl.Series wrapper
+        """
+
+        @classmethod
+        def cast(cls, v: polars.Series) -> pl.Series:
+            return cast(pl.Series, v)
+
+        @classmethod
+        def validate(cls, v: Any, info: core_schema.ValidationInfo):
+            if isinstance(v, pl.Series):
+                return v
+            # elif isinstance(v, Iterable):
+            #     return np.array(v)
+            else:
+                raise ValueError((v, type(v)))
+
+        @classmethod
+        def __get_pydantic_core_schema__(
+            cls, source_type: Any, handler: GetCoreSchemaHandler
+        ) -> CoreSchema:
+            return core_schema.chain_schema(
+                [
+                    core_schema.with_info_plain_validator_function(
+                        cls.validate,
+                    ),
+                ]
+            )
