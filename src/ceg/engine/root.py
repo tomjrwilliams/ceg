@@ -53,14 +53,83 @@ class EngineStorage:
     snaps: EngineStorageConfig | None = None
     values: EngineStorageConfig | None = None
 
+@dataclass(frozen=True)
+class UseRootConfigs(Object):
+
+    def root(self, domain: Domain) -> EngineRoot: ...
+
+    def event_queue(self, domain: Domain) -> EventQueue: 
+        root = self.root(domain)
+        db = root.storage.events
+        table = db.table or "Events"
+        if db.type == SQLite:
+            return EventQueueSQLite.new(
+                db=db.conn,
+                table=table,
+                parser=domain.event_parser
+            )
+        raise ValueError(self, db)
+
+    def dependency_key_val(self, domain: Domain) -> DependencyKeyVal:
+        root = self.root(domain)
+        db = root.storage.depends or root.storage.events.drop_table()
+        table = db.table or "Depends"
+        if db.type == SQLite:
+            return DependencyKeyValSQLite.new(
+                db=db.conn,
+                table=table,
+                parser=domain.depends_parser
+            )
+        raise ValueError(self, db)
+
+    def obj_key_val(self, domain: Domain) -> ObjectKeyVal:
+        root = self.root(domain) 
+        db = root.storage.objects or root.storage.events.drop_table()
+        table = db.table or "Objects"
+        if db.type == SQLite:
+            return ObjectKeyValSQLite.new(
+                db=db.conn,
+                table=table,
+                parser=domain.object_parser
+            )
+        raise ValueError(self, db)
+
+    def snap_key_val(self, domain: Domain) -> SnapKeyVal:
+        root = self.root(domain) 
+        db = root.storage.snaps or root.storage.events.drop_table()
+        table = db.table or "Snaps"
+        if db.type == SQLite:
+            return SnapKeyValSQLite.new(
+                db=db.conn,
+                table=table,
+                parser=domain.snap_parser
+            )
+        raise ValueError(self, db)
+
+    def value_key_val(self, domain: Domain) -> ValueKeyVal:
+        root = self.root(domain)
+        # NOTE: override with eg. numpy store as needed
+        db = root.storage.values or root.storage.events.drop_table()
+        table = db.table or "Values"
+        if db.type == SQLite:
+            return ValueKeyValJSONSQLite.new(
+                db=db.conn,
+                table=table,
+                parser=domain.value_parser
+            )
+        raise ValueError(self, db)
+
 @final
 @dataclass(frozen=True)
-class EngineRoot(Object):
+class EngineRoot(UseRootConfigs):
     parent: Object | None = Object.parent_field()
     storage: EngineStorage = Field()
     version: int = 0
     type: Literal["EngineRoot"] = "EngineRoot"
 
+    def root(self, domain: Domain):
+        return self
+    
     @classmethod
     def new(
         cls,
@@ -73,71 +142,18 @@ class EngineRoot(Object):
             parent=None,
         )
 
-    def event_queue(self, domain: Domain) -> EventQueue: 
-        db = self.storage.events
-        table = db.table or "Events"
-        if db.type == SQLite:
-            return EventQueueSQLite.new(
-                db=db.conn,
-                table=table,
-                parser=domain.event_parser
-            )
-        raise ValueError(self, db)
-
-    def dependency_key_val(self, domain: Domain) -> DependencyKeyVal:
-        db = self.storage.depends or self.storage.events.drop_table()
-        table = db.table or "Depends"
-        if db.type == SQLite:
-            return DependencyKeyValSQLite.new(
-                db=db.conn,
-                table=table,
-                parser=domain.depends_parser
-            )
-        raise ValueError(self, db)
-
-    def obj_key_val(self, domain: Domain) -> ObjectKeyVal: 
-        db = self.storage.objects or self.storage.events.drop_table()
-        table = db.table or "Objects"
-        if db.type == SQLite:
-            return ObjectKeyValSQLite.new(
-                db=db.conn,
-                table=table,
-                parser=domain.object_parser
-            )
-        raise ValueError(self, db)
-
-    def snap_key_val(self, domain: Domain) -> SnapKeyVal: 
-        db = self.storage.snaps or self.storage.events.drop_table()
-        table = db.table or "Snaps"
-        if db.type == SQLite:
-            return SnapKeyValSQLite.new(
-                db=db.conn,
-                table=table,
-                parser=domain.snap_parser
-            )
-        raise ValueError(self, db)
-
-    def value_key_val(self, domain: Domain) -> ValueKeyVal:
-        # NOTE: override with eg. numpy store as needed
-        db = self.storage.values or self.storage.events.drop_table()
-        table = db.table or "Values"
-        if db.type == SQLite:
-            return ValueKeyValJSONSQLite.new(
-                db=db.conn,
-                table=table,
-                parser=domain.value_parser
-            )
-        raise ValueError(self, db)
-
     def depends(self, domain: Domain) -> list[Dependency]:
         return []
 
     def handlers(self, event: Event, domain: Domain) -> list[Handler]:
         return []
 
+
+
 __all__ = [
     "SQLite",
     "EngineStorageConfig",
     "EngineStorage",
     "EngineRoot",
+    "UseRootConfigs",
 ]

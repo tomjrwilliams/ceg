@@ -19,6 +19,10 @@ from pathlib import Path
 
 from .. import s3
 
+from .. import logs
+
+logger, log_kw = logs.prepare_logger(__file__)
+
 # TZ = US Eastern
 
 # workflow: check last update
@@ -200,7 +204,7 @@ def file_stem(
     snap: str = "full",  # full
     freq: str = "1day",  # 1day
 ):
-    suffixes = suffix_maps[folder].folder
+    suffixes = suffix_maps[folder].file
     if suffix is None:
         suffix = suffixes.get("default", None)
 
@@ -400,19 +404,15 @@ def write_file_s3(
 
 
 def cache():
+    # TODO: move to shared utils lib
     if os.environ.get("STREAMLIT") == "true":
-
         def st_decorator(f):
             import streamlit as st
-
             return st.cache_data(f)
-
         return st_decorator
     else:
-
         def lru_decorator(f):
             return lru_cache(maxsize=512)(f)
-
         return lru_decorator
 
 

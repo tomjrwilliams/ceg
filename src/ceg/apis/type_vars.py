@@ -40,7 +40,7 @@ class ndarray(np.ndarray):
 
     @classmethod
     def cast(cls, v: np.ndarray) -> ndarray:
-        return cast(ndarray, v)
+        return cls(v)
 
     @classmethod
     def validate(cls, v: Any, info: core_schema.ValidationInfo):
@@ -66,7 +66,7 @@ class ndarray(np.ndarray):
 
 import polars
 class pl:
-    
+
     class Series(polars.Series):
         """
         pydantic enhanced pl.Series wrapper
@@ -74,7 +74,7 @@ class pl:
 
         @classmethod
         def cast(cls, v: polars.Series) -> pl.Series:
-            return cast(pl.Series, v)
+            return cls(v)
 
         @classmethod
         def validate(cls, v: Any, info: core_schema.ValidationInfo):

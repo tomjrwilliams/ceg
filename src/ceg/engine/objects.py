@@ -7,12 +7,15 @@ from typing import (
     Literal,
     Protocol,
     Callable,
+    ParamSpec,
     Any,
     overload,
     cast,
     final,
 )
+import logging
 import functools
+from functools import partial
 
 if TYPE_CHECKING:
     from dataclasses import dataclass
@@ -27,6 +30,7 @@ from pydantic import (
 )
 from frozendict import frozendict
 
+from ..apis import logs
 from ..apis import kv
 
 from .events import *
@@ -35,9 +39,12 @@ from .values import *
 from .depends import *
 
 import os
+
 TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
 
 T = TypeVar("T")
+
+logger, log_kw = logs.prepare_logger(__file__)
 
 @dataclass(frozen=True)
 class Handler:
@@ -139,6 +146,12 @@ class Object:
     def check(self):
         assert self.type == type(self).__name__, self
         return self
+    
+    def log_repr(self):
+        parent = self.parent
+        if isinstance(parent, Object):
+            parent = parent.path
+        return repr(replace(self, parent=parent))
 
     # -------------
 
@@ -305,9 +318,10 @@ class ObjectKeyValSQLite(
         parser: Type[ObjectParser],table: str = "Objects",
         on_update: Callable[[str, Object], None] | None = None
     ) -> ObjectKeyValSQLite:
-        return cls(config=kv.SQLiteKeyValConfig(
+        self = cls(config=kv.SQLiteKeyValConfig(
             db=db, name=table
         ), on_update=on_update, parser=parser)
+        return cast(ObjectKeyValSQLite, self.prepare())
 
 @dataclass(frozen=True)
 class FieldDiff:
@@ -351,6 +365,8 @@ class ObjectDiff:
             flds
         )
 
+O = TypeVar("O", bound=Object)
+
 @dataclass(frozen=True)
 class Domain:
     root: Object # snap is used for domain on_run trigger
@@ -378,21 +394,55 @@ class Domain:
     @property
     def value_parser(self) -> Type[ValueParser]: ...
 
+    @overload
+    def get(self, obj: None, t: Type[O]) -> None: ...
+
+    @overload
+    def get(self, obj: str | Object, t: Type[O]) -> O: ...
+
+    def get(
+        self, 
+        obj: str | Object | None,
+        t: Type[O],
+    ) -> O | None:
+        if obj is None:
+            return obj
+        elif isinstance(obj, str):
+            obj = self.objects.get(obj)
+        assert isinstance(obj, t)
+        return obj
+
     def with_obj(self, obj: Object) -> Domain:
+        # TODO: proper frozendict subtpye -> replace with set rather than dict spread
         obj = obj.check()
         assert obj.path not in self.objects, obj.path
-        # TODO: depends
-        # TODO: add parents if not given
-        return replace(
-            self, objects={
-                **self.objects,
-                **{obj.path: obj}
+        objects={
+            **self.objects,
+            obj.path: obj
+        }
+        depends = self.depends
+        for dep in obj.depends(self):
+            assert dep.obj == obj.path
+            obj_peers = depends.get(dep.depends, {})
+            depends = {
+                **depends,
+                dep.depends: {
+                    **obj_peers,
+                    obj.path: dep
+                }
             }
+        return replace(
+            self, objects=objects, depends=depends
         )
     
     # NOTE: we dont need to diff the domain itself
     # if we add objects then their depends will be picked up on sync, and we know to iter the whole queue again, regardless of the domains own latest
     def sync(self) -> Domain:
+        
+        log = partial(
+            log_kw, prefix=f"sync({self.root.path})"
+        )
+        log(start=True)
         
         # TODO: or object.value not snap?
         snap = self.root.get_snap(self)
@@ -403,6 +453,8 @@ class Domain:
             curr = snap.event
             assert curr.i is not None, curr
             curr_i = curr.i
+        
+        log(snap=snap, curr=curr)
 
         q = self.root.event_queue(self)
 
@@ -412,55 +464,16 @@ class Domain:
         for i_path, triggers in self.depends.items():
             for o_path, dep in triggers.items():
                 obj = self.objects.get(o_path)
-                assert obj is not None, (o_path)
-
-                if not dep.active:
-                    dep = dep.set(
-                        obj.dependency_key_val(self)
-                    )
-                    continue
-
-                dep_prev = dep.get(
-                    dep.key(),
-                    obj.dependency_key_val(self)
-                )
-
-                events = []
-                if dep_prev is None:
-                    history = history or q.head_with_i(
-                        n=-1,
-                        where_i = [("le", curr_i)]
-                        # TODO: head = from first?
-                    )
-                    events = [
-                        e for e in history
-                        if e.obj == i_path
-                    ]
-                elif dep.events is not None:
-                    blob_events = dep_prev.events or []
-                    e_types = [
-                        e_type for e_type in dep.events
-                        if e_type not in blob_events
-                    ]
-                    if len(e_types):
-                        history = history or q.head_with_i(
-                            n=-1,
-                            where_i = [("le", curr_i)]
-                            # TODO: head = from first?
-                        )
-                        events = [
-                            e for e in history
-                            if e.obj == i_path
-                            and e.type in e_types    
-                        ]
-
-                for e in events:
-                    handlers = obj.handlers(e, self)
-                    for handler in handlers:
-                        handler.handle(e, obj, self)
-
-                dep = dep.set(
-                    obj.dependency_key_val(self)
+                assert obj is not None, o_path
+                obj, dep = handle_past_events(
+                    self,
+                    obj=obj,
+                    dep=dep,
+                    curr_i=curr_i,
+                    i_path = i_path,
+                    log=log,
+                    q=q,
+                    history=history,
                 )
 
         e_sync = self.root.publish(DomainSync(
@@ -469,18 +482,12 @@ class Domain:
         assert e_sync.i is not None, e_sync
         
         for k, obj_new in self.objects.items():
-            obj_old = obj_new.get_obj(self)
-            if obj_old is None:
-                e_new = self.root.publish(ObjectNew(k), self)
-                assert e_new.i is not None, e_new
-            else:
-                diff = obj_old.diff(obj_new)
-                if diff is None:
-                    continue
-                e_chg = self.root.publish(
-                    ObjectChange(k, diff), self
-                )
-                assert e_chg.i is not None, e_chg
+            obj_new = sync_object_def(
+                self,
+                obj_new,
+                k,
+                log=log,
+            )
 
         events = q.head_with_i(
             n=-1,
@@ -489,31 +496,14 @@ class Domain:
         )
 
         while len(events):
-
             for e in events:
-                i_path = e.obj
-                triggers = self.depends.get(i_path)
-                if triggers is None:
-                    continue
-                for o_path, dep in triggers.items():
-                    if not dep.active:
-                        continue
-                    elif dep.events is None:
-                        pass
-                    elif e.type not in dep.events:
-                        continue
-                    
-                    obj = self.objects.get(o_path)
-                    assert obj is not None, o_path
+                curr, curr_i = handle_new_event(
+                    self,
+                    e,
+                    curr_i,
+                    log=log,
+                )
 
-                    handlers = obj.handlers(e, self)
-                    for handler in handlers:
-                        handler.handle(e, obj, self)
-
-                curr = e
-                assert curr.i is not None, curr
-                curr_i = curr.i
-            
             events = q.head_with_i(
                 n=-1,
                 where_i = [("gt", curr_i)],
@@ -528,6 +518,144 @@ class Domain:
             snap.set(self.root.snap_key_val(self))
         
         return self
+
+P = ParamSpec("P")
+
+def sync_object_def(
+    self: Domain,
+    obj_new: Object,
+    k: str,
+    log: Callable[..., None],
+):
+    obj_old = obj_new.get_obj(self)
+
+    if obj_old is None:
+        log(obj_new=obj_new)
+        e_new = self.root.publish(ObjectNew(k), self)
+        assert e_new.i is not None, e_new
+    else:
+        diff = obj_old.diff(obj_new)
+        log(obj_diff=diff)
+        if diff is None:
+            return obj_new
+        e_chg = self.root.publish(
+            ObjectChange(k, diff), self
+        )
+        assert e_chg.i is not None, e_chg
+    return obj_new
+
+def handle_past_events(
+    self: Domain,
+    obj: Object,
+    dep: Dependency,
+    curr_i: int,
+    i_path: str,
+    log: Callable[..., None],
+    q: EventQueue,
+    history: list[Event] | None = None,
+) -> tuple[Object, Dependency]:
+
+    log(obj=obj, dep=dep)
+
+    if not dep.active:
+        dep = dep.set(
+            obj.dependency_key_val(self)
+        )
+        return obj, dep
+
+    dep_prev = dep.get(
+        dep.key(),
+        obj.dependency_key_val(self)
+    )
+    log(obj=obj, dep_prev=dep_prev)
+
+    events = []
+    if dep_prev is None:
+        history = history or q.head_with_i(
+            n=-1,
+            where_i = [("le", curr_i)]
+            # TODO: head = from first?
+        )
+        events = [
+            e for e in history
+            if e.obj == i_path
+        ]
+    elif dep.events is not None:
+        blob_events = dep_prev.events or []
+        e_types = [
+            e_type for e_type in dep.events
+            if e_type not in blob_events
+        ]
+        if len(e_types):
+            history = history or q.head_with_i(
+                n=-1,
+                where_i = [("le", curr_i)]
+                # TODO: head = from first?
+            )
+            events = [
+                e for e in history
+                if e.obj == i_path
+                and e.type in e_types    
+            ]
+
+    log(obj=obj, n_events=len(events))
+
+    for e in events:
+
+        handlers = obj.handlers(e, self)
+        log(obj=obj, e=e, n_handlers=len(handlers))
+
+        for handler in handlers:
+            log(obj=obj, e=e, handler=handler, start=True)
+            handler.handle(e, obj, self)
+            log(obj=obj, e=e, handler=handler, end=True)
+
+    dep = dep.set(
+        obj.dependency_key_val(self)
+    )
+    return obj, dep
+
+def handle_new_event(
+    self: Domain,
+    e: Event,
+    curr_i: int,
+    log: Callable[..., None],
+) -> tuple[Event, int]:
+    i_path = e.obj
+    triggers = self.depends.get(i_path)
+
+    if triggers is None:
+        log(e=e, triggers=triggers)
+
+        assert e.i is not None, e
+        return e, e.i
+
+    for o_path, dep in triggers.items():
+        if not dep.active:
+            continue
+        elif dep.events is None:
+            pass
+        elif e.type not in dep.events:
+            continue
+            
+        obj = self.objects.get(o_path)
+        assert obj is not None, o_path
+
+        log(obj=obj, dep=dep, e=e)
+
+        handlers = obj.handlers(e, self)
+        log(obj=obj, e=e, handlers=handlers)
+
+        for handler in handlers:
+            log(obj=obj, e=e, handler=handler, start=True)
+            handler.handle(e, obj, self)
+            log(obj=obj, e=e, handler=handler, end=True)
+
+    curr = e
+    assert curr.i is not None, curr
+    curr_i = curr.i
+
+    return curr, curr_i
 
 @dataclass(frozen=True)
 class DomainSync(Event):

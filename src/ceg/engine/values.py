@@ -13,6 +13,7 @@ from typing import (
     final,
 )
 import functools
+import io
 from pydantic import (
     TypeAdapter,
     BaseModel,
@@ -207,6 +208,10 @@ class ValueNumPy(Value):
     arr: ndarray
     # TODO: n dims?
 
+    @classmethod
+    def new(cls, k: str, v: np.ndarray) -> ValueNumPy:
+        return cls(k, ndarray.cast(v))
+
     @property
     def size(self) -> int:
         return self.arr.size
@@ -267,30 +272,30 @@ class ValueKeyChunkNumPyF64(
     def append_val(
         self, val: float, acc: ValueNumPy, tail: bool = True
     ) -> tuple[ValueNumPy, ValueNumPy | None]:
-        acc = ValueNumPy(
+        acc = ValueNumPy.new(
             acc.obj, 
-            ndarray.cast(np.concat(
+            np.concat(
                 (acc.arr, np.array([val]))
                 if tail
                 else (np.array([val]), acc.arr)
-            ))
+            )
         )
         return self.chunk_val(acc, tail=tail)
 
     def extend_val(
         self, val: ValueNumPy, acc: ValueNumPy, tail: bool = True
     ) -> tuple[ValueNumPy, ValueNumPy | None]:
-        acc = ValueNumPy(acc.obj, ndarray.cast(np.concat(
+        acc = ValueNumPy.new(acc.obj, np.concat(
             (acc.arr, val.arr) if tail else (val.arr, acc.arr)
-        )))
+        ))
         return self.chunk_val(acc, tail=tail)
 
     def concat_val(
         self, val: ValueNumPy, acc: ValueNumPy, tail: bool = True
     ) -> ValueNumPy:
-        return ValueNumPy(acc.obj, ndarray.cast(np.concat(
+        return ValueNumPy.new(acc.obj, np.concat(
             (acc.arr, val.arr) if tail else (val.arr, acc.arr)
-        )))
+        ))
 
 @final
 @dataclass(frozen=True)
@@ -317,12 +322,123 @@ class ValueKeyChunkNumPySQLite( # TODO: f64?
 @dataclass(frozen=True)
 class ValuePlSeries(Value):
     ser: pl_types.Series
+
+    @classmethod
+    def new(cls, k: str, ser: pl.Series) -> ValuePlSeries:
+        return cls(k, type_vars.pl.Series.cast(ser))
+
+    @property
+    def size(self):
+        return len(self.ser)
+
+    def __getitem__(self, sl: slice) -> ValuePlSeries:
+        return self.new(self.obj, self.ser[sl])
     
-# TODO: valuekeychunkplSeriesF64
 
 @dataclass(frozen=True)
-class ValueKeyChunkPlSeriesParq(kv.KeyChunk):
-    pass
+class ValueKeyChunkPlSeriesF64(
+    kv.KeyChunk[
+        int, str, bytes, str, ValuePlSeries, float
+    ]
+):
+    type_id: Type[int] = int
+    type_key_i: Type[str] = str
+    type_val_i: Type[bytes]= bytes
+    type_key_o: Type[str] = str
+    type_val_o: Type[ValuePlSeries] = ValuePlSeries
+    type_val_t: Type[float] = float
+
+    def encode_key_type(self, t: Type[str]) -> Type[str]:
+        return t
+
+    def encode_val_type(self, t: Type[ValuePlSeries]) -> Type[bytes]:
+        return bytes
+
+    def encode_key(self, k: str) -> str:
+        return k
+
+    def decode_key(self, k: str) -> str:
+        return k
+
+    def encode_val(self, k: str, v: ValuePlSeries) -> bytes:
+        return pl.DataFrame({k: v.ser}).serialize()
+
+    def decode_val(
+        self, k: str, v: bytes
+    ) -> ValuePlSeries:
+        df = pl.DataFrame.deserialize(io.BytesIO(v))
+        return ValuePlSeries.new(k, df.get_column(k))
+    
+    def init_val(self) -> ValuePlSeries:
+        return ValuePlSeries.new("", pl.Series("", [], dtype=pl.Float64))
+
+    # TODO: generalise these out into numpy IO?
+    # implement in api core, not engine?
+
+    def chunk_val(self, acc: ValuePlSeries, tail: bool = True) -> tuple[ValuePlSeries, ValuePlSeries | None]:
+        size = self.config.size
+        if acc.size >= size * 2:
+            if tail:
+                # tail, body
+                return acc[-size:], acc[:-size]
+            else:
+                # head, body
+                return acc[:size], acc[size:]
+        return acc, None
+
+    def append_val(
+        self, val: float, acc: ValuePlSeries, tail: bool = True
+    ) -> tuple[ValuePlSeries, ValuePlSeries | None]:
+        acc = ValuePlSeries.new(
+            acc.obj, 
+            acc.ser.extend_constant(val, 1)
+            if tail
+            else pl.Series(acc.obj, [val]).extend(acc.ser)
+        )
+        return self.chunk_val(acc, tail=tail)
+
+    def extend_val(
+        self, val: ValuePlSeries, acc: ValuePlSeries, tail: bool = True
+    ) -> tuple[ValuePlSeries, ValuePlSeries | None]:
+        acc = ValuePlSeries.new(
+            acc.obj, 
+            acc.ser.extend(val.ser)
+            if tail
+            else val.ser.extend(acc.ser)
+        )
+        return self.chunk_val(acc, tail=tail)
+
+    def concat_val(
+        self, val: ValuePlSeries, acc: ValuePlSeries, tail: bool = True
+    ) -> ValuePlSeries:
+        return ValuePlSeries(
+            acc.obj, 
+            acc.ser.extend(val.ser)
+            if tail
+            else val.ser.extend(acc.ser)
+        )
+
+@final
+@dataclass(frozen=True)
+class ValueKeyChunkPlSeriesSQLite( # TODO: f64?
+    ValueKeyChunkPlSeriesF64,
+    kv.SQLiteKeyChunk[
+        int, str, bytes, str, ValuePlSeries, float
+    ]
+):
+    
+    @classmethod
+    def new(
+        cls,
+        db: str,
+        size: int = 32,
+        table: str = "ChunksPlSeriesF64",
+    ) -> ValueKeyChunkPlSeriesSQLite:
+        self = cls(config=kv.SQLiteKeyChunkConfig(
+            size=size, db=db,name=table
+        ))
+        return cast(ValueKeyChunkPlSeriesSQLite, self.prepare())
+
 
 __all__ = [
     "ValueParser",
@@ -332,6 +448,6 @@ __all__ = [
     "ValueKeyValJSONSQLite",
     "ValueKeyChunkNumPySQLite",
     "ValueNumPy",
-    "ValueKeyChunkPlSeriesParq",
+    "ValueKeyChunkPlSeriesSQLite",
     "ValuePlSeries",
 ]

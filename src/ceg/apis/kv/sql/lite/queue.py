@@ -136,7 +136,8 @@ class SQLiteQueue(Queue[ID, DtI, ValI, DtO, ValO]):
         if not len(res):
             return []
 
-        assert len(res) <= n, res
+        if n > 0:
+            assert len(res) <= n, res
 
         return [
             (

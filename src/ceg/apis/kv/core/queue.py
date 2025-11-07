@@ -164,6 +164,8 @@ class Queue(
         self,
         sl: list[tuple[ID, ValI, DtI]]
     ) -> tuple[list[ID], list[ValO], list[DtO]]:
+        if not len(sl):
+            return [], [], []
         i, v, t = cast(
             tuple[list[ID], list[ValI], list[DtI]],
             zip(*sl), 

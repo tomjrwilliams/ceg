@@ -13,7 +13,7 @@ from frozendict import frozendict
 
 import streamlit as st
 
-os.environ["STREAMLIT"] = "true"
+# os.environ["STREAMLIT"] = "true"
 os.environ["TIMEZONE_OFFSET"] = str(st.context.timezone_offset)
 
 if (
