@@ -142,6 +142,8 @@ class ValueKeyVal(
 
     # TODO: get and set are generic, they just need the relevant encode and decode methods set in the types passed to the relevant key val for the value type
 
+V_KV = TypeVar("V_KV", bound=ValueKeyVal)
+
 # TODO: possibly suffix with asbytes
 @dataclass(frozen=True)
 class ValueKeyValJSON(ValueKeyVal[bytes]):
@@ -305,7 +307,18 @@ class ValueKeyChunkNumPySQLite( # TODO: f64?
         int, str, bytes, str, ValueNumPy, float
     ]
 ):
-    
+    def set_from_df(
+        self,
+        df: pl.DataFrame,
+        k: str,
+        obj: str,
+        chunk: int,
+    ) -> ValueNumPy:
+        # : F64_1D
+        v_np: np.ndarray = df.select(k).to_numpy().T[0]
+        v = ValueNumPy(obj, type_vars.ndarray.cast(v_np))
+        return self.set(obj, v, chunk)
+
     @classmethod
     def new(
         cls,
@@ -322,6 +335,12 @@ class ValueKeyChunkNumPySQLite( # TODO: f64?
 @dataclass(frozen=True)
 class ValuePlSeries(Value):
     ser: pl_types.Series
+    
+    def head(self, n: int) -> pl.Series:
+        return self.ser.head(n)
+
+    def tail(self, n: int) -> pl.Series:
+        return self.ser.tail(n)
 
     @classmethod
     def new(cls, k: str, ser: pl.Series) -> ValuePlSeries:
@@ -427,6 +446,17 @@ class ValueKeyChunkPlSeriesSQLite( # TODO: f64?
     ]
 ):
     
+    def set_from_df(
+        self,
+        df: pl.DataFrame,
+        k: str,
+        obj: str,
+        chunk: int = kv.BODY
+    ) -> ValuePlSeries:
+        v_s = df.get_column(k)
+        v = ValuePlSeries.new(obj, v_s)
+        return self.set(obj, v, chunk)
+    
     @classmethod
     def new(
         cls,
@@ -444,6 +474,7 @@ __all__ = [
     "ValueParser",
     "Value",
     "ValueKeyVal",
+    "V_KV",
     "ValueKeyValJSON",
     "ValueKeyValJSONSQLite",
     "ValueKeyChunkNumPySQLite",

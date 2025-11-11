@@ -509,10 +509,11 @@ class MemoryKeyChunk(
         i: ID | None = None,
     ) -> ID:
         id = self.identify(key, chunk)
+        assert id is not None, id
         if i is not None:
             assert i == id, (i, id)
         self.data[(key, chunk)] = val
-        return i
+        return id
 
 @dataclass(frozen=True)
 class ExampleKeyChunk(

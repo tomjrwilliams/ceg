@@ -153,6 +153,9 @@ class Object:
             parent = parent.path
         return repr(replace(self, parent=parent))
 
+    def extend_path(self, s: str) -> str:
+        return f"{self.path}.{s}"
+
     # -------------
 
     @overload
@@ -250,7 +253,21 @@ class Object:
     def snap_key_val(self, domain: Domain) -> SnapKeyVal: ...
 
     # NOTE: as for snap, but likely more object specific, migth be key_val subtype (eg. chunked), depending on value type (get_value then calls value_key_val)
-    def value_key_val(self, domain: Domain) -> ValueKeyVal: ...
+    @overload
+    def value_key_val(
+        self, domain: Domain, t: Type[T]
+    ) -> T: ...
+
+    @overload
+    def value_key_val(
+        self, domain: Domain, t: None = None,
+    ) -> ValueKeyVal: ...
+
+    def value_key_val(
+        self, 
+        domain: Domain,
+        t: Type[T] | None = None,
+    ) -> ValueKeyVal | T: ...
 
     # NOTE: listen to any event for these objects
     def depends(self, domain: Domain) -> list[Dependency]: ...

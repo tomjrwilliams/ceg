@@ -32,7 +32,13 @@ from .values import *
 from .depends import *
 from .objects import *
 
+# TODO: os.environ.get()
+ROOT = "test"
+ROOT_DB = "./__local__/test.db"
+
 SQLite = "SQLite"
+
+# TODO: rename environment??
 
 @dataclass(frozen=True)
 class EngineStorageConfig:
@@ -53,14 +59,26 @@ class EngineStorage:
     snaps: EngineStorageConfig | None = None
     values: EngineStorageConfig | None = None
 
+    def get_config(
+        self, k: str, default: str = "events"
+    ) -> EngineStorageConfig:
+        config = getattr(self, k)
+        if isinstance(config, EngineStorageConfig):
+            return config
+        config = getattr(self, default)
+        assert isinstance(config, EngineStorageConfig), (
+            config, k, default
+        )
+        return config
+
 @dataclass(frozen=True)
 class UseRootConfigs(Object):
 
     def root(self, domain: Domain) -> EngineRoot: ...
 
     def event_queue(self, domain: Domain) -> EventQueue: 
-        root = self.root(domain)
-        db = root.storage.events
+        storage = self.root(domain).storage
+        db = storage.get_config("events")
         table = db.table or "Events"
         if db.type == SQLite:
             return EventQueueSQLite.new(
@@ -71,8 +89,8 @@ class UseRootConfigs(Object):
         raise ValueError(self, db)
 
     def dependency_key_val(self, domain: Domain) -> DependencyKeyVal:
-        root = self.root(domain)
-        db = root.storage.depends or root.storage.events.drop_table()
+        storage = self.root(domain).storage
+        db = storage.get_config("depends")
         table = db.table or "Depends"
         if db.type == SQLite:
             return DependencyKeyValSQLite.new(
@@ -83,8 +101,8 @@ class UseRootConfigs(Object):
         raise ValueError(self, db)
 
     def obj_key_val(self, domain: Domain) -> ObjectKeyVal:
-        root = self.root(domain) 
-        db = root.storage.objects or root.storage.events.drop_table()
+        storage = self.root(domain).storage
+        db = storage.get_config("objects")
         table = db.table or "Objects"
         if db.type == SQLite:
             return ObjectKeyValSQLite.new(
@@ -95,8 +113,8 @@ class UseRootConfigs(Object):
         raise ValueError(self, db)
 
     def snap_key_val(self, domain: Domain) -> SnapKeyVal:
-        root = self.root(domain) 
-        db = root.storage.snaps or root.storage.events.drop_table()
+        storage = self.root(domain).storage
+        db = storage.get_config("snaps")
         table = db.table or "Snaps"
         if db.type == SQLite:
             return SnapKeyValSQLite.new(
@@ -107,9 +125,9 @@ class UseRootConfigs(Object):
         raise ValueError(self, db)
 
     def value_key_val(self, domain: Domain) -> ValueKeyVal:
-        root = self.root(domain)
+        storage = self.root(domain).storage
         # NOTE: override with eg. numpy store as needed
-        db = root.storage.values or root.storage.events.drop_table()
+        db = storage.get_config("values")
         table = db.table or "Values"
         if db.type == SQLite:
             return ValueKeyValJSONSQLite.new(
@@ -133,11 +151,21 @@ class EngineRoot(UseRootConfigs):
     @classmethod
     def new(
         cls,
-        path: str,
-        storage: EngineStorage,
+        root: str | None = None,
+        storage: EngineStorage | str | None = None,
     ) -> EngineRoot:
+        root = root or str(ROOT)
+        assert root is not None, root
+        storage = storage or str(ROOT_DB)
+        if isinstance(storage, str):
+            storage = EngineStorage(
+                events=EngineStorageConfig(
+                    storage,
+                    type=SQLite
+                )
+            )
         return EngineRoot(
-            path=path,
+            path=root,
             storage=storage,
             parent=None,
         )
@@ -148,7 +176,35 @@ class EngineRoot(UseRootConfigs):
     def handlers(self, event: Event, domain: Domain) -> list[Handler]:
         return []
 
+@dataclass(frozen=True)
+class UseChunkedValues(UseRootConfigs):
 
+    @property
+    def chunk(self) -> int: ...
+
+    def value_key_val(
+        self,
+        domain: Domain,
+        t: None = None,
+        # TODO: return union with parquet etc.
+        # can then create a parser discriminator class
+    ) -> (
+        ValueKeyChunkNumPySQLite
+        | ValueKeyChunkPlSeriesSQLite
+    ):
+        storage = self.root(domain).storage
+        db = storage.get_config("values")
+        # TODO: get table name default from the key_val class itself?
+
+        if db.type == SQLite:
+            return ValueKeyChunkPlSeriesSQLite.new(
+                size=self.chunk,
+                db=db.conn,
+            )
+        # TODO: if format == numpy: ...
+        # TODO: elif ...?
+
+        raise ValueError(self, db)
 
 __all__ = [
     "SQLite",
@@ -156,4 +212,5 @@ __all__ = [
     "EngineStorage",
     "EngineRoot",
     "UseRootConfigs",
+    "UseChunkedValues",
 ]
