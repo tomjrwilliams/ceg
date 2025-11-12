@@ -154,7 +154,7 @@ class Object:
         return repr(replace(self, parent=parent))
 
     def extend_path(self, s: str) -> str:
-        return f"{self.path}.{s}"
+        return f"{self.path}-{s}"
 
     # -------------
 

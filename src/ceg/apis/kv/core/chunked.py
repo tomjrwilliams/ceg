@@ -10,7 +10,7 @@ from typing import (
 from dataclasses import dataclass, field
 import numpy as np
 
-from ...type_vars import *
+from ...t import *
 from .key_val import *
 
 

@@ -17,6 +17,6 @@
 #             bars = Bar.new(parent)
 #             parent = BarFut.new(bars)
 #         return cls(
-#             path=f"{parent.path}.{path}",
+#             path=f"{parent.path}-{path}",
 #             parent=parent,
 #         )

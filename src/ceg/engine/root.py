@@ -213,4 +213,6 @@ __all__ = [
     "EngineRoot",
     "UseRootConfigs",
     "UseChunkedValues",
+    "ROOT",
+    "ROOT_DB",
 ]

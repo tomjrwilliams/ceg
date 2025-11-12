@@ -29,11 +29,11 @@ import numpy as np
 import polars as pl
 
 from ...... import apis
-from ......apis import type_vars
+from ......apis import t
 from ......apis import kv
 from ......engine import *
 
-from ...root import Fut, FutDaily, ORD, CONTR
+from ...root import *
 
 TEST = "test"
 TEST_DB = "./__local__/test.db"
@@ -60,8 +60,8 @@ class FutDailyOrdinal(
     ident: int
     field: str
     adjust: str
+    source: str
     fx: str | None = None  # ccy to convert to
-    source: str | None = None
 
     # NOTE: chunk not in path, as doesnt change value
     # only back-end layout
@@ -253,7 +253,7 @@ class HandleNewFutDailyOrdinal(Handler):
 @dataclass(frozen=True)
 class FutDailyOrdinalDomain(Domain):
     """
-    >>> eng = EngineRoot.new(TEST)
+    >>> eng = EngineRoot.new(ROOT)
     >>> obj = FutDailyOrdinal.new(
     ...     eng,
     ...     symbol="ES", # spx
@@ -269,7 +269,7 @@ class FutDailyOrdinalDomain(Domain):
     ... )
     >>> obj.value_key_val(domain).get(obj.path, 1).ser
     shape: (6_296,)
-    Series: 'test.fut.d.ES.1.close.pct.frd' [f64]
+    Series: 'test-fut-d-ES-1-close-pct-frd' [f64]
     [
         1351.83
         1352.06

@@ -28,13 +28,13 @@ from frozendict import frozendict
 import numpy as np
 import polars as pl
 
-from ..... import apis
-from .....apis import type_vars
-from .....apis import kv
-from .....engine import *
+from ...... import apis
+from ......apis import t
+from ......apis import kv
+from ......engine import *
 
-from ..root import Fut, FutDaily, ORD, CONTR
-from .bars.ord import FutDailyOrdinal
+from ...root import *
+from .ord import FutDailyOrdinal
 
 TEST = "test"
 TEST_DB = "./__local__/test.db"
@@ -62,8 +62,8 @@ class FutDailyRx(
     ident: str
     field: str
     adjust: str
+    source: str
     fx: str | None = None  # ccy to convert to
-    source: str | None = None
 
     # NOTE: chunk not in path, as doesnt change value
     # only back-end layout
@@ -255,52 +255,33 @@ class HandleNewFutDailyRx(Handler):
 @dataclass(frozen=True)
 class FutDailyRxDomain(Domain):
     """
-    >>> from .bars import FutDailyOrdinalDomain
-    >>> eng = EngineRoot.new(TEST)
+    >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
     ...     eng,
-    ...     symbol="TN", # 10yr us
+    ...     symbol="ES",
     ...     ident = 1,
     ...     field="close",
-    ...     adjust="abs",
+    ...     adjust="pct",
     ...     source="frd"
     ... )
     >>> obj = FutDailyRx.new(ord)
-    >>> domain = (
-    ...    FutDailyOrdinalDomain.new(eng)
-    ...     .with_obj(ord)
-    ...     .sync()
-    ... )
     >>> domain = (
     ...     FutDailyRxDomain.new(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )
-    >>> ord.value_key_val(domain).get(ord.path, 1).tail(8)
-    shape: (8,)
-    Series: 'test.fut.d.TN.1.close.abs.frd' [f64]
-    [
-        114.0625
-        null
-        null
-        113.359375
-        113.578125
-        113.28125
-        113.015625
-        114.03125
-    ]
     >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
     shape: (8,)
-    Series: 'test.fut.d.TN.1.close.abs.frd.rx' [f64]
+    Series: 'test-fut-d-ES-1-close-pct-frd-rx' [f64]
     [
-        -0.171875
+        0.000963
         null
         null
-        -0.703125
-        0.21875
-        -0.296875
-        -0.265625
-        1.015625
+        null
+        0.001891
+        -0.011499
+        -0.003516
+        -0.020255
     ]
     """
 

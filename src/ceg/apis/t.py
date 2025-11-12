@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Iterable, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Iterable, TypeVar, cast, overload
 
 # TODO: typed replace
 from dataclasses import replace
@@ -31,6 +31,20 @@ ValT = TypeVar("ValT", covariant=False)
 def not_none(v: T | None) -> T:
     assert v is not None, v
     return v
+
+def only_index_not_none(
+    *vs: Any | None, strict: bool = True
+) -> int | None:
+    i_res: int | None = None
+    for i, v in enumerate(vs):
+        if v is not None:
+            if i_res is None:
+                i_res = i
+            else:
+                raise ValueError(vs)
+    if strict and i_res is None:
+        raise ValueError(vs)
+    return i_res
 
 
 class ndarray(np.ndarray):

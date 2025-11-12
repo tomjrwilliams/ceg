@@ -16,7 +16,7 @@ import datetime
 import datetime as dt
 from dataclasses import dataclass, field
 
-from ...type_vars import *
+from ...t import *
 
 gt = Literal["gt"]
 ge = Literal["ge"]
@@ -374,7 +374,7 @@ class ExampleQueue(QueueTimestampAsFloat[int, int, float]):
 @dataclass(frozen=True)
 class ExampleMemoryQueue(
     ExampleQueue,
-    MemoryQueue[int, dt.datetime, int, dt.datetime, float]
+    MemoryQueue[int, float, int, dt.datetime, float]
 ):
     """
     >>> import time

@@ -29,8 +29,8 @@ else:
 
 from frozendict import frozendict
 
-from ..apis import type_vars
-from ..apis.type_vars import ndarray, pl as pl_types
+from ..apis import t
+from ..apis.t import ndarray, pl as pl_types
 from ..apis import kv
 
 import os
@@ -130,7 +130,7 @@ class Value:
 
 @dataclass(frozen=True)
 class ValueKeyVal(
-    kv.KeyValStrKeyIO[int, type_vars.ValI, Value]
+    kv.KeyValStrKeyIO[int, t.ValI, Value]
 ):
     type_id: Type[int] = int
     type_key_i: Type[str] = str
@@ -316,7 +316,7 @@ class ValueKeyChunkNumPySQLite( # TODO: f64?
     ) -> ValueNumPy:
         # : F64_1D
         v_np: np.ndarray = df.select(k).to_numpy().T[0]
-        v = ValueNumPy(obj, type_vars.ndarray.cast(v_np))
+        v = ValueNumPy(obj, t.ndarray.cast(v_np))
         return self.set(obj, v, chunk)
 
     @classmethod
@@ -344,7 +344,7 @@ class ValuePlSeries(Value):
 
     @classmethod
     def new(cls, k: str, ser: pl.Series) -> ValuePlSeries:
-        return cls(k, type_vars.pl.Series.cast(ser))
+        return cls(k, t.pl.Series.cast(ser))
 
     @property
     def size(self):

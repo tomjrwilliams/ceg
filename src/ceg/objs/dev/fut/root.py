@@ -33,7 +33,7 @@ class Fut(Object):
     @classmethod
     def new(cls, parent: EngineRoot, path = "fut"):
         return cls(
-            path=f"{parent.path}.{path}",
+            path=f"{parent.path}-{path}",
             parent=parent,
         )
     
@@ -113,7 +113,7 @@ class Fut(Object):
         ), (
             symbol, ident, field, adjust, source, fx
         )
-        path=".".join([
+        path="-".join([
             symbol,
             str(ident),
             field,
@@ -121,7 +121,7 @@ class Fut(Object):
             source,
         ])
         if fx is not None:
-            path += f".{fx}"
+            path += f"-{fx}"
         return (
             path,
             symbol,

@@ -30,7 +30,7 @@
 #         path = "con",
 #     ):
 #         return cls(
-#             path=f"{parent.path}.{path}",
+#             path=f"{parent.path}-{path}",
 #             parent=parent,
 #             symbol=symbol,
 #             expiry=expiry,

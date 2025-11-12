@@ -10,7 +10,11 @@ import datetime as dt
 from dataclasses import dataclass, replace
 
 from .... import sqlite
-from ....type_vars import *
+from ....t import (
+    DtI,
+    DtO,
+    ValO,
+)
 from ...core import (
     Queue,
     QueueConfig,
@@ -176,7 +180,7 @@ class SQLiteQueue(Queue[ID, DtI, ValI, DtO, ValO]):
 @dataclass(frozen=True)
 class ExampleSQLiteQueue(
     ExampleQueue,
-    SQLiteQueue[int, dt.datetime, int, dt.datetime, float]
+    SQLiteQueue[int, float, int, dt.datetime, float]
 ):
     """
     >>> import time

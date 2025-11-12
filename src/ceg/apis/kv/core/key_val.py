@@ -10,7 +10,7 @@ from typing import (
 from dataclasses import dataclass, field
 from frozendict import frozendict
 
-from ...type_vars import *
+from ...t import *
 
 # TODO: rename keyValstoreConfig
 # TODO: convience registry on keyValStore to the class object

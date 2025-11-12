@@ -17,13 +17,16 @@
 
 
 
-- i think thinking in terms of space a la football, space for a player to move / pivot / pass / shoot into, is interesting, potential for a price to drift into an area
-
-- has it (recently) been there before? how long did it stay there, what was the short term volatility whilst there
+-price: has it (recently) been there before? how long did it stay there, what was the short term volatility whilst there
 
 
 - rolling average of how large the average reversal is after new mins (how to define reversal)?
 - likewise for new max, pullback (before starting a new up-trend - that defined as?)
+
+
+
+
+- roling rank is an interesting variant of distance to local min / max?
 
 
 
