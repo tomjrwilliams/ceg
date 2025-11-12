@@ -47,7 +47,7 @@ class FutDailyEMax(FutDailyEM):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -83,7 +83,7 @@ class FutDailyEMax(FutDailyEM):
         return HandleNewFutDailyEMax()
 
 @dataclass(frozen=True)
-class HandleNewFutDailyEMax(Handler):
+class HandleNewFutDailyEMax(HandleNewFutDailyEM):
 
     def calc(
         self,
@@ -92,11 +92,82 @@ class HandleNewFutDailyEMax(Handler):
         domain: Domain,
         df: pl.DataFrame,
     ) -> pl.DataFrame:
-        raise ValueError((obj, "TODO"))
-    
+        s = df.get_column(obj.field)
+        v = s.fill_null(0).to_numpy()
+        is_null = s.is_null().to_numpy()
+        res = calc(v, is_null, alpha=obj.calc_alpha())
+        return pl.DataFrame({
+            "mask": s,
+            obj.field: res
+        }).select(
+            pl.when(pl.col("mask").is_null())
+            .then(None)
+            .otherwise(obj.field)
+            .alias(obj.field)
+        )
+
+import numba as nb
+
+@nb.jit()
+def calc(
+    v: np.ndarray,
+    is_null: np.ndarray,
+    alpha: float,
+    # TODO: assert float?
+):
+    i: int = 0
+    n: int = len(v)
+    res = np.empty(n, dtype=v.dtype)
+    acc: float = 0
+    mu: float = 0
+    alpha_comp = 1 - alpha
+    while i < n:
+        if not is_null[i]:
+            vv = v[i]
+            if i == 0:
+                acc = vv
+                mu = acc
+            elif vv > acc:
+                acc = vv
+            else:
+                acc = (alpha_comp * acc) + (alpha * vv)
+            res[i] = acc
+        i += 1
+    return res
+
 
 @dataclass(frozen=True)
-class FutDailyEMaxDomain(Domain):
+class FutDailyEMaxDomain(FutDailyEMDomain):
+    """
+    >>> eng = EngineRoot.new(ROOT)
+    >>> ord = FutDailyOrdinal.new(
+    ...     eng,
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = FutDailyEMax.new(ord, span=4)
+    >>> domain = (
+    ...     FutDailyEMaxDomain.new(eng)
+    ...     .with_obj(obj)
+    ...     .sync()
+    ... )
+    >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-emax-4' [f64]
+    [
+        5721.07
+        null
+        null
+        5815.5
+        5826.5
+        5799.7
+        5775.52
+        5714.512
+    ]
+    """
 
     @dataclass(frozen=True)
     class Root(
@@ -119,6 +190,7 @@ class FutDailyEMaxDomain(Domain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailyEMax
         )
 
@@ -126,6 +198,7 @@ class FutDailyEMaxDomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyEMax.Snap
         )
 

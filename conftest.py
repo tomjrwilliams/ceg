@@ -20,6 +20,8 @@ os.environ["TEST_LOGS"] = str(TEST_LOGS)
 import pytest
 import logging
 
+logging.getLogger("numba").setLevel(logging.INFO)
+
 logger = logging.Logger("PYTEST")
 
 log_handler = logging.FileHandler(TEST_LOGS)

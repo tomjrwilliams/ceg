@@ -35,7 +35,7 @@ from ......engine import *
 
 from ...root import *
 from ..bars import *
-from ..calc.m import FutDailyM, FutDailyMDomain
+from ..calc import *
 
 @dataclass(frozen=True)
 class FutDailyMax(FutDailyM):
@@ -47,7 +47,7 @@ class FutDailyMax(FutDailyM):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -82,7 +82,7 @@ class FutDailyMax(FutDailyM):
         return HandleNewFutDailyMax()
 
 @dataclass(frozen=True)
-class HandleNewFutDailyMax(Handler):
+class HandleNewFutDailyMax(HandleNewFutDailyM):
 
     def calc(
         self,
@@ -95,7 +95,7 @@ class HandleNewFutDailyMax(Handler):
         e = (
             pl.col(obj.field).rolling_max(
                 len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
 
@@ -109,7 +109,7 @@ class HandleNewFutDailyMax(Handler):
     
 
 @dataclass(frozen=True)
-class FutDailyMaxDomain(Domain):
+class FutDailyMaxDomain(FutDailyMDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
@@ -120,24 +120,24 @@ class FutDailyMaxDomain(Domain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = FutDailyVar.new(ord, span=4)
+    >>> obj = FutDailyMax.new(ord, window=4)
     >>> domain = (
-    ...     FutDailyVarDomain.new(eng)
+    ...     FutDailyMaxDomain.new(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )
     >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
     shape: (8,)
-    Series: 'test-fut-d-ES-1-close-pct-frd-rx-evar-4' [f64]
+    Series: 'test-fut-d-ES-1-close-pct-frd-max-4' [f64]
     [
-        0.000056
+        5729.75
         null
         null
-        null
-        0.000024
-        0.000081
-        0.000038
-        0.000106
+        5815.5
+        5826.5
+        5826.5
+        5826.5
+        5826.5
     ]
     """
 
@@ -162,6 +162,7 @@ class FutDailyMaxDomain(Domain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailyMax
         )
 
@@ -169,6 +170,7 @@ class FutDailyMaxDomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyMax.Snap
         )
 

@@ -35,7 +35,7 @@ from ......engine import *
 
 from ...root import *
 from ..bars import *
-from ..calc.m import FutDailyM, FutDailyMDomain
+from ..calc import *
 
 @dataclass(frozen=True)
 class FutDailyMed(FutDailyM):
@@ -47,7 +47,7 @@ class FutDailyMed(FutDailyM):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -82,7 +82,7 @@ class FutDailyMed(FutDailyM):
         return HandleNewFutDailyMed()
 
 @dataclass(frozen=True)
-class HandleNewFutDailyMed(Handler):
+class HandleNewFutDailyMed(HandleNewFutDailyM):
 
     def calc(
         self,
@@ -95,7 +95,7 @@ class HandleNewFutDailyMed(Handler):
         e = (
             pl.col(obj.field).rolling_median(
                 len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
 
@@ -109,7 +109,7 @@ class HandleNewFutDailyMed(Handler):
     
 
 @dataclass(frozen=True)
-class FutDailyMedDomain(Domain):
+class FutDailyMedDomain(FutDailyMDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
@@ -120,24 +120,24 @@ class FutDailyMedDomain(Domain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = FutDailyVar.new(ord, span=4)
+    >>> obj = FutDailyMed.new(ord, window=4)
     >>> domain = (
-    ...     FutDailyVarDomain.new(eng)
+    ...     FutDailyMedDomain.new(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )
     >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
     shape: (8,)
-    Series: 'test-fut-d-ES-1-close-pct-frd-rx-evar-4' [f64]
+    Series: 'test-fut-d-ES-1-close-pct-frd-med-4' [f64]
     [
-        0.000056
+        5715.5
         null
         null
-        null
-        0.000024
-        0.000081
-        0.000038
-        0.000106
+        5766.875
+        5821.0
+        5815.5
+        5787.5
+        5749.375
     ]
     """
 
@@ -162,6 +162,7 @@ class FutDailyMedDomain(Domain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailyMed
         )
 
@@ -169,6 +170,7 @@ class FutDailyMedDomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyMed.Snap
         )
 

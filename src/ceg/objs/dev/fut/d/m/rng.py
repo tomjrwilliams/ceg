@@ -35,7 +35,7 @@ from ......engine import *
 
 from ...root import *
 from ..bars import *
-from ..calc.m import FutDailyM, FutDailyMDomain
+from ..calc import *
 
 @dataclass(frozen=True)
 class FutDailyRng(FutDailyM):
@@ -47,7 +47,7 @@ class FutDailyRng(FutDailyM):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -83,7 +83,7 @@ class FutDailyRng(FutDailyM):
         return HandleNewFutDailyRng()
 
 @dataclass(frozen=True)
-class HandleNewFutDailyRng(Handler):
+class HandleNewFutDailyRng(HandleNewFutDailyM):
 
     def calc(
         self,
@@ -97,25 +97,25 @@ class HandleNewFutDailyRng(Handler):
         u = (
             e.rolling_max(
                 len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
             if obj.width is None
             else e.rolling_quantile(
                 0.5 + obj.width,
                 window_size=len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
         l = (
             e.rolling_min(
                 len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
             if obj.width is None
             else e.rolling_quantile(
                 0.5 - obj.width,
                 window_size=len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
         e = u - l
@@ -130,7 +130,7 @@ class HandleNewFutDailyRng(Handler):
     
 
 @dataclass(frozen=True)
-class FutDailyRngDomain(Domain):
+class FutDailyRngDomain(FutDailyMDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
@@ -141,24 +141,24 @@ class FutDailyRngDomain(Domain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = FutDailyVar.new(ord, span=4)
+    >>> obj = FutDailyRng.new(ord, window=4)
     >>> domain = (
-    ...     FutDailyVarDomain.new(eng)
+    ...     FutDailyRngDomain.new(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )
     >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
     shape: (8,)
-    Series: 'test-fut-d-ES-1-close-pct-frd-rx-evar-4' [f64]
+    Series: 'test-fut-d-ES-1-close-pct-frd-rng-4' [f64]
     [
-        0.000056
+        60.5
         null
         null
-        null
-        0.000024
-        0.000081
-        0.000038
-        0.000106
+        97.25
+        11.0
+        67.0
+        87.25
+        203.5
     ]
     """
 
@@ -183,6 +183,7 @@ class FutDailyRngDomain(Domain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailyRng
         )
 
@@ -190,6 +191,7 @@ class FutDailyRngDomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyRng.Snap
         )
 

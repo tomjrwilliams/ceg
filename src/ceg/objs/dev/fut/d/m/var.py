@@ -35,7 +35,7 @@ from ......engine import *
 
 from ...root import *
 from ..bars import *
-from ..calc.m import FutDailyM, FutDailyMDomain
+from ..calc import *
 
 @dataclass(frozen=True)
 class FutDailyVar(FutDailyM):
@@ -47,7 +47,7 @@ class FutDailyVar(FutDailyM):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -70,7 +70,7 @@ class FutDailyVar(FutDailyM):
     version: int = 0
     type: Literal["FutDailyVar"] = "FutDailyVar"
 
-    SUFFIX: ClassVar[str] = "max"
+    SUFFIX: ClassVar[str] = "var"
 
     @dataclass(frozen=True)
     class Snap(FutDaily.Snap):
@@ -82,7 +82,7 @@ class FutDailyVar(FutDailyM):
         return HandleNewFutDailyVar()
 
 @dataclass(frozen=True)
-class HandleNewFutDailyVar(Handler):
+class HandleNewFutDailyVar(HandleNewFutDailyM):
 
     def calc(
         self,
@@ -93,9 +93,9 @@ class HandleNewFutDailyVar(Handler):
     ) -> pl.DataFrame:
         
         e = (
-            pl.col(obj.field).rolling_max(
+            pl.col(obj.field).rolling_var(
                 len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
 
@@ -109,7 +109,7 @@ class HandleNewFutDailyVar(Handler):
     
 
 @dataclass(frozen=True)
-class FutDailyVarDomain(Domain):
+class FutDailyVarDomain(FutDailyMDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyRx.new(
@@ -120,7 +120,7 @@ class FutDailyVarDomain(Domain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = FutDailyVar.new(ord, span=4)
+    >>> obj = FutDailyVar.new(ord, window=4)
     >>> domain = (
     ...     FutDailyVarDomain.new(eng)
     ...     .with_obj(obj)
@@ -128,16 +128,16 @@ class FutDailyVarDomain(Domain):
     ... )
     >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
     shape: (8,)
-    Series: 'test-fut-d-ES-1-close-pct-frd-rx-evar-4' [f64]
+    Series: 'test-fut-d-ES-1-close-pct-frd-rx-var-4' [f64]
     [
-        0.000056
-        null
-        null
-        null
-        0.000024
         0.000081
-        0.000038
-        0.000106
+        null
+        null
+        0.000129
+        0.000114
+        0.000203
+        0.000145
+        0.000093
     ]
     """
 
@@ -151,7 +151,7 @@ class FutDailyVarDomain(Domain):
 
         # TODO: to override
 
-        SUFFIX: ClassVar[str] = "max"
+        SUFFIX: ClassVar[str] = "var"
         # TODO: to override
 
     @dataclass(frozen=True)
@@ -162,6 +162,7 @@ class FutDailyVarDomain(Domain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailyVar
         )
 
@@ -169,6 +170,7 @@ class FutDailyVarDomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyVar.Snap
         )
 

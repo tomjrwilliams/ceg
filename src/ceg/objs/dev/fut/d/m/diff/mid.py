@@ -33,9 +33,9 @@ from .......apis import t
 from .......apis import kv
 from .......engine import *
 
-from ....root import Fut, FutDaily, ORD, CONTR
-from ...bars.ord import FutDailyOrdinal
-from ...calc.md import FutDailyMD, FutDailyMDDomain
+from ....root import *
+from ...bars import *
+from ...calc import *
 
 @dataclass(frozen=True)
 class FutDailyMDMid(FutDailyMD):
@@ -47,7 +47,7 @@ class FutDailyMDMid(FutDailyMD):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -71,7 +71,7 @@ class FutDailyMDMid(FutDailyMD):
     version: int = 0
     type: Literal["FutDailyMDMid"] = "FutDailyMDMid"
 
-    SUFFIX: ClassVar[str] = "mda"
+    SUFFIX: ClassVar[str] = "mdmid"
 
     @dataclass(frozen=True)
     class Snap(FutDaily.Snap):
@@ -83,7 +83,7 @@ class FutDailyMDMid(FutDailyMD):
         return HandleNewFutDailyMDMid()
 
 @dataclass(frozen=True)
-class HandleNewFutDailyMDMid(Handler):
+class HandleNewFutDailyMDMid(HandleNewFutDailyMD):
 
     def calc(
         self,
@@ -97,25 +97,25 @@ class HandleNewFutDailyMDMid(Handler):
         u = (
             e.rolling_max(
                 len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
             if obj.width is None
             else e.rolling_quantile(
                 0.5 + obj.width,
                 window_size=len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
         l = (
             e.rolling_min(
                 len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
             if obj.width is None
             else e.rolling_quantile(
                 0.5 - obj.width,
                 window_size=len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
         mid = (u + l) / 2
@@ -131,7 +131,7 @@ class HandleNewFutDailyMDMid(Handler):
     
 
 @dataclass(frozen=True)
-class FutDailyMDMidDomain(Domain):
+class FutDailyMDMidDomain(FutDailyMDDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
@@ -142,24 +142,24 @@ class FutDailyMDMidDomain(Domain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = FutDailyVar.new(ord, span=4)
+    >>> obj = FutDailyMDMid.new(ord, window=4)
     >>> domain = (
-    ...     FutDailyVarDomain.new(eng)
+    ...     FutDailyMDMidDomain.new(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )
     >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
     shape: (8,)
-    Series: 'test-fut-d-ES-1-close-pct-frd-rx-evar-4' [f64]
+    Series: 'test-fut-d-ES-1-close-pct-frd-mdmid-4' [f64]
     [
-        0.000056
+        18.75
         null
         null
-        null
-        0.000024
-        0.000081
-        0.000038
-        0.000106
+        48.625
+        5.5
+        -33.5
+        -43.625
+        -101.75
     ]
     """
 
@@ -173,7 +173,7 @@ class FutDailyMDMidDomain(Domain):
 
         # TODO: to override
 
-        SUFFIX: ClassVar[str] = "mda"
+        SUFFIX: ClassVar[str] = "mdmid"
         # TODO: to override
 
     @dataclass(frozen=True)
@@ -184,6 +184,7 @@ class FutDailyMDMidDomain(Domain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailyMDMid
         )
 
@@ -191,6 +192,7 @@ class FutDailyMDMidDomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyMDMid.Snap
         )
 

@@ -47,7 +47,7 @@ class FutDailyEMA(FutDailyEM):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -97,7 +97,8 @@ class HandleNewFutDailyEMA(HandleNewFutDailyEM):
             pl.col(obj.field).ewm_mean(
                 span=obj.span,
                 alpha=obj.alpha,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
+                ignore_nulls=True,
             )
         )
 
@@ -132,14 +133,14 @@ class FutDailyEMADomain(FutDailyEMDomain):
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-ema-4' [f64]
     [
-        5713.339679
+        5711.550199
         null
         null
-        5780.890295
-        5804.802131
-        5783.676808
-        5764.248186
-        5704.700068
+        5753.13012
+        5782.478072
+        5773.286843
+        5759.672106
+        5705.003264
     ]
     """
 
@@ -164,6 +165,7 @@ class FutDailyEMADomain(FutDailyEMDomain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailyEMA
         )
 
@@ -171,6 +173,7 @@ class FutDailyEMADomain(FutDailyEMDomain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyEMA.Snap
         )
 

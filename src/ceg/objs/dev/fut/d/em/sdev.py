@@ -97,7 +97,8 @@ class HandleNewFutDailyESDev(HandleNewFutDailyEM):
             pl.col(obj.field).ewm_std(
                 span=obj.span,
                 alpha=obj.alpha,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
+                ignore_nulls=True,
             )
         )
 
@@ -132,14 +133,14 @@ class FutDailyESDevDomain(FutDailyEMDomain):
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rx-esdev-4' [f64]
     [
-        0.007456
+        0.008131
         null
         null
-        null
-        0.004856
-        0.009013
-        0.006199
-        0.010308
+        0.011117
+        0.009137
+        0.011772
+        0.009188
+        0.012394
     ]
     """
 

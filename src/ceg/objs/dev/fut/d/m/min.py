@@ -35,7 +35,7 @@ from ......engine import *
 
 from ...root import *
 from ..bars import *
-from ..calc.m import FutDailyM, FutDailyMDomain
+from ..calc import *
 
 @dataclass(frozen=True)
 class FutDailyMin(FutDailyM):
@@ -47,7 +47,7 @@ class FutDailyMin(FutDailyM):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -82,7 +82,7 @@ class FutDailyMin(FutDailyM):
         return HandleNewFutDailyMin()
 
 @dataclass(frozen=True)
-class HandleNewFutDailyMin(Handler):
+class HandleNewFutDailyMin(HandleNewFutDailyM):
 
     def calc(
         self,
@@ -95,7 +95,7 @@ class HandleNewFutDailyMin(Handler):
         e = (
             pl.col(obj.field).rolling_min(
                 len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
 
@@ -109,7 +109,7 @@ class HandleNewFutDailyMin(Handler):
     
 
 @dataclass(frozen=True)
-class FutDailyMinDomain(Domain):
+class FutDailyMinDomain(FutDailyMDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
@@ -120,24 +120,24 @@ class FutDailyMinDomain(Domain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = FutDailyVar.new(ord, span=4)
+    >>> obj = FutDailyMin.new(ord, window=4)
     >>> domain = (
-    ...     FutDailyVarDomain.new(eng)
+    ...     FutDailyMinDomain.new(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )
     >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
     shape: (8,)
-    Series: 'test-fut-d-ES-1-close-pct-frd-rx-evar-4' [f64]
+    Series: 'test-fut-d-ES-1-close-pct-frd-min-4' [f64]
     [
-        0.000056
+        5669.25
         null
         null
-        null
-        0.000024
-        0.000081
-        0.000038
-        0.000106
+        5718.25
+        5815.5
+        5759.5
+        5739.25
+        5623.0
     ]
     """
 
@@ -162,6 +162,7 @@ class FutDailyMinDomain(Domain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailyMin
         )
 
@@ -169,6 +170,7 @@ class FutDailyMinDomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyMin.Snap
         )
 

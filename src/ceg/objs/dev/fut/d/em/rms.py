@@ -98,7 +98,8 @@ class HandleNewFutDailyERms(HandleNewFutDailyEM):
             pl.col(obj.field).pow(2).ewm_mean(
                 span=obj.span,
                 alpha=obj.alpha,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
+                ignore_nulls=True,
             ).sqrt()
         )
 
@@ -133,14 +134,14 @@ class FutDailyERmsDomain(FutDailyEMDomain):
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rx-erms-4' [f64]
     [
-        0.006222
+        0.007089
         null
         null
-        null
-        0.003388
-        0.008919
-        0.006856
-        0.014466
+        0.012077
+        0.009431
+        0.010308
+        0.008288
+        0.014329
     ]
     """
 

@@ -33,8 +33,8 @@ from .......apis import t
 from .......apis import kv
 from .......engine import *
 
-from ....root import Fut, FutDaily, ORD, CONTR
-from ...bars.ord import FutDailyOrdinal
+from ....root import *
+from ...bars import *
 from ...calc.emp import FutDailyEMP, FutDailyEMPDomain
 
 @dataclass(frozen=True)
@@ -47,7 +47,7 @@ class FutDailyEMPA(FutDailyEMP):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -97,7 +97,7 @@ class HandleNewFutDailyEMPA(Handler):
             pl.col(obj.field).ewm_mean(
                 span=obj.span,
                 alpha=obj.alpha,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
         # now backward rolling window
@@ -129,6 +129,7 @@ class FutDailyEMPADomain(Domain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailyEMPA
         )
 
@@ -136,6 +137,7 @@ class FutDailyEMPADomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyEMPA.Snap
         )
 

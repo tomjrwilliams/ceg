@@ -73,3 +73,9 @@
 - simple multi dimensional quartile plot, possibly five start (big / small up / down flat) depenednet on levels and windows of forward back, how correlated each is with the other
 
 - very useful as a generalised event study between two variables
+
+
+
+
+
+- diff to ma, etc. : norm (as pct not abs)?

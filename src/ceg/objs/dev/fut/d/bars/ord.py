@@ -267,16 +267,13 @@ class FutDailyOrdinalDomain(Domain):
     ...     .with_obj(obj)
     ...     .sync()
     ... )
-    >>> obj.value_key_val(domain).get(obj.path, 1).ser
-    shape: (6_296,)
+    >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+    shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd' [f64]
     [
-        1351.83
-        1352.06
-        1318.92
+        5718.25
         null
         null
-        …
         5815.5
         5826.5
         5759.5

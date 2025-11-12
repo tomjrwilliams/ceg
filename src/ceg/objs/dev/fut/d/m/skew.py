@@ -35,7 +35,7 @@ from ......engine import *
 
 from ...root import *
 from ..bars import *
-from ..calc.m import FutDailyM, FutDailyMDomain
+from ..calc import *
 
 @dataclass(frozen=True)
 class FutDailySkew(FutDailyM):
@@ -47,7 +47,7 @@ class FutDailySkew(FutDailyM):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -82,7 +82,7 @@ class FutDailySkew(FutDailyM):
         return HandleNewFutDailySkew()
 
 @dataclass(frozen=True)
-class HandleNewFutDailySkew(Handler):
+class HandleNewFutDailySkew(HandleNewFutDailyM):
 
     def calc(
         self,
@@ -95,7 +95,7 @@ class HandleNewFutDailySkew(Handler):
         e = (
             pl.col(obj.field).rolling_skew(
                 len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
 
@@ -109,7 +109,7 @@ class HandleNewFutDailySkew(Handler):
     
 
 @dataclass(frozen=True)
-class FutDailySkewDomain(Domain):
+class FutDailySkewDomain(FutDailyMDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyRx.new(
@@ -120,24 +120,24 @@ class FutDailySkewDomain(Domain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = FutDailyVar.new(ord, span=4)
+    >>> obj = FutDailySkew.new(ord, window=4)
     >>> domain = (
-    ...     FutDailyVarDomain.new(eng)
+    ...     FutDailySkewDomain.new(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )
     >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
     shape: (8,)
-    Series: 'test-fut-d-ES-1-close-pct-frd-rx-evar-4' [f64]
+    Series: 'test-fut-d-ES-1-close-pct-frd-rx-skew-4' [f64]
     [
-        0.000056
+        0.15138
         null
         null
-        null
-        0.000024
-        0.000081
-        0.000038
-        0.000106
+        2.6070e-14
+        3.3046e-14
+        0.073938
+        0.464041
+        -0.228863
     ]
     """
 
@@ -162,6 +162,7 @@ class FutDailySkewDomain(Domain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailySkew
         )
 
@@ -169,6 +170,7 @@ class FutDailySkewDomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailySkew.Snap
         )
 

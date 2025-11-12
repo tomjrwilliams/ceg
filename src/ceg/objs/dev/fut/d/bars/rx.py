@@ -55,7 +55,7 @@ class FutDailyRx(
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
 
     symbol: str
@@ -208,7 +208,7 @@ class HandleNewFutDailyRx(Handler):
         df = pl.DataFrame({obj.field: v.ser})
 
         e = (
-            pl.col(obj.field).pct_change()
+            pl.col(obj.field).forward_fill().pct_change()
             if parent.adjust == "pct"
             else pl.col(obj.field).forward_fill().diff()
             if parent.adjust == "abs"
@@ -277,7 +277,7 @@ class FutDailyRxDomain(Domain):
         0.000963
         null
         null
-        null
+        0.017007
         0.001891
         -0.011499
         -0.003516
@@ -320,12 +320,14 @@ class FutDailyRxDomain(Domain):
             | FutDaily
             | FutDailyOrdinal
             | FutDailyRx
+            | FutDailyRx
         )
 
     @dataclass(frozen=True)
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyRx.Snap
         )
 

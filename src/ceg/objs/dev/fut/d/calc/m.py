@@ -54,7 +54,7 @@ class FutDailyM(
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -85,8 +85,8 @@ class FutDailyM(
     class Snap(FutDaily.Snap):
         type: Literal["FutDailyMSnap"] = "FutDailyMSnap"
  
-    def get_parent(self, domain: Domain) -> FutDailyOrdinal:
-        return domain.get(self.parent, FutDailyOrdinal)
+    def get_parent(self, domain: Domain) -> FutDailyOrdinal | FutDailyRx:
+        return domain.get(self.parent, FutDailyOrdinal | FutDailyRx)
 
     def root(self, domain: Domain) -> EngineRoot:
         return self.get_parent(domain).root(domain)
@@ -212,7 +212,7 @@ class HandleNewFutDailyM(Handler):
                 len(df)
                 if obj.window is None
                 else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
 

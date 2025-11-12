@@ -47,7 +47,7 @@ class FutDailyERng(FutDailyEM):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -82,6 +82,9 @@ class FutDailyERng(FutDailyEM):
     ) -> HandleNewFutDailyERng:
         return HandleNewFutDailyERng()
 
+from .max import calc as calc_max
+from .min import calc as calc_min
+
 @dataclass(frozen=True)
 class HandleNewFutDailyERng(HandleNewFutDailyEM):
 
@@ -92,11 +95,57 @@ class HandleNewFutDailyERng(HandleNewFutDailyEM):
         domain: Domain,
         df: pl.DataFrame,
     ) -> pl.DataFrame:
-        raise ValueError((obj, "TODO"))
-    
+        s = df.get_column(obj.field)
+        v = s.fill_null(0).to_numpy()
+        is_null = s.is_null().to_numpy()
+        mx = calc_max(v, is_null, alpha=obj.calc_alpha())
+        mn = calc_min(v, is_null, alpha=obj.calc_alpha())
+        return pl.DataFrame({
+            "mask": s,
+            "max": mx,
+            "min": mn,
+        }).select(
+            pl.when(pl.col("mask").is_null())
+            .then(None)
+            .otherwise(
+                pl.col("max") - pl.col("min")
+            )
+            .alias(obj.field)
+        )
+
 
 @dataclass(frozen=True)
-class FutDailyERngDomain(Domain):
+class FutDailyERngDomain(FutDailyEMDomain):
+    """
+    >>> eng = EngineRoot.new(ROOT)
+    >>> ord = FutDailyOrdinal.new(
+    ...     eng,
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = FutDailyERng.new(ord, span=4)
+    >>> domain = (
+    ...     FutDailyERngDomain.new(eng)
+    ...     .with_obj(obj)
+    ...     .sync()
+    ... )
+    >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-erng-4' [f64]
+    [
+        13.068
+        null
+        null
+        64.4988
+        45.29928
+        40.2
+        36.27
+        91.512
+    ]
+    """
 
     @dataclass(frozen=True)
     class Root(
@@ -119,6 +168,7 @@ class FutDailyERngDomain(Domain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailyERng
         )
 
@@ -126,6 +176,7 @@ class FutDailyERngDomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyERng.Snap
         )
 

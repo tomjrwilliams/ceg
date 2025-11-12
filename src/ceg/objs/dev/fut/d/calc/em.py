@@ -103,6 +103,17 @@ class FutDailyEM(
         ), snap
         return snap
     
+    def calc_alpha(self) -> float:
+        res = (
+            self.alpha
+            if self.alpha is not None
+            else 2 / (self.span + 1)
+            if self.span is not None
+            else None
+        )
+        assert res is not None, self
+        return res
+    
     @classmethod
     def params_suffix(
         cls,
@@ -325,6 +336,7 @@ class FutDailyEMDomain(Domain):
             | FutDaily
             | FutDailyOrdinal
             | FutDailyRx
+            | FutDailyRx
             # | FutDailyEM
             # TODO: to override
         )
@@ -333,6 +345,7 @@ class FutDailyEMDomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyRx.Snap
             # | FutDailyEM.Snap
             # TODO: to override

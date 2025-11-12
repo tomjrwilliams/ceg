@@ -33,9 +33,9 @@ from .......apis import t
 from .......apis import kv
 from .......engine import *
 
-from ....root import Fut, FutDaily, ORD, CONTR
-from ...bars.ord import FutDailyOrdinal
-from ...calc.md import FutDailyMD, FutDailyMDDomain
+from ....root import *
+from ...bars import *
+from ...calc import *
 
 @dataclass(frozen=True)
 class FutDailyMDMax(FutDailyMD):
@@ -47,7 +47,7 @@ class FutDailyMDMax(FutDailyMD):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -82,7 +82,7 @@ class FutDailyMDMax(FutDailyMD):
         return HandleNewFutDailyMDMax()
 
 @dataclass(frozen=True)
-class HandleNewFutDailyMDMax(Handler):
+class HandleNewFutDailyMDMax(HandleNewFutDailyMD):
 
     def calc(
         self,
@@ -95,7 +95,7 @@ class HandleNewFutDailyMDMax(Handler):
         e = pl.col(obj.field) - (
             pl.col(obj.field).rolling_max(
                 len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
 
@@ -109,7 +109,7 @@ class HandleNewFutDailyMDMax(Handler):
     
 
 @dataclass(frozen=True)
-class FutDailyMDMaxDomain(Domain):
+class FutDailyMDMaxDomain(FutDailyMDDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
@@ -120,24 +120,24 @@ class FutDailyMDMaxDomain(Domain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = FutDailyVar.new(ord, span=4)
+    >>> obj = FutDailyMDMax.new(ord, window=4)
     >>> domain = (
-    ...     FutDailyVarDomain.new(eng)
+    ...     FutDailyMDMaxDomain.new(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )
     >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
     shape: (8,)
-    Series: 'test-fut-d-ES-1-close-pct-frd-rx-evar-4' [f64]
+    Series: 'test-fut-d-ES-1-close-pct-frd-mdmax-4' [f64]
     [
-        0.000056
+        -11.5
         null
         null
-        null
-        0.000024
-        0.000081
-        0.000038
-        0.000106
+        0.0
+        0.0
+        -67.0
+        -87.25
+        -203.5
     ]
     """
 
@@ -162,6 +162,7 @@ class FutDailyMDMaxDomain(Domain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailyMDMax
         )
 
@@ -169,6 +170,7 @@ class FutDailyMDMaxDomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyMDMax.Snap
         )
 

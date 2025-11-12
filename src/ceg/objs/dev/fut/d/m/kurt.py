@@ -35,7 +35,7 @@ from ......engine import *
 
 from ...root import *
 from ..bars import *
-from ..calc.m import FutDailyM, FutDailyMDomain
+from ..calc import *
 
 @dataclass(frozen=True)
 class FutDailyKurt(FutDailyM):
@@ -47,7 +47,7 @@ class FutDailyKurt(FutDailyM):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -82,7 +82,7 @@ class FutDailyKurt(FutDailyM):
         return HandleNewFutDailyKurt()
 
 @dataclass(frozen=True)
-class HandleNewFutDailyKurt(Handler):
+class HandleNewFutDailyKurt(HandleNewFutDailyM):
 
     def calc(
         self,
@@ -95,7 +95,7 @@ class HandleNewFutDailyKurt(Handler):
         e = (
             pl.col(obj.field).rolling_kurtosis(
                 len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
 
@@ -109,7 +109,7 @@ class HandleNewFutDailyKurt(Handler):
     
 
 @dataclass(frozen=True)
-class FutDailyKurtDomain(Domain):
+class FutDailyKurtDomain(FutDailyMDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyRx.new(
@@ -120,24 +120,24 @@ class FutDailyKurtDomain(Domain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = FutDailyVar.new(ord, span=4)
+    >>> obj = FutDailyKurt.new(ord, window=4)
     >>> domain = (
-    ...     FutDailyVarDomain.new(eng)
+    ...     FutDailyKurtDomain.new(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )
     >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
     shape: (8,)
-    Series: 'test-fut-d-ES-1-close-pct-frd-rx-evar-4' [f64]
+    Series: 'test-fut-d-ES-1-close-pct-frd-rx-kurt-4' [f64]
     [
-        0.000056
+        -1.116847
         null
         null
-        null
-        0.000024
-        0.000081
-        0.000038
-        0.000106
+        -2.0
+        -2.0
+        -1.5
+        -1.070286
+        -1.379246
     ]
     """
 
@@ -162,6 +162,7 @@ class FutDailyKurtDomain(Domain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailyKurt
         )
 
@@ -169,6 +170,7 @@ class FutDailyKurtDomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyKurt.Snap
         )
 

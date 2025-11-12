@@ -97,7 +97,8 @@ class HandleNewFutDailyEVar(HandleNewFutDailyEM):
             pl.col(obj.field).ewm_var(
                 span=obj.span,
                 alpha=obj.alpha,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
+                ignore_nulls=True,
             )
         )
 
@@ -132,14 +133,14 @@ class FutDailyEVarDomain(FutDailyEMDomain):
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rx-evar-4' [f64]
     [
-        0.000056
+        0.000066
         null
         null
-        null
-        0.000024
-        0.000081
-        0.000038
-        0.000106
+        0.000124
+        0.000083
+        0.000139
+        0.000084
+        0.000154
     ]
     """
 

@@ -33,9 +33,9 @@ from .......apis import t
 from .......apis import kv
 from .......engine import *
 
-from ....root import Fut, FutDaily, ORD, CONTR
-from ...bars.ord import FutDailyOrdinal
-from ...calc.md import FutDailyMD, FutDailyMDDomain
+from ....root import *
+from ...bars import *
+from ...calc import *
 
 @dataclass(frozen=True)
 class FutDailyMDQile(FutDailyMD):
@@ -47,7 +47,7 @@ class FutDailyMDQile(FutDailyMD):
     fx: str | None = None # ccy to convert to\n
     source: str | None = None\n
     """
-    parent: FutDailyOrdinal | str
+    parent: FutDailyOrdinal | FutDailyRx | str
     # TODO: or contract
     # TODO: or rx thereof
 
@@ -81,9 +81,66 @@ class FutDailyMDQile(FutDailyMD):
         self
     ) -> HandleNewFutDailyMDQile:
         return HandleNewFutDailyMDQile()
+    @classmethod
+    def params_suffix(
+        cls,
+        window: int | None = None,
+        quantile: float | None = None,
+    ):
+        assert quantile is not None, cls
+        if window is None:
+            params = "ex"
+        else:
+            params = str(window)
+        params += f"-{quantile}"
+        return f"{cls.SUFFIX}-" + params
+    
+    @classmethod
+    def new(
+        cls,
+        parent: FutDailyOrdinal | EngineRoot,
+        symbol: str | None = None,
+        ident: int | str | None = None,
+        field: str | None = None,
+        adjust: str | None = None,
+        # NOTE: just for contracts?
+        source: str | None = None,
+        fx: str | None = None,
+        # TODO: expect, to decide on ordinal
+        # --
+        window: int | None = None,
+        quantile: float | None = None,
+    ):
+        if isinstance(parent, EngineRoot):
+            assert isinstance(symbol, str), symbol
+            if ident is not None:
+                assert isinstance(ident, int), ident
+            parent = FutDailyOrdinal.new(
+                parent,
+                symbol=symbol,
+                ident=ident,
+                field=field,
+                adjust=adjust,
+                source=source,
+                fx=fx,
+            )
+        return cls(
+            path=parent.extend_path(cls.params_suffix(
+                window=window,quantile=quantile,
+            )),
+            parent=parent,
+            symbol=parent.symbol,
+            ident=str(ident),
+            field=parent.field,
+            adjust=parent.adjust,
+            source=parent.source,
+            fx=parent.fx,
+            window=window,
+            quantile=quantile,
+        )
 
 @dataclass(frozen=True)
-class HandleNewFutDailyMDQile(Handler):
+class HandleNewFutDailyMDQile(HandleNewFutDailyMD):
 
     def calc(
         self,
@@ -98,7 +155,7 @@ class HandleNewFutDailyMDQile(Handler):
             pl.col(obj.field).rolling_quantile(
                 obj.quantile,
                 window_size=len(df) if obj.window is None else obj.window,
-                min_samples=2, # TODO: or more?
+                min_samples=1, # TODO: or more?
             )
         )
 
@@ -112,7 +169,7 @@ class HandleNewFutDailyMDQile(Handler):
     
 
 @dataclass(frozen=True)
-class FutDailyMDQileDomain(Domain):
+class FutDailyMDQileDomain(FutDailyMDDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
@@ -123,24 +180,24 @@ class FutDailyMDQileDomain(Domain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = FutDailyVar.new(ord, span=4)
+    >>> obj = FutDailyMDQile.new(ord, window=4, quantile=.5)
     >>> domain = (
-    ...     FutDailyVarDomain.new(eng)
+    ...     FutDailyMDQileDomain.new(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )
     >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
     shape: (8,)
-    Series: 'test-fut-d-ES-1-close-pct-frd-rx-evar-4' [f64]
+    Series: 'test-fut-d-ES-1-close-pct-frd-mdqile-4-0.5' [f64]
     [
-        0.000056
+        0.0
         null
         null
-        null
-        0.000024
-        0.000081
-        0.000038
-        0.000106
+        0.0
+        0.0
+        -56.0
+        -76.25
+        -136.5
     ]
     """
 
@@ -165,6 +222,7 @@ class FutDailyMDQileDomain(Domain):
             | FutDaily
             | FutDaily
             | FutDailyOrdinal
+            | FutDailyRx
             | FutDailyMDQile
         )
 
@@ -172,6 +230,7 @@ class FutDailyMDQileDomain(Domain):
     class snap_parser(SnapParser):
         snap: (
             FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
             | FutDailyMDQile.Snap
         )
 
