@@ -339,13 +339,13 @@ class FutDailyRxDomain(Domain):
         return FutDailyRxDomain(root)
     
     @classmethod
-    def new(cls) -> FutDailyRxDomain:
+    def new(cls, symbol: str = "ES") -> FutDailyRxDomain:
         eng = EngineRoot.new(ROOT)
         self = FutDailyRxDomain.empty(eng)
         for adj in ["pct", "abs"]:
             obj = FutDailyRx.new(
                 eng,
-                symbol="ES", # spx
+                symbol=symbol, # spx
                 ident = 1,
                 field="close",
                 adjust=adj,

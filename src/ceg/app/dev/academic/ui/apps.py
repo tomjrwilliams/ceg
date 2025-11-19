@@ -5,8 +5,8 @@ import streamlit as st
 from streamlit.navigation.page import StreamlitPage
 
 def app(
-    pages: dict[str, dict[
-        str, Callable[
+    pages: list[StreamlitPage] | dict[str, StreamlitPage | dict[
+        str, StreamlitPage | Callable[
             [], 
             # StreamlitPage
             None
@@ -21,9 +21,15 @@ def app(
     # for _, ps in pages.items():
     #     for name, p in ps.items():
     #         p.__name__ = name
+    if isinstance(pages, list):
+        return st.navigation(pages)
     return st.navigation(
         {
-            section: list(ps.values())  # type: ignore
+            section: (
+                ps 
+                if isinstance(ps, StreamlitPage)
+                else list(ps.values())  # type: ignore
+            )
             for section, ps in pages.items()
         }
     )

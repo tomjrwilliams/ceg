@@ -36,11 +36,17 @@ class Component:
     def child_key(self, key: str) -> str:
         return f"{self.key}_{key}"
     
+    def pre_render(self) -> None: ...
+
     def render(self) -> Component: ...
+
+    def post_render(self) -> None: ...
 
     def page(self) -> Callable[[], None]:
         def f():
+            self.pre_render()
             self.render()
+            self.post_render()
             return
         return f
     

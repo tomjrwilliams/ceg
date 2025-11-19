@@ -58,7 +58,9 @@ class App:
                 if dp.name in self.pages:
                     st.page_link(self.pages[dp.name])
         return st.Page(
-            f, title="pages", default=True,
+            f,
+            title="home",
+            default=True,
         )
 
     def get_page_name(self):
@@ -115,12 +117,15 @@ class App:
             hidden_link(self.get_page_name(), "RENAME")
             hidden_link(self.get_page_name(), "NEW")
             
-            st.button("RENAME", on_click=click_rename)
-            st.button("NEW", on_click=click_new)
+            c1, c2 = st.columns(2)
+            with c2:
+                st.button("NEW", on_click=click_new)
+            with c1:
+                st.button("RENAME", on_click=click_rename)
 
     def get_pages(
         self,
-        obj_to_daily
+        daily_cls: Type[ExploreDailyFromRows]
     ):
         pages = {}
         for dp in Path(self.root).iterdir():
@@ -139,15 +144,9 @@ class App:
             # TODO: or numeric names?
 
             if config["type"] == "daily":
-                f = ExploreDailyFromRows(
+                f = daily_cls(
                     name,
                     str(dp),
-                    lambda r: obj_to_daily(**r),
-                    lambda r: (
-                        r["label"] 
-                        if r["label"] is not None
-                        else r["obj"]
-                    ),
                     schema={
                         "graph": pl.Int32,
                         "obj": pl.String,

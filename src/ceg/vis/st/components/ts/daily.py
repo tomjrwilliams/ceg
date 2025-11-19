@@ -514,12 +514,14 @@ EXPLORER_COMPONENTS: dict[
 @dataclass(frozen=True)
 class ExploreFromRows(Component):
     key: str
-    cache: str # rename cache
-    row_to_df: Callable[[dict], pl.DataFrame]
-    row_to_alias: Callable[[dict], str]
+    cache: str
     schema: dict[str, Type[pl.DataType]]
     
     label_key: str = "label"
+
+    def row_to_df(self, r: dict) -> pl.DataFrame | None: ...
+
+    def row_to_alias(self, r: dict) -> str: ...
 
     def check_df(self, df: pl.DataFrame):
         return df

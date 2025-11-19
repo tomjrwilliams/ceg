@@ -1,4 +1,6 @@
 from . import dev
+from . import explorer
+
 # app has the same dev (projects) and prod distinction as objs
 
 # as app is mostly just ui config onto the data produced in objs
