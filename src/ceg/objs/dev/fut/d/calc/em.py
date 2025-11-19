@@ -37,8 +37,6 @@ from ...root import *
 from ..bars import *
 from ..bars.rx import FutDailyRx
 
-TEST = "test"
-TEST_DB = "./__local__/test.db"
 
 #  ------------------
 
@@ -241,7 +239,7 @@ class HandleNewFutDailyEM(Handler):
 
         if snap is not None:
             # NOTE: should already be handled?
-            raise ValueError((self, event))
+            return None
 
         parent = obj.get_parent(domain)
 
@@ -356,7 +354,7 @@ class FutDailyEMDomain(Domain):
         value: ValueNumPy | ValuePlSeries
 
     @classmethod
-    def new(cls, engine: EngineRoot):
+    def empty(cls, engine: EngineRoot):
         root = cls.Root.new(engine)
         return cls(root)
     

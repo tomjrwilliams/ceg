@@ -122,7 +122,7 @@ class FutDailyKurtDomain(FutDailyMDomain):
     ... )
     >>> obj = FutDailyKurt.new(ord, window=4)
     >>> domain = (
-    ...     FutDailyKurtDomain.new(eng)
+    ...     FutDailyKurtDomain.empty(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )

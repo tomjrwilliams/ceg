@@ -148,7 +148,7 @@ class FutDailyEMinDomain(FutDailyEMDomain):
     ... )
     >>> obj = FutDailyEMin.new(ord, span=4)
     >>> domain = (
-    ...     FutDailyEMinDomain.new(eng)
+    ...     FutDailyEMinDomain.empty(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )

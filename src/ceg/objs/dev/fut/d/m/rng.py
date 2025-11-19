@@ -143,7 +143,7 @@ class FutDailyRngDomain(FutDailyMDomain):
     ... )
     >>> obj = FutDailyRng.new(ord, window=4)
     >>> domain = (
-    ...     FutDailyRngDomain.new(eng)
+    ...     FutDailyRngDomain.empty(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )

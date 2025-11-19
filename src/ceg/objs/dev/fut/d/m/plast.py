@@ -195,7 +195,7 @@ class FutDailyPLastDomain(FutDailyMDomain):
     ... )
     >>> obj = FutDailyPLast.new(ord, window=4)
     >>> domain = (
-    ...     FutDailyPLastDomain.new(eng)
+    ...     FutDailyPLastDomain.empty(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )

@@ -144,7 +144,7 @@ class FutDailyMDMidDomain(FutDailyMDDomain):
     ... )
     >>> obj = FutDailyMDMid.new(ord, window=4)
     >>> domain = (
-    ...     FutDailyMDMidDomain.new(eng)
+    ...     FutDailyMDMidDomain.empty(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )

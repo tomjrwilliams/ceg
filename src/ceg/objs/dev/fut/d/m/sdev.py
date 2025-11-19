@@ -122,7 +122,7 @@ class FutDailySDevDomain(FutDailyMDomain):
     ... )
     >>> obj = FutDailySDev.new(ord, window=4)
     >>> domain = (
-    ...     FutDailySDevDomain.new(eng)
+    ...     FutDailySDevDomain.empty(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )

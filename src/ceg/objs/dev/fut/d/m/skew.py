@@ -122,7 +122,7 @@ class FutDailySkewDomain(FutDailyMDomain):
     ... )
     >>> obj = FutDailySkew.new(ord, window=4)
     >>> domain = (
-    ...     FutDailySkewDomain.new(eng)
+    ...     FutDailySkewDomain.empty(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )

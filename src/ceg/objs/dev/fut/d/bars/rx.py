@@ -36,8 +36,6 @@ from ......engine import *
 from ...root import *
 from .ord import FutDailyOrdinal
 
-TEST = "test"
-TEST_DB = "./__local__/test.db"
 
 #  ------------------
 
@@ -190,7 +188,7 @@ class HandleNewFutDailyRx(Handler):
 
         if snap is not None:
             # NOTE: should already be handled?
-            raise ValueError((self, event))
+            return None
 
         parent = obj.get_parent(domain)
 
@@ -266,7 +264,7 @@ class FutDailyRxDomain(Domain):
     ... )
     >>> obj = FutDailyRx.new(ord)
     >>> domain = (
-    ...     FutDailyRxDomain.new(eng)
+    ...     FutDailyRxDomain.empty(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )
@@ -336,9 +334,25 @@ class FutDailyRxDomain(Domain):
         value: ValueNumPy | ValuePlSeries
 
     @classmethod
-    def new(cls, engine: EngineRoot):
+    def empty(cls, engine: EngineRoot):
         root = FutDailyRxDomain.Root.new(engine)
         return FutDailyRxDomain(root)
+    
+    @classmethod
+    def new(cls) -> FutDailyRxDomain:
+        eng = EngineRoot.new(ROOT)
+        self = FutDailyRxDomain.empty(eng)
+        for adj in ["pct", "abs"]:
+            obj = FutDailyRx.new(
+                eng,
+                symbol="ES", # spx
+                ident = 1,
+                field="close",
+                adjust=adj,
+                source="frd",
+            )
+            self = self.with_obj(obj)
+        return cast(FutDailyRxDomain, self)
     
 #  ------------------
 

@@ -35,8 +35,6 @@ from ......engine import *
 
 from ...root import *
 
-TEST = "test"
-TEST_DB = "./__local__/test.db"
 
 #  ------------------
 
@@ -194,8 +192,9 @@ class HandleNewFutDailyOrdinal(Handler):
         snap = obj.get_snap(domain)
 
         if snap is not None:
-            # NOTE: should already be handled?
-            raise ValueError((self, event))
+            return None
+            # # NOTE: should already be handled?
+            # raise ValueError((self, event))
 
         if obj.source == "frd":
             df = apis.data.frd.read_file(
@@ -263,7 +262,7 @@ class FutDailyOrdinalDomain(Domain):
     ...     source="frd",
     ... )
     >>> domain = (
-    ...    FutDailyOrdinalDomain.new(eng)
+    ...    FutDailyOrdinalDomain.empty(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )
@@ -326,9 +325,25 @@ class FutDailyOrdinalDomain(Domain):
         value: ValueNumPy | ValuePlSeries
 
     @classmethod
-    def new(cls, engine: EngineRoot):
+    def empty(cls, engine: EngineRoot):
         root = FutDailyOrdinalDomain.Root.new(engine)
         return FutDailyOrdinalDomain(root)
+
+    @classmethod
+    def new(cls) -> FutDailyOrdinalDomain:
+        eng = EngineRoot.new(ROOT)
+        self = FutDailyOrdinalDomain.empty(eng)
+        for adj in ["pct", "abs"]:
+            obj = FutDailyOrdinal.new(
+                eng,
+                symbol="ES", # spx
+                ident = 1,
+                field="close",
+                adjust=adj,
+                source="frd",
+            )
+            self = self.with_obj(obj)
+        return cast(FutDailyOrdinalDomain, self)
     
 #  ------------------
 

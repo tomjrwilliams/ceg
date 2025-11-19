@@ -5,6 +5,7 @@ import polars as pl
 import streamlit as st
 
 from .. import core
+from .....apis.st import cache
 
 def session_state_text_input(
     label: str,
@@ -20,20 +21,7 @@ def session_state_text_input(
         value=default
     )
 
-import os
-from functools import lru_cache
 
-def cache():
-    # TODO: move to shared utils lib
-    if os.environ.get("STREAMLIT") == "true":
-        def st_decorator(f):
-            import streamlit as st
-            return st.cache_data(f)
-        return st_decorator
-    else:
-        def lru_decorator(f):
-            return lru_cache(maxsize=512)(f)
-        return lru_decorator
 
 @cache()
 def load_results(fp: str, **kwargs):
@@ -76,5 +64,8 @@ def single_table(
             with st.container(height=height):
                 st.table(df)
         else:
-            st.table(df, height=height)
+            st.table(
+                df,
+                # height=height # type: ignore
+            )
     return res

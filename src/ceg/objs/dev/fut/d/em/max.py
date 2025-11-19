@@ -150,7 +150,7 @@ class FutDailyEMaxDomain(FutDailyEMDomain):
     ... )
     >>> obj = FutDailyEMax.new(ord, span=4)
     >>> domain = (
-    ...     FutDailyEMaxDomain.new(eng)
+    ...     FutDailyEMaxDomain.empty(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )

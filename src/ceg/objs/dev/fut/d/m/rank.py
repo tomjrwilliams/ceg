@@ -122,7 +122,7 @@ class FutDailyRankDomain(FutDailyMDomain):
     ... )
     >>> obj = FutDailyRank.new(ord, window=4)
     >>> domain = (
-    ...     FutDailyRankDomain.new(eng)
+    ...     FutDailyRankDomain.empty(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )

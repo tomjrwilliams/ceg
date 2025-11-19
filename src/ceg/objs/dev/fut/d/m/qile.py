@@ -182,7 +182,7 @@ class FutDailyQileDomain(FutDailyMDomain):
     ... )
     >>> obj = FutDailyQile.new(ord, window=4, quantile=.5)
     >>> domain = (
-    ...     FutDailyQileDomain.new(eng)
+    ...     FutDailyQileDomain.empty(eng)
     ...     .with_obj(obj)
     ...     .sync()
     ... )

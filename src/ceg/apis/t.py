@@ -110,3 +110,32 @@ class pl:
                     ),
                 ]
             )
+    class DataFrame(polars.DataFrame):
+        """
+        pydantic enhanced pl.DataFrame wrapper
+        """
+
+        @classmethod
+        def cast(cls, v: polars.DataFrame) -> pl.DataFrame:
+            return cls(v)
+
+        @classmethod
+        def validate(cls, v: Any, info: core_schema.ValidationInfo):
+            if isinstance(v, pl.DataFrame):
+                return v
+            # elif isinstance(v, Iterable):
+            #     return np.array(v)
+            else:
+                raise ValueError((v, type(v)))
+
+        @classmethod
+        def __get_pydantic_core_schema__(
+            cls, source_type: Any, handler: GetCoreSchemaHandler
+        ) -> CoreSchema:
+            return core_schema.chain_schema(
+                [
+                    core_schema.with_info_plain_validator_function(
+                        cls.validate,
+                    ),
+                ]
+            )

@@ -417,15 +417,21 @@ class Domain:
     @overload
     def get(self, obj: str | Object, t: Type[O]) -> O: ...
 
+    @overload
+    def get(self, obj: str | Object, t: None) -> Object: ...
+
     def get(
         self, 
         obj: str | Object | None,
-        t: Type[O],
-    ) -> O | None:
+        t: Type[O] | None,
+    ) -> O | Object | None:
         if obj is None:
             return obj
         elif isinstance(obj, str):
             obj = self.objects.get(obj)
+        if t is None:
+            assert isinstance(obj, Object), obj
+            return obj
         assert isinstance(obj, t)
         return obj
 
