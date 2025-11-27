@@ -37,36 +37,10 @@ from ...root import *
 from ..bars import *
 from ..calc import *
 
+from ....calc import *
+
 @dataclass(frozen=True)
 class FutDailyEMin(FutDailyEM):
-    """FutDailyEMin(UseRootConfigs):\n
-    parent: FutDaily\n
-    symbol: str\n
-    field: str\n
-    adjust: str\n
-    fx: str | None = None # ccy to convert to\n
-    source: str | None = None\n
-    """
-    parent: FutDailyOrdinal | FutDailyRx | str
-    # TODO: or contract
-    # TODO: or rx thereof
-
-    symbol: str
-    ident: str
-    field: str
-    adjust: str
-    source: str
-    fx: str | None = None  # ccy to convert to
-
-    span: float | None = None
-    alpha: float | None = None
-
-    # NOTE: chunk not in path, as doesnt change value
-    # only back-end layout
-    # NOTE: likewise for back-end type: np vs pq etc.
-
-    chunk: int = 32
-    # TODO: db?
 
     version: int = 0
     type: Literal["FutDailyEMin"] = "FutDailyEMin"
@@ -83,59 +57,12 @@ class FutDailyEMin(FutDailyEM):
         return HandleNewFutDailyEMin()
 
 @dataclass(frozen=True)
-class HandleNewFutDailyEMin(HandleNewFutDailyEM):
+class HandleNewFutDailyEMin(HandleNewDailyEMin):
+    pass
 
-    def calc(
-        self,
-        event: Event,
-        obj: FutDailyEMin,
-        domain: Domain,
-        df: pl.DataFrame,
-    ) -> pl.DataFrame:
-        s = df.get_column(obj.field)
-        v = s.fill_null(0).to_numpy()
-        is_null = s.is_null().to_numpy()
-        res = calc(v, is_null, alpha=obj.calc_alpha())
-        return pl.DataFrame({
-            "mask": s,
-            obj.field: res
-        }).select(
-            pl.when(pl.col("mask").is_null())
-            .then(None)
-            .otherwise(obj.field)
-            .alias(obj.field)
-        )
-
-import numba as nb
-
-@nb.jit()
-def calc(
-    v: np.ndarray,
-    is_null: np.ndarray,
-    alpha: float,
-    # TODO: assert float?
-):
-    i: int = 0
-    n: int = len(v)
-    res = np.empty(n, dtype=v.dtype)
-    acc: float = 0
-    alpha_comp = 1 - alpha
-    while i < n:
-        if not is_null[i]:
-            vv = v[i]
-            if i == 0:
-                acc = vv
-            elif vv < acc:
-                acc = vv
-            else:
-                acc = (alpha_comp * acc) + (alpha * vv)
-            res[i] = acc
-        i += 1
-    return res
-    
 
 @dataclass(frozen=True)
-class FutDailyEMinDomain(FutDailyEMDomain):
+class FutDailyEMinDomain(FutDailyDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
@@ -169,16 +96,14 @@ class FutDailyEMinDomain(FutDailyEMDomain):
 
     @dataclass(frozen=True)
     class Root(
-        FutDailyEMDomain.Root,
+        FutDailyDomain.Root,
     ):
 
         version: int = 0
         type: Literal["FutDailyEMinDomain"] = "FutDailyEMinDomain"
 
-        # TODO: to override
 
         SUFFIX: ClassVar[str] = "emin"
-        # TODO: to override
 
     @dataclass(frozen=True)
     class object_parser(ObjectParser):

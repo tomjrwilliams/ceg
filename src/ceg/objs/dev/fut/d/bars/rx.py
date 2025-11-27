@@ -34,41 +34,20 @@ from ......apis import kv
 from ......engine import *
 
 from ...root import *
-from .ord import FutDailyOrdinal
+from .ord import FutDailyOrdinal, HasFutDailyOrdinalParent
 
+from ....calc import *
 
 #  ------------------
 
 
 @dataclass(frozen=True)
 class FutDailyRx(
-    UseChunkedValues,
-    UseRootConfigs,
+    HasFutDailyOrdinalParent,
+    DailyChunked,
 ):
-    """FutDailyRx(UseRootConfigs):\n
-    parent: FutDaily\n
-    symbol: str\n
-    field: str\n
-    adjust: str\n
-    fx: str | None = None # ccy to convert to\n
-    source: str | None = None\n
-    """
-    parent: FutDailyOrdinal | FutDailyRx | str
+    parent: FutDailyOrdinal | str
     # TODO: or contract
-
-    symbol: str
-    ident: str
-    field: str
-    adjust: str
-    source: str
-    fx: str | None = None  # ccy to convert to
-
-    # NOTE: chunk not in path, as doesnt change value
-    # only back-end layout
-    # NOTE: likewise for back-end type: np vs pq etc.
-
-    chunk: int = 32
-    # TODO: db?
 
     version: int = 0
     type: Literal["FutDailyRx"] = "FutDailyRx"
@@ -77,22 +56,12 @@ class FutDailyRx(
     class Snap(FutDaily.Snap):
         type: Literal["FutDailyRxSnap"] = "FutDailyRxSnap"
  
-    def get_parent(self, domain: Domain) -> FutDailyOrdinal:
-        return domain.get(self.parent, FutDailyOrdinal)
-
-    def root(self, domain: Domain) -> EngineRoot:
-        return self.get_parent(domain).root(domain)
-    
     def get_snap(
         self, domain: Domain
     ) -> FutDailyRx.Snap | None:
-        snap = self.snap_key_val(domain).get(self.path)
-        if snap is None:
-            return snap
-        assert isinstance(
-            snap, FutDailyRx.Snap
-        ), snap
-        return snap
+        return self.snap_key_val(domain).get(
+            self.path, FutDailyRx.Snap
+        )
     
     @classmethod
     def new(
@@ -120,33 +89,17 @@ class FutDailyRx(
                 source=source,
                 fx=fx,
             )
+        # assert ident is not None, parent
         return cls(
             path=parent.extend_path("rx"),
             parent=parent,
-            symbol=parent.symbol,
-            ident=str(ident),
-            field=parent.field,
-            adjust=parent.adjust,
-            source=parent.source,
-            fx=parent.fx,
         )
 
     def depends(self, domain: Domain) -> list[Dependency]:
-        # TODO: listen to ancestors?
-        return [
-            Dependency(
-                self.path,
-                self.path,
-                events=("ObjectNew",)
-            ),
-            Dependency(
-                self.path,
-                domain.root.path,
-                events=("DomainSync",)
-            ),
-            # TODO: self.ObjectChange
-            # for chunk and backend type / loc
-        ]
+        return (
+            self.depends_self(domain)
+            + self.depends_domain(domain)
+        )
 
     def handlers(self, event: Event, domain: Domain) -> list[Handler]:
         res: list[Handler] = []
@@ -173,75 +126,42 @@ class HandleUpdateFutDailyRx(Handler):
         # TODO:
         # check latest update, if today, skip
         # check new data available
-        # if after snap.last, get and append
+        # if after snap.last, Wget and append
         return
 
 @dataclass(frozen=True)
-class HandleNewFutDailyRx(Handler):
-    def handle(
+class HandleNewFutDailyRx(
+    HandleNewChunkedGivenPlSeries,
+    HandleNewDailyChunkedFromChunkedParent,
+):
+    
+    def calc_df(
         self,
+        df: pl.DataFrame,
         event: ObjectNew,
         obj: FutDailyRx,
         domain: Domain,
-    ):
-        snap = obj.get_snap(domain)
-
-        if snap is not None:
-            # NOTE: should already be handled?
-            return None
-
+    ) -> pl.DataFrame:
+        
         parent = obj.get_parent(domain)
 
-        parent_snap = parent.get_snap(domain)
-        assert parent_snap is not None, parent_snap
-
-        v = (
-            parent.value_key_val(domain)
-            .get(parent.path, kv.BODY)
-        )
-
-        # TODO: if numpy we assume dense, use snap to infer dates
-
-        assert isinstance(v, ValuePlSeries), v
-        df = pl.DataFrame({obj.field: v.ser})
-
         e = (
-            pl.col(obj.field).forward_fill().pct_change()
-            if parent.adjust == "pct"
-            else pl.col(obj.field).forward_fill().diff()
-            if parent.adjust == "abs"
+            pl.col(VALUE).forward_fill().pct_change()
+            if parent.tags.adjust == "pct"
+            else pl.col(VALUE).forward_fill().diff()
+            if parent.tags.adjust == "abs"
             else None
         )
-        assert e is not None, parent.adjust
+        assert e is not None, parent.tags.adjust
 
         df = df.with_columns(
-            pl.when(pl.col(obj.field).is_null())
+            pl.when(pl.col(VALUE).is_null())
             .then(None)
             .otherwise(e)
-            .alias(obj.field)
+            .alias(VALUE)
         )
 
-        e, v = handlers.set_value_chunk_from_df(
-            obj,
-            domain,
-            df,
-            obj.field,
-            chunk=kv.BODY,
-            publish=True,
-        )
-
-        snap = (
-            obj.snap_key_val(domain)
-            .set(obj.path, FutDailyRx.Snap(
-                event,
-                obj.path,
-                dt.datetime.now(),
-                parent_snap.first,
-                parent_snap.last,
-            ))
-        )
-
-        return e
+        return df
 
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
@@ -251,7 +171,33 @@ class HandleNewFutDailyRx(Handler):
 #  ------------------
 
 @dataclass(frozen=True)
-class FutDailyRxDomain(Domain):
+class FutDailyDomain(FutDailyDomainBase):
+
+    @dataclass(frozen=True)
+    class object_parser(ObjectParser):
+        obj: (
+            EngineRoot
+            | Fut
+            | FutDaily
+            | FutDaily
+            | FutDailyOrdinal
+            | FutDailyRx
+        )
+
+    @dataclass(frozen=True)
+    class snap_parser(SnapParser):
+        snap: (
+            FutDailyOrdinal.Snap
+            | FutDailyRx.Snap
+        )
+
+    @classmethod
+    def empty(cls, engine: EngineRoot):
+        root = cls.Root.new(engine)
+        return cls(root)
+
+@dataclass(frozen=True)
+class FutDailyRxDomain(FutDailyDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
@@ -284,54 +230,12 @@ class FutDailyRxDomain(Domain):
     """
 
     @dataclass(frozen=True)
-    class Root(
-        UseRootConfigs,
-    ):
+    class Root(FutDailyDomain.Root):
         parent: FutDaily | str
         version: int = 0
         type: Literal["FutDailyRxDomain"] = "FutDailyRxDomain"
 
-        def get_parent(self, domain: Domain) -> FutDaily:
-            return domain.get(self.parent, FutDaily)
-
-        def root(self, domain: Domain) -> EngineRoot:
-            return self.get_parent(domain).root(domain)
-
-        @classmethod
-        def new(
-            cls,
-            parent: FutDaily | EngineRoot,
-        ):
-            if isinstance(parent, EngineRoot):
-                parent = FutDaily.new(parent)
-            return cls(
-                path = parent.extend_path("rx"),
-                parent=parent
-            )
-
-    @dataclass(frozen=True)
-    class object_parser(ObjectParser):
-        obj: (
-            EngineRoot
-            | Fut
-            | FutDaily
-            | FutDaily
-            | FutDailyOrdinal
-            | FutDailyRx
-            | FutDailyRx
-        )
-
-    @dataclass(frozen=True)
-    class snap_parser(SnapParser):
-        snap: (
-            FutDailyOrdinal.Snap
-            | FutDailyRx.Snap
-            | FutDailyRx.Snap
-        )
-
-    @dataclass(frozen=True)
-    class value_parser(ValueParser):
-        value: ValueNumPy | ValuePlSeries
+        SUFFIX: ClassVar[str] = "rx"
 
     @classmethod
     def empty(cls, engine: EngineRoot):
@@ -354,7 +258,23 @@ class FutDailyRxDomain(Domain):
             self = self.with_obj(obj)
         return cast(FutDailyRxDomain, self)
     
+@dataclass(frozen=True)
+class HasFutDailyGrandParent(Object):
+    parent: FutDailyOrdinal | FutDailyRx | str
+
+    def get_parent(self, domain: Domain) -> FutDailyOrdinal | FutDailyRx:
+        return domain.get(self.parent, FutDailyOrdinal | FutDailyRx)
+
 #  ------------------
 
 # TODO: if __name__ == __main__:
 # run domain by name
+
+__all__ = [
+    "FutDailyRx",
+    "HandleUpdateFutDailyRx",
+    "HandleNewFutDailyRx",
+    "FutDailyDomain",
+    "FutDailyRxDomain",
+    "HasFutDailyGrandParent",
+]

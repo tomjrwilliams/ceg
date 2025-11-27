@@ -133,9 +133,8 @@ class Folders:
 
 
 class SuffixMap(NamedTuple):
-    file: frozendict[str, str]
+    file: frozendict[str, str | None]
     folder: frozendict[str, str]
-
 
 
 suffix_maps = cast(
@@ -158,7 +157,7 @@ suffix_maps = cast(
                 file=frozendict(
                     pct="continuous_ratio_adjusted",
                     abs="continuous_absolute_adjusted",
-                    raw="continuous_unadjusted",
+                    raw=None,
                     default="pct",
                 ),
                 folder=frozendict(

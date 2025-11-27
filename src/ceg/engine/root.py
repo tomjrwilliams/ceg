@@ -72,9 +72,26 @@ class EngineStorage:
         return config
 
 @dataclass(frozen=True)
-class UseRootConfigs(Object):
+class ParentHasRoot(Object):
 
     def root(self, domain: Domain) -> EngineRoot: ...
+
+@dataclass(frozen=True)
+class UseRootConfigs(Object):
+
+    def get_parent(
+        self, domain: Domain
+    ) -> ParentHasRoot:
+        assert self.parent is not None, self
+        return cast(
+            ParentHasRoot,
+            domain.get(self.parent, t=Object)
+        )
+
+    def root(self, domain: Domain) -> EngineRoot:
+        if isinstance(self, EngineRoot):
+            return self
+        return self.get_parent(domain).root(domain)
 
     def event_queue(self, domain: Domain) -> EventQueue: 
         storage = self.root(domain).storage

@@ -560,8 +560,8 @@ def create_table(
             cols = cur.execute(
                 f"; PRAGMA table_info({table})"
             ).fetchall()
-        except:
-            raise ValueError(s)
+        except Exception as e:
+            raise ValueError((e, table, s))
     cols = parse_table_info(cols)
     if len(cols) >= len(schema):
         return {k: c for k, c in cols.items() if k in schema}
@@ -622,7 +622,9 @@ def format_values(
         )
     return tuple(
         (
-            format.get(k, TYPE_FORMAT.get(type(v), identity))(v)
+            format.get( # type: ignore
+                k, TYPE_FORMAT.get(type(v), identity)
+            )(v) 
             for k, v in d.items()
         )
     )

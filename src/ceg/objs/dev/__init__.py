@@ -1,4 +1,9 @@
+
+from . import calc
 from . import fut
+
+from . import pfo
+from . import strat
 
 # maybe organise d001_{...}, d002_{...} etc.
 

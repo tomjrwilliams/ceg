@@ -3,7 +3,10 @@ from __future__ import annotations
 from typing import (
     TYPE_CHECKING,
 )
-from .m import FutDailyM, FutDailyMDomain, FutDailyOrdinal, EngineRoot
+
+from ....calc import *
+from ..bars import *
+from .m import *
 
 if TYPE_CHECKING:
     from dataclasses import dataclass
@@ -11,28 +14,7 @@ else:
     from pydantic.dataclasses import dataclass
 
 @dataclass(frozen=True)
-class FutDailyMEP(FutDailyM):
-    pspan: float | None = None
-    palpha: float | None = None
-
-    @classmethod
-    def params_suffix(
-        cls,
-        window: int | None = None,
-        palpha: float | None = None,
-        pspan: float | None = None,
-    ):
-        if window is None:
-            params = "ex"
-        else:
-            params = str(window)
-        if palpha is not None:
-            params += f"-{palpha}"
-        elif pspan is not None:
-            params += f"-{pspan}"
-        else:
-            raise ValueError(cls)
-        return f"{cls.SUFFIX}-" + params
+class FutDailyMEP(DailyChunkedMEP):
 
     @classmethod
     def new(
@@ -71,17 +53,19 @@ class FutDailyMEP(FutDailyM):
                 pspan=pspan,
             )),
             parent=parent,
-            symbol=parent.symbol,
-            ident=str(ident),
-            field=parent.field,
-            adjust=parent.adjust,
-            source=parent.source,
-            fx=parent.fx,
-            window=window,
-            palpha=palpha,
-            pspan=pspan,
+            # tags=FutDailyTags(
+            #     symbol=parent.tags.symbol,
+            #     ident=parent.tags.ident,
+            #     field=parent.tags.field,
+            #     adjust=parent.tags.adjust,
+            #     source=parent.tags.source,
+            #     fx=parent.tags.fx,
+            # ),
+            params=DailyChunkedMEPParams(
+                window=window,
+                palpha=palpha,
+                pspan=pspan,
+            ),
         )
 
-@dataclass(frozen=True)
-class FutDailyMEPDomain(FutDailyMDomain):
-    pass
+__all__ = ["FutDailyMEP"]

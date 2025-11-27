@@ -9,13 +9,17 @@ from typing import (
     Callable,
     ParamSpec,
     Any,
+    Union,
     overload,
     cast,
+    get_type_hints,
+    get_args,
+    get_origin,
     final,
 )
 import logging
 import functools
-from functools import partial
+from functools import partial, lru_cache
 
 if TYPE_CHECKING:
     from dataclasses import dataclass
@@ -148,10 +152,10 @@ class Object:
         return self
     
     def log_repr(self):
-        parent = self.parent
-        if isinstance(parent, Object):
-            parent = parent.path
-        return repr(replace(self, parent=parent))
+        return self.alias_parents()
+
+    def alias_parents(self):
+        return alias_parents(self)
 
     def extend_path(self, s: str) -> str:
         return f"{self.path}-{s}"
@@ -432,28 +436,40 @@ class Domain:
         if t is None:
             assert isinstance(obj, Object), obj
             return obj
-        assert isinstance(obj, t)
+        assert isinstance(obj, t), (obj, t)
         return obj
+    
+    def with_objs(self, *obj: Object) -> Domain:
+        for o in obj:
+            self = self.with_obj(o)
+        return self
 
     def with_obj(self, obj: Object) -> Domain:
         # TODO: proper frozendict subtpye -> replace with set rather than dict spread
-        obj = obj.check()
+        if isinstance(obj.parent, Object):
+            if not obj.parent.path in self.objects:
+                self = self.with_obj(obj.parent)
+        obj = obj.check().alias_parents()
+        if obj.path in self.objects:
+            return self
         assert obj.path not in self.objects, obj.path
         objects={
             **self.objects,
             obj.path: obj
         }
         depends = self.depends
-        for dep in obj.depends(self):
-            assert dep.obj == obj.path
-            obj_peers = depends.get(dep.depends, {})
-            depends = {
-                **depends,
-                dep.depends: {
-                    **obj_peers,
-                    obj.path: dep
+        obj_depends = obj.depends(self)
+        if obj_depends is not None:
+            for dep in obj_depends:
+                assert dep.obj == obj.path
+                obj_peers = depends.get(dep.depends, {})
+                depends = {
+                    **depends,
+                    dep.depends: {
+                        **obj_peers,
+                        obj.path: dep
+                    }
                 }
-            }
         return replace(
             self, objects=objects, depends=depends
         )
@@ -725,7 +741,93 @@ class DefaultEventParser(EventParser):
         | ValuePrepend
     )
     
+@dataclass(frozen=True)
+class DependsSelf(Object):
+    def depends_self(self, domain: Domain) -> list[Dependency]: ...
+
+@dataclass(frozen=True)
+class DependsDomain(Object):
+    def depends_self(self, domain: Domain) -> list[Dependency]: ...
+    
+@dataclass(frozen=True)
+class DependsSelfNew(Object):
+        
+    def depends_self(self, domain: Domain) -> list[Dependency]:
+        # TODO: listen to ancestors?
+        
+        # TODO: self.ObjectChange
+        # for chunk and backend type / loc
+
+        return [
+            Dependency(
+                self.path,
+                self.path,
+                events=("ObjectNew",)
+            )
+        ]
+    
+@dataclass(frozen=True)
+class DependsDomainSync(Object):
+    def depends_domain(self, domain: Domain) -> list[Dependency]:
+        return [
+            Dependency(
+                self.path,
+                domain.root.path,
+                events=("DomainSync",)
+            ),
+        ]
+
+def is_obj_class(t: Type[Any]):
+    return t is Object or issubclass(t, Object)
+
+def is_obj_hint(hint: Any):
+    if isinstance(hint, type) and is_obj_class(hint):
+        return True
+    elif get_origin(hint) is Union:
+        return any([
+            is_obj_hint(h) for h in get_args(hint)
+        ])
+    else:
+        return False
+
+@lru_cache(maxsize=512)
+def obj_type_hints(t: Type[Object]):
+    hints = get_type_hints(t)
+    return hints, {
+        k: hint for k, hint in hints.items()
+        # if is_obj_hint(hint)
+    }
+
+def obj_to_alias(v: Any):
+    # TODO: wrap in type v if subclass of container?
+    if isinstance(v, Object):
+        return v.path
+    elif isinstance(v, list):
+        return [obj_to_alias(vv) for vv in v]
+    elif isinstance(v, tuple):
+        return tuple((obj_to_alias(vv) for vv in v))
+    elif isinstance(v, dict):
+        return {
+            obj_to_alias(k): obj_to_alias(vv)
+            for k, vv in v.items()
+        }
+    elif isinstance(v, set):
+        return set((obj_to_alias(vv) for vv in v))
+    # elif isinstance(v, frozendict): ...
+    else:
+        return v
+
+def alias_parents(obj: Object):
+    hints, obj_hints = obj_type_hints(type(obj))
+    assert "parent" in obj_hints, (obj, hints, obj_hints)
+    aliases = {
+        k: obj_to_alias(getattr(obj, k))
+        for k, _ in obj_hints.items()
+    }
+    return replace(obj, **aliases)
+
 __all__ = [
+    "O",
     "Handler",
     "FieldDiff",
     "ObjectDiff",
@@ -733,6 +835,7 @@ __all__ = [
     "Object",
     "ObjectKeyVal",
     "ObjectKeyValSQLite",
+    "alias_parents",
     #
     "Domain",
     "DomainSync",
@@ -742,4 +845,9 @@ __all__ = [
     "ValueAppend",
     "ValuePrepend",
     "DefaultEventParser",
+    #
+    "DependsSelf",
+    "DependsDomain",
+    "DependsSelfNew",
+    "DependsDomainSync",
 ]

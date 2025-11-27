@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import (
     TYPE_CHECKING,
 )
-from .m import FutDailyM, FutDailyMDomain, HandleNewFutDailyM
+from .m import FutDailyM
 
 if TYPE_CHECKING:
     from dataclasses import dataclass
@@ -14,10 +14,4 @@ else:
 class FutDailyMD(FutDailyM):
     pass
 
-@dataclass(frozen=True)
-class FutDailyMDDomain(FutDailyMDomain):
-    pass
-
-@dataclass(frozen=True)
-class HandleNewFutDailyMD(HandleNewFutDailyM):
-    pass
+__all__ = ["FutDailyMD"]

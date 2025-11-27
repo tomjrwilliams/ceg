@@ -37,36 +37,10 @@ from ...root import *
 from ..bars import *
 from ..calc import *
 
+from ....calc import *
+
 @dataclass(frozen=True)
 class FutDailyKurt(FutDailyM):
-    """FutDailyKurt(UseRootConfigs):\n
-    parent: FutDaily\n
-    symbol: str\n
-    field: str\n
-    adjust: str\n
-    fx: str | None = None # ccy to convert to\n
-    source: str | None = None\n
-    """
-    parent: FutDailyOrdinal | FutDailyRx | str
-    # TODO: or contract
-    # TODO: or rx thereof
-
-    symbol: str
-    ident: str
-    field: str
-    adjust: str
-    source: str
-    fx: str | None = None  # ccy to convert to
-
-    window: int | None = None
-
-    # NOTE: chunk not in path, as doesnt change value
-    # only back-end layout
-    # NOTE: likewise for back-end type: np vs pq etc.
-
-    chunk: int = 32
-    # TODO: db?
-
     version: int = 0
     type: Literal["FutDailyKurt"] = "FutDailyKurt"
 
@@ -82,34 +56,11 @@ class FutDailyKurt(FutDailyM):
         return HandleNewFutDailyKurt()
 
 @dataclass(frozen=True)
-class HandleNewFutDailyKurt(HandleNewFutDailyM):
-
-    def calc(
-        self,
-        event: Event,
-        obj: FutDailyKurt,
-        domain: Domain,
-        df: pl.DataFrame,
-    ) -> pl.DataFrame:
-        
-        e = (
-            pl.col(obj.field).rolling_kurtosis(
-                len(df) if obj.window is None else obj.window,
-                min_samples=1, # TODO: or more?
-            )
-        )
-
-        df = df.with_columns(
-            pl.when(pl.col(obj.field).is_null())
-            .then(None)
-            .otherwise(e)
-            .alias(obj.field)
-        )
-        return df
-    
+class HandleNewFutDailyKurt(HandleNewDailyKurt):
+    pass
 
 @dataclass(frozen=True)
-class FutDailyKurtDomain(FutDailyMDomain):
+class FutDailyKurtDomain(FutDailyDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyRx.new(
@@ -143,36 +94,10 @@ class FutDailyKurtDomain(FutDailyMDomain):
 
     @dataclass(frozen=True)
     class Root(
-        FutDailyMDomain.Root,
+        FutDailyDomain.Root,
     ):
 
         version: int = 0
         type: Literal["FutDailyKurtDomain"] = "FutDailyKurtDomain"
 
-        # TODO: to override
-
         SUFFIX: ClassVar[str] = "kurt"
-        # TODO: to override
-
-    @dataclass(frozen=True)
-    class object_parser(ObjectParser):
-        obj: (
-            EngineRoot
-            | Fut
-            | FutDaily
-            | FutDaily
-            | FutDailyOrdinal
-            | FutDailyRx
-            | FutDailyKurt
-        )
-
-    @dataclass(frozen=True)
-    class snap_parser(SnapParser):
-        snap: (
-            FutDailyOrdinal.Snap
-            | FutDailyRx.Snap
-            | FutDailyKurt.Snap
-        )
-
-# TODO: if __name__ == __main__:
-# run domain by name

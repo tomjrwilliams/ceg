@@ -1,5 +1,5 @@
+from . import academic
 from . import dev
-from . import explorer
 
 # app has the same dev (projects) and prod distinction as objs
 

@@ -37,37 +37,10 @@ from ...root import *
 from ..bars import *
 from ..calc import *
 
+from ....calc import *
+
 @dataclass(frozen=True)
 class FutDailyMid(FutDailyM):
-    """FutDailyMid(UseRootConfigs):\n
-    parent: FutDaily\n
-    symbol: str\n
-    field: str\n
-    adjust: str\n
-    fx: str | None = None # ccy to convert to\n
-    source: str | None = None\n
-    """
-    parent: FutDailyOrdinal | FutDailyRx | str
-    # TODO: or contract
-    # TODO: or rx thereof
-
-    symbol: str
-    ident: str
-    field: str
-    adjust: str
-    source: str
-    fx: str | None = None  # ccy to convert to
-
-    window: int | None = None
-    width: float | None = None
-
-    # NOTE: chunk not in path, as doesnt change value
-    # only back-end layout
-    # NOTE: likewise for back-end type: np vs pq etc.
-
-    chunk: int = 32
-    # TODO: db?
-
     version: int = 0
     type: Literal["FutDailyMid"] = "FutDailyMid"
 
@@ -82,55 +55,69 @@ class FutDailyMid(FutDailyM):
     ) -> HandleNewFutDailyMid:
         return HandleNewFutDailyMid()
 
-@dataclass(frozen=True)
-class HandleNewFutDailyMid(HandleNewFutDailyM):
-
-    def calc(
-        self,
-        event: Event,
-        obj: FutDailyMid,
-        domain: Domain,
-        df: pl.DataFrame,
-    ) -> pl.DataFrame:
-        
-        e = pl.col(obj.field)
-        u = (
-            e.rolling_max(
-                len(df) if obj.window is None else obj.window,
-                min_samples=1, # TODO: or more?
-            )
-            if obj.width is None
-            else e.rolling_quantile(
-                0.5 + obj.width,
-                window_size=len(df) if obj.window is None else obj.window,
-                min_samples=1, # TODO: or more?
-            )
+    @classmethod
+    def params_suffix(
+        cls,
+        window: int | None = None,
+        width: float | None = None,
+    ):
+        if window is None:
+            params = "ex"
+        else:
+            params = str(window)
+        return f"{cls.SUFFIX}-" + params + (
+            ""
+            if width is None
+            else f"-{width}"
         )
-        l = (
-            e.rolling_min(
-                len(df) if obj.window is None else obj.window,
-                min_samples=1, # TODO: or more?
-            )
-            if obj.width is None
-            else e.rolling_quantile(
-                0.5 - obj.width,
-                window_size=len(df) if obj.window is None else obj.window,
-                min_samples=1, # TODO: or more?
-            )
-        )
-        e = (u + l) / 2
-
-        df = df.with_columns(
-            pl.when(pl.col(obj.field).is_null())
-            .then(None)
-            .otherwise(e)
-            .alias(obj.field)
-        )
-        return df
     
+    @classmethod
+    def new(
+        cls,
+        parent: FutDailyOrdinal | FutDailyRx | EngineRoot,
+        symbol: str | None = None,
+        ident: int | str | None = None,
+        field: str | None = None,
+        adjust: str | None = None,
+        # NOTE: just for contracts?
+        source: str | None = None,
+        fx: str | None = None,
+        # TODO: expect, to decide on ordinal
+        # --
+        window: int | None = None,
+        width: float | None = None,
+    ):
+        if isinstance(parent, EngineRoot):
+            assert isinstance(symbol, str), symbol
+            if ident is not None:
+                assert isinstance(ident, int), ident
+            parent = FutDailyOrdinal.new(
+                parent,
+                symbol=symbol,
+                ident=ident,
+                field=field,
+                adjust=adjust,
+                source=source,
+                fx=fx,
+            )
+        return cls(
+            path=parent.extend_path(cls.params_suffix(
+                window=window,
+                width=width,
+            )),
+            parent=parent,
+            params=DailyMidParams(
+                window=window,
+                width=width,
+            ),
+        )
+    
+@dataclass(frozen=True)
+class HandleNewFutDailyMid(HandleNewDailyMid):
+    pass
 
 @dataclass(frozen=True)
-class FutDailyMidDomain(FutDailyMDomain):
+class FutDailyMidDomain(FutDailyDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
@@ -164,16 +151,14 @@ class FutDailyMidDomain(FutDailyMDomain):
 
     @dataclass(frozen=True)
     class Root(
-        FutDailyMDomain.Root,
+        FutDailyDomain.Root,
     ):
 
         version: int = 0
         type: Literal["FutDailyMidDomain"] = "FutDailyMidDomain"
 
-        # TODO: to override
 
         SUFFIX: ClassVar[str] = "mid"
-        # TODO: to override
 
     @dataclass(frozen=True)
     class object_parser(ObjectParser):

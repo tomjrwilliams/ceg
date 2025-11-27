@@ -134,11 +134,26 @@ class KeyVal(
 
     # NOTE: if on_update is none, cannot update
 
+    @overload
     def get(
         self,
         key: KeyO,
+        t: None=None,
         # TODO: default value if not found
-    ) -> ValO | None:
+    ) -> ValO | None: ...
+    @overload
+    def get(
+        self,
+        key: KeyO,
+        t: Type[T],
+        # TODO: default value if not found
+    ) -> T | None: ...
+    def get(
+        self,
+        key: KeyO,
+        t: Type[T] | None = None,
+        # TODO: default value if not found
+    ) -> ValO | T | None:
         key_i = self.check_type_key_i(
             self.encode_key(self.check_type_key_o(key))
         )
@@ -150,6 +165,8 @@ class KeyVal(
                 key, self.check_type_val_i(val_i)
             )
         )
+        if t is not None:
+            assert isinstance(val_o, t), (val_o, t)
         return val_o
 
     def iget(
@@ -169,12 +186,32 @@ class KeyVal(
             ))
         )
 
+    @overload
     def set(
         self,
         key: KeyO,
         val: ValO,
-    ) -> ValO:
+        t: None = None,
+    ) -> ValO: ...
+
+    @overload
+    def set(
+        self,
+        key: KeyO,
+        val: ValO,
+        t: Type[T],
+    ) -> T: ...
+
+    def set(
+        self,
+        key: KeyO,
+        val: ValO,
+        t: Type[T] | None = None,
+    ) -> ValO | T:
         _, v = self.iset(key, val)
+        if t is not None:
+            assert isinstance(v, t), (v, t)
+            return v
         return v
 
     def iset(

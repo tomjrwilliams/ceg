@@ -1,50 +1,49 @@
+
 from __future__ import annotations
+import os
 from typing import (
     TYPE_CHECKING,
+    Type,
+    TypeVar,
+    ClassVar,
+    Literal,
+    Protocol,
+    overload,
+    cast,
+    final,
 )
-from ...... import apis
+import datetime
+import datetime as dt
 
-from .em import FutDailyEM, FutDailyEMDomain, FutDailyOrdinal, EngineRoot
+import functools
+from dataclasses import replace
 
 if TYPE_CHECKING:
     from dataclasses import dataclass
 else:
     from pydantic.dataclasses import dataclass
 
-@dataclass(frozen=True)
-class FutDailyEMEP(FutDailyEM):
-    pspan: float | None = None
-    palpha: float | None = None
+from frozendict import frozendict
 
-    @classmethod
-    def params_suffix(
-        cls,
-        span: float | None = None,
-        alpha: float | None = None,
-        palpha: float | None = None,
-        pspan: float | None = None,
-    ):
-        i = apis.t.only_index_not_none(
-            span, alpha, strict=True
-        )
-        if i == 0:
-            assert span is not None, span
-            assert span >= 1, span
-            params = f"{span}"
-        elif i == 1:
-            assert alpha is not None, alpha
-            assert 0 < alpha < 1, alpha
-            params = f"{alpha}"
-        else:
-            raise ValueError((span, alpha))
-        params = f"{cls.SUFFIX}-" + params
-        if palpha is not None:
-            params += f"-{palpha}"
-        elif pspan is not None:
-            params += f"-{pspan}"
-        else:
-            raise ValueError(cls)
-        return params
+import numpy as np
+import polars as pl
+
+from ...... import apis
+from ......apis import t
+from ......apis import kv
+from ......engine import *
+
+from ....calc import *
+
+from ...root import *
+from ..bars import *
+
+from .em import *
+
+#  ------------------
+
+@dataclass(frozen=True)
+class FutDailyEMEP(DailyChunkedEMEP):
 
     @classmethod
     def new(
@@ -85,18 +84,21 @@ class FutDailyEMEP(FutDailyEM):
                 pspan=pspan,
             )),
             parent=parent,
-            symbol=parent.symbol,
-            ident=str(ident),
-            field=parent.field,
-            adjust=parent.adjust,
-            source=parent.source,
-            fx=parent.fx,
-            span=span,
-            alpha=alpha,
-            palpha=palpha,
-            pspan=pspan,
+            # tags=FutDailyTags(
+            #     symbol=parent.tags.symbol,
+            #     ident=parent.tags.ident,
+            #     field=parent.tags.field,
+            #     adjust=parent.tags.adjust,
+            #     source=parent.tags.source,
+            #     fx=parent.tags.fx,
+            # ),
+            params=DailyChunkedEMEPParams(
+                span=span,
+                alpha=alpha,
+                palpha=palpha,
+                pspan=pspan,
+            )
         )
 
-@dataclass(frozen=True)
-class FutDailyEMEPDomain(FutDailyEMDomain):
-    pass
+
+__all__ = ["FutDailyEMEP"]

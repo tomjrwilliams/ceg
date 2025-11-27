@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import (
     TYPE_CHECKING,
 )
-from .m import FutDailyM, FutDailyMDomain, FutDailyOrdinal, EngineRoot
+from ....calc import *
+from ..bars import *
+from .m import *
 
 if TYPE_CHECKING:
     from dataclasses import dataclass
@@ -11,24 +13,7 @@ else:
     from pydantic.dataclasses import dataclass
 
 @dataclass(frozen=True)
-class FutDailyMP(FutDailyM):
-    pwindow: int | None = None
-
-    @classmethod
-    def params_suffix(
-        cls,
-        window: int | None = None,
-        pwindow: int | None = None,
-    ):
-        if window is None:
-            params = "ex"
-        else:
-            params = str(window)
-        if pwindow is None:
-            params += "-ex"
-        else:
-            params += f"-{str(pwindow)}"
-        return f"{cls.SUFFIX}-" + params
+class FutDailyMP(DailyChunkedMP):
 
     @classmethod
     def new(
@@ -65,16 +50,18 @@ class FutDailyMP(FutDailyM):
                 pwindow=pwindow,
             )),
             parent=parent,
-            symbol=parent.symbol,
-            ident=str(ident),
-            field=parent.field,
-            adjust=parent.adjust,
-            source=parent.source,
-            fx=parent.fx,
-            window=window,
-            pwindow=pwindow,
+            # tags=FutDailyTags(
+            #     symbol=parent.tags.symbol,
+            #     ident=parent.tags.ident,
+            #     field=parent.tags.field,
+            #     adjust=parent.tags.adjust,
+            #     source=parent.tags.source,
+            #     fx=parent.tags.fx,
+            # ),
+            params=DailyChunkedMPParams(
+                window=window,
+                pwindow=pwindow,
+            )
         )
-
-@dataclass(frozen=True)
-class FutDailyMPDomain(FutDailyMDomain):
-    pass
+    
+__all__ = ["FutDailyMP"]

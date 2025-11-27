@@ -5,7 +5,9 @@ from typing import (
 )
 from ...... import apis
 
-from .em import FutDailyEM, FutDailyEMDomain, FutDailyOrdinal, EngineRoot
+from ....calc import *
+from ..bars import *
+from .em import *
 
 if TYPE_CHECKING:
     from dataclasses import dataclass
@@ -13,35 +15,7 @@ else:
     from pydantic.dataclasses import dataclass
 
 @dataclass(frozen=True)
-class FutDailyEMP(FutDailyEM):
-    pwindow: int | None = None
-
-    @classmethod
-    def params_suffix(
-        cls,
-        span: float | None = None,
-        alpha: float | None = None,
-        pwindow: int | None = None,
-    ):
-        i = apis.t.only_index_not_none(
-            span, alpha, strict=True
-        )
-        if i == 0:
-            assert span is not None, span
-            assert span >= 1, span
-            params = f"{span}"
-        elif i == 1:
-            assert alpha is not None, alpha
-            assert 0 < alpha < 1, alpha
-            params = f"{alpha}"
-        else:
-            raise ValueError((span, alpha))
-        params = f"{cls.SUFFIX}-" + params
-        if pwindow is None:
-            params += "-ex"
-        else:
-            params += f"-{str(pwindow)}"
-        return params
+class FutDailyEMP(DailyChunkedEMP):
 
     @classmethod
     def new(
@@ -80,17 +54,21 @@ class FutDailyEMP(FutDailyEM):
                 pwindow=pwindow,
             )),
             parent=parent,
-            symbol=parent.symbol,
-            ident=str(ident),
-            field=parent.field,
-            adjust=parent.adjust,
-            source=parent.source,
-            fx=parent.fx,
-            span=span,
-            alpha=alpha,
-            pwindow=pwindow,
+            # tags=FutDailyTags(
+            #     symbol=parent.tags.symbol,
+            #     ident=parent.tags.ident,
+            #     field=parent.tags.field,
+            #     adjust=parent.tags.adjust,
+            #     source=parent.tags.source,
+            #     fx=parent.tags.fx,
+            # ),
+            params=DailyChunkedEMPParams(
+                span=span,
+                alpha=alpha,
+                pwindow=pwindow,
+            ),
         )
 
-@dataclass(frozen=True)
-class FutDailyEMPDomain(FutDailyEMDomain):
-    pass
+__all__ = [
+    "FutDailyEMP"
+]

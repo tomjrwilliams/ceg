@@ -29,7 +29,7 @@ from ..core import *
 from ..dates import *
 from ..dfs import *
 from .....apis import t
-from . import perf
+from .....apis import perf
 
 @dataclass(frozen=True)
 class ExploreDailyComponent(Component):
@@ -384,108 +384,20 @@ class DailyBackTestTableRx(DailyBackTest):
             # should identify if sig and scale
             # or just scale
 
+            # and return no sig as well if relevant
+
             # ie. we optionally plot a separate variant with just scale
             # only signal flag (as always scale)
-
-            k_pos, k_rx = f"{k}_pos", f"{k}_rx"
-            for row_k, row_sig in {
-                # k: False,
-                k_rx: True,
-            }.items():
-                (
-                    r_mu,
-                    r_sd,
-                    r_rms,
-                    r_skew,
-                    r_shrp,
-                    r_sort,
-                    r_dd,
-                    r_calm,
-                    r_pos_mu,
-                    r_pos_sd,
-                    r_pos_skew,
-                ) = bt_df.select(
-                    perf.rx_mu(rx=row_k)
-                    .mul(252)
-                    .alias("mu")
-                    .item(),
-                    perf.rx_vol(rx=row_k)
-                    .mul(16)
-                    .alias("sd")
-                    .item(),
-                    perf.rx_rms(rx=row_k)
-                    .mul(16)
-                    .alias("rms")
-                    .item(),
-                    pl.col(row_k)
-                    .skew()
-                    .alias("skew")
-                    .item(),
-                    perf.rx_sharpe(rx=row_k)
-                    .alias("shrp")
-                    .item(),
-                    perf.rx_sharpe(rx=row_k, threshold=0)
-                    .alias("sort")
-                    .item(),
-                    perf.rx_dd_max(rx=row_k)
-                    .alias("dd")
-                    .item(),
-                    perf.rx_calmar(rx=row_k)
-                    .alias("calm")
-                    .item(),
-                    *([
-                        pl.col(k_pos)
-                        .mean()
-                        .alias("pos_mu")
-                        .item(),
-                        pl.col(k_pos)
-                        .std()
-                        .alias("pos_sd")
-                        .item(),
-                        pl.col(k_pos)
-                        .skew()
-                        .alias("pos_skew")
-                        .item(),
-                    ] if row_sig else [
-                        pl.lit(1.).alias("pos_mu").item(),
-                        pl.lit(0.).alias("pos_sd").item(),
-                        pl.lit(0.).alias("pos_skew").item(),
-                    ])
-                ).row(0, named=False)
-
-                r = dict(
-                    key=k,
-                    sig=row_sig,
-                    mu = r_mu,
-                    sd = r_sd,
-                    rms = r_rms,
-                    skew=r_skew,
-                    shrp = r_shrp,
-                    sort = r_sort,
-                    dd=r_dd,
-                    calm = r_calm,
-                    pos_mu = r_pos_mu,
-                    pos_sd = r_pos_sd,
-                    pos_skew = r_pos_skew,
-                )
-                res.append(r)
+            r = perf.perf_row(
+                bt_df,
+                k=k,
+                sig=True,
+            )
+            res.append(r)
 
         st.table(pl.DataFrame(res))
 
         return self
-
-# TODO: dot syntax (or pipe, in place of dot so easier to parse decimals) that include custom funcs like sharpe, (rolling) etc. (eg. on rx series), for dynamic plotting
-
-# TODO: if many series, we also need a grouping key?
-# or use the alias: the alias groups together related series (into a cell), and then the group column indicates if rx or signal (for instance)
-
-# ie. the group then specifies which series to use for x vs y etc.
-
-# TODO: graph can take kwargs, k=v style, pass to the component to parse
-
-# eg. downsampling
-
-# where the backtest lagging (and optionally lagged scatter below) understands the downsampling
 
 # TODO: scatter blot, similar notion as the above
 
@@ -569,6 +481,7 @@ class ExploreDailyFromRows(
                 "label": 100,
                 "group": 100,
                 "params": 200,
+                # TODO: take this from caller
             }
         ).render()
 
@@ -586,11 +499,13 @@ class ExploreDailyFromRows(
                 self.partition: pl.Int32,
                 "type": pl.String,
                 "params": pl.String,
+                # TODO: take this from caller
             },
             widths = {
                 self.partition: 50,
                 "type": 200,
                 "params": 600,
+                # TODO: take this from caller
             }
         ).render()
 
@@ -613,11 +528,13 @@ class ExploreDailyFromRows(
         )
 
         for part, part_df in sorted(
-            rows.df.partition_by(
+            rows.df.filter(
+                pl.col(self.partition).is_not_null()
+            ).partition_by(
                 self.partition,
                 as_dict=True,
             ).items(),
-            key = lambda part_part_df: part_part_df[0]
+            key = lambda part_part_df: part_part_df[0] 
         ):
             
             config_df = graph_configs.get(part)

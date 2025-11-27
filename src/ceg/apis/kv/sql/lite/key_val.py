@@ -76,14 +76,17 @@ class SQLiteKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
         # TODO STRICT
 
         # TODO: chunk
-        t = sqlite.Table.new(
-            self.config.name,
-            primary_key="id",
-            key=self.type_key_i,
-            val=self.type_val_i,
-            # TODO: dict, col names
-            unique=("key",),
-        ).create(self.config.db)
+        try:
+            t = sqlite.Table.new(
+                self.config.name,
+                primary_key="id",
+                key=self.type_key_i,
+                val=self.type_val_i,
+                # TODO: dict, col names
+                unique=("key",),
+            ).create(self.config.db)
+        except:
+            raise ValueError(self)
 
         # TODO: composite pkey?
         # if the type_key_i is a tuple?
