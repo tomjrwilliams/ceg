@@ -36,8 +36,6 @@ from ......engine import *
 from ...root import *
 from .ord import FutDailyOrdinal, HasFutDailyOrdinalParent, BarDaily
 
-from ....calc import *
-
 #  ------------------
 
 

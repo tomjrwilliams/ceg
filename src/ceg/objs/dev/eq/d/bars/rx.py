@@ -38,8 +38,6 @@ from ...root import *
 from .etf import EqDailyEtf, HasEqDailyEtfParent
 from .stock import EqDailyStock, HasEqDailyStockParent
 
-from ....calc import *
-
 #  ------------------
 
 

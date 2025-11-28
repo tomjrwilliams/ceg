@@ -38,8 +38,6 @@ from ...root import *
 from ....bars import RX_ADJUSTMENTS
 from .px import IndexDailyPx, HasIndexDailyPxParent
 
-from ....calc import *
-
 #  ------------------
 
 

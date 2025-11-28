@@ -35,7 +35,6 @@ from ......engine import *
 
 from ....bars import BarDailyTags, BarDaily, FX
 from ...root import *
-from ....calc import *
 
 #  ------------------
 
