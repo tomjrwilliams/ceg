@@ -34,8 +34,10 @@ from .......apis import t
 from .......apis import kv
 from .......engine import *
 
+from ..prelude import *
 from ..base import *
 from ...base import *
+from ...handlers import *
 
 @dataclass(frozen=True)
 class BarDailyMax(BarDailyM):
@@ -117,3 +119,8 @@ class BarDailyMaxDomain(DailyChunkedDomain):
 
 # TODO: if __name__ == __main__:
 # run domain by name
+__all__ = [
+    "BarDailyMax",
+    "HandleNewBarDailyMax",
+    "BarDailyMaxDomain",
+]

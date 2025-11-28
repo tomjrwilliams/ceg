@@ -28,13 +28,13 @@ from frozendict import frozendict
 import numpy as np
 import polars as pl
 
+from ..... import apis
 from .....apis import t
 from .....apis import kv
 from .....engine import *
 
-from ...calc import bars
-from ... import fut
-
+from ...calc.d.bars.prelude import *
+from ...calc.d import bars
 from ...pfo import *
 
 #  ------------------
@@ -178,8 +178,8 @@ class StratMomEOscFut(Domain):
             EngineRoot
             | FutDailyOrdinal
             | FutDailyRx
-            | BarDailyEOsc
-            | BarDailyERms
+            | bars.BarDailyEOsc
+            | bars.BarDailyERms
             | PfolioDailyBt
             | PfolioDailyPos
             | PfolioDailyRx
@@ -190,8 +190,8 @@ class StratMomEOscFut(Domain):
         snap: (
             FutDailyOrdinal.Snap
             | FutDailyRx.Snap
-            | BarDailyEOsc.Snap
-            | BarDailyERms.Snap
+            | bars.BarDailyEOsc.Snap
+            | bars.BarDailyERms.Snap
             | PfolioDailyBt.Snap
             | PfolioDailyPos.Snap
             | PfolioDailyRx.Snap
@@ -216,7 +216,7 @@ class StratMomEOscFut(Domain):
         for bt in bts:
             symbol = bt.symbol
             px_adj = "pct" if bt.pct else "abs"
-            fut_px = fut.FutDailyOrdinal.new(
+            fut_px = FutDailyOrdinal.new(
                 eng,
                 symbol=symbol,
                 ident = 1,
@@ -224,7 +224,7 @@ class StratMomEOscFut(Domain):
                 adjust=px_adj,
                 source="frd"
             )
-            fut_rx = fut.FutDailyRx.new(
+            fut_rx = FutDailyRx.new(
                 eng,
                 symbol=symbol,
                 ident = 1,
@@ -235,7 +235,7 @@ class StratMomEOscFut(Domain):
             if isinstance(
                 bt.scale, EOscScaleNotionalParams
             ):
-                scale = fut.FutDailyOrdinal.new(
+                scale = FutDailyOrdinal.new(
                     eng,
                     symbol=symbol,
                     ident = 1,

@@ -33,13 +33,13 @@ from ......apis import t
 from ......apis import kv
 from ......engine import *
 
-from .base import *
-from .m import *
+from ..base import *
+from .em import *
 
 #  ------------------
 
 @dataclass(frozen=True)
-class HandleNewDailyDM(
+class HandleNewDailyDEM(
     HandleNewChunkedGivenPlSeries,
     HandleNewDailyChunkedFromChunkedParent,
 
@@ -49,77 +49,16 @@ class HandleNewDailyDM(
 #  ------------------
 
 @dataclass(frozen=True)
-class HandleNewDailyDMA(
-    HandleNewDailyDM,
-    HandleNewDailyMA,
+class HandleNewDailyDEMA(
+    HandleNewDailyDEM,
+    HandleNewDailyEMA
 ):
 
     def calc_expr(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
-        domain: Domain,
-    ) -> pl.Expr:
-        return pl.col(VALUE) - self._calc_expr(
-            df,
-            event,
-            obj,
-            domain,
-        )
-    
-@dataclass(frozen=True)
-class HandleNewDailyDKurt(
-    HandleNewDailyDM,
-    HandleNewDailyKurt,
-):
-
-    def calc_expr(
-        self,
-        df: pl.DataFrame,
-        event: ObjectNew,
-        obj: DailyChunkedM,
-        domain: Domain,
-    ) -> pl.Expr:
-        return pl.col(VALUE) - self._calc_expr(
-            df,
-            event,
-            obj,
-            domain,
-        )
-
-
-@dataclass(frozen=True)
-class HandleNewDailyDMax(
-    HandleNewDailyDM,
-    HandleNewDailyMax,
-):
-
-    def calc_expr(
-        self,
-        df: pl.DataFrame,
-        event: ObjectNew,
-        obj: DailyChunkedM,
-        domain: Domain,
-    ) -> pl.Expr:
-        return pl.col(VALUE) - self._calc_expr(
-            df,
-            event,
-            obj,
-            domain,
-        )    
-
-@dataclass(frozen=True)
-class HandleNewDailyDMed(
-    HandleNewDailyDM,
-    HandleNewDailyMed,
-):
-
-    def calc_expr(
-        self,
-        df: pl.DataFrame,
-        event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyChunkedEM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -130,18 +69,50 @@ class HandleNewDailyDMed(
         )
 
 @dataclass(frozen=True)
-class HandleNewDailyDMid(
-    HandleNewDailyDM,
-    HandleNewDailyMid,
+class HandleNewDailyDEMax(
+    HandleNewDailyDEM,
+    HandleNewDailyEMax
 ):
 
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedMid,
+        obj: DailyChunkedEM,
         domain: Domain,
     ) -> pl.DataFrame:
+        
+        df = df.with_columns(
+            pl.col(VALUE).alias("OLD")
+        )
+        df = self._calc_df(
+            df,
+            event,
+            obj,
+            domain,
+        )
+        e = pl.col("OLD") - pl.col(VALUE)
+        return df.with_columns(
+            pl.when(pl.col(VALUE).is_null())
+            .then(None)
+            .otherwise(e)
+            .alias(VALUE)
+        )
+
+@dataclass(frozen=True)
+class HandleNewDailyDEMid(
+    HandleNewDailyDEM,
+    HandleNewDailyEMid
+):
+
+    def calc_df(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyChunkedEM,
+        domain: Domain,
+    ) -> pl.DataFrame:
+        
         df = df.with_columns(
             pl.col(VALUE).alias("OLD")
         )
@@ -159,134 +130,17 @@ class HandleNewDailyDMid(
             .alias(VALUE)
         )
     
-
 @dataclass(frozen=True)
-class HandleNewDailyDMin(
-    HandleNewDailyDM,
-    HandleNewDailyMin,
-):
-
-    def calc_expr(
-        self,
-        df: pl.DataFrame,
-        event: ObjectNew,
-        obj: DailyChunkedM,
-        domain: Domain,
-    ) -> pl.Expr:
-        return pl.col(VALUE) - self._calc_expr(
-            df,
-            event,
-            obj,
-            domain,
-        )
-
-
-@dataclass(frozen=True)
-class HandleNewDailyDPLast(
-    HandleNewDailyDM,
-    HandleNewDailyPLast,
+class HandleNewDailyDEMin(
+    HandleNewDailyDEM,
+    HandleNewDailyEMin
 ):
 
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
-        domain: Domain,
-    ) -> pl.DataFrame:
-        df = df.with_columns(
-            pl.col(VALUE).alias("OLD")
-        )
-        df = self._calc_df(
-            df,
-            event,
-            obj,
-            domain,
-        )
-        e = pl.col("OLD") - pl.col(VALUE)
-        return df.with_columns(
-            pl.when(pl.col(VALUE).is_null())
-            .then(None)
-            .otherwise(e)
-            .alias(VALUE)
-        )
-    
-
-@dataclass(frozen=True)
-class HandleNewDailyDQile(
-    HandleNewDailyDM,
-    HandleNewDailyQile,
-):
-
-    def calc_expr(
-        self,
-        df: pl.DataFrame,
-        event: ObjectNew,
-        obj: DailyChunkedQile,
-        domain: Domain,
-    ) -> pl.Expr:
-        return pl.col(VALUE) - self._calc_expr(
-            df,
-            event,
-            obj,
-            domain,
-        )
-    
-
-@dataclass(frozen=True)
-class HandleNewDailyDRank(
-    HandleNewDailyDM,
-    HandleNewDailyRank,
-):
-
-    def calc_expr(
-        self,
-        df: pl.DataFrame,
-        event: ObjectNew,
-        obj: DailyChunkedM,
-        domain: Domain,
-    ) -> pl.Expr:
-        return pl.col(VALUE) - self._calc_expr(
-            df,
-            event,
-            obj,
-            domain,
-        )
-
-    
-@dataclass(frozen=True)
-class HandleNewDailyDRms(
-    HandleNewDailyDM,
-    HandleNewDailyRms,
-):
-
-    def calc_expr(
-        self,
-        df: pl.DataFrame,
-        event: ObjectNew,
-        obj: DailyChunkedM,
-        domain: Domain,
-    ) -> pl.Expr:
-        return pl.col(VALUE) - self._calc_expr(
-            df,
-            event,
-            obj,
-            domain,
-        )
-
-
-    
-@dataclass(frozen=True)
-class HandleNewDailyDRng(
-    HandleNewDailyDM,
-    HandleNewDailyRng,
-):
-
-    def calc_df(
-        self,
-        df: pl.DataFrame,
-        event: ObjectNew,
-        obj: DailyChunkedMRng,
+        obj: DailyChunkedEM,
         domain: Domain,
     ) -> pl.DataFrame:
         df = df.with_columns(
@@ -306,38 +160,49 @@ class HandleNewDailyDRng(
             .alias(VALUE)
         )
 
+
 @dataclass(frozen=True)
-class HandleNewDailyDSDev(
-    HandleNewDailyDM,
-    HandleNewDailySDev,
+class HandleNewDailyDEPLast(
+    HandleNewDailyDEM,
+    HandleNewDailyEPLast
 ):
 
-    def calc_expr(
+    def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyChunkedEM,
         domain: Domain,
-    ) -> pl.Expr:
-        return pl.col(VALUE) - self._calc_expr(
+    ) -> pl.DataFrame:
+        
+        df = df.with_columns(
+            pl.col(VALUE).alias("OLD")
+        )
+        df = self._calc_df(
             df,
             event,
             obj,
             domain,
         )
-
+        e = pl.col("OLD") - pl.col(VALUE)
+        return df.with_columns(
+            pl.when(pl.col(VALUE).is_null())
+            .then(None)
+            .otherwise(e)
+            .alias(VALUE)
+        )
     
 @dataclass(frozen=True)
-class HandleNewDailyDSkew(
-    HandleNewDailyDM,
-    HandleNewDailySkew,
+class HandleNewDailyDERms(
+    HandleNewDailyDEM,
+    HandleNewDailyERms
 ):
 
     def calc_expr(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyChunkedEM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -347,19 +212,49 @@ class HandleNewDailyDSkew(
             domain,
         )
 
-    
 
 @dataclass(frozen=True)
-class HandleNewDailyDVar(
-    HandleNewDailyDM,
-    HandleNewDailyVar,
+class HandleNewDailyDERng(
+    HandleNewDailyDEM,
+    HandleNewDailyERng
+):
+
+    def calc_df(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyChunkedEM,
+        domain: Domain,
+    ) -> pl.DataFrame:
+        
+        df = df.with_columns(
+            pl.col(VALUE).alias("OLD")
+        )
+        df = self._calc_df(
+            df,
+            event,
+            obj,
+            domain,
+        )
+        e = pl.col("OLD") - pl.col(VALUE)
+        return df.with_columns(
+            pl.when(pl.col(VALUE).is_null())
+            .then(None)
+            .otherwise(e)
+            .alias(VALUE)
+        )
+
+@dataclass(frozen=True)
+class HandleNewDailyDESDev(
+    HandleNewDailyDEM,
+    HandleNewDailyESDev
 ):
 
     def calc_expr(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyChunkedEM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -369,22 +264,35 @@ class HandleNewDailyDVar(
             domain,
         )
 
-#  ------------------
+@dataclass(frozen=True)
+class HandleNewDailyDEVar(
+    HandleNewDailyDEM,
+    HandleNewDailyEVar
+):
 
+    def calc_expr(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyChunkedEM,
+        domain: Domain,
+    ) -> pl.Expr:
+        return pl.col(VALUE) - self._calc_expr(
+            df,
+            event,
+            obj,
+            domain,
+        )
+    
 __all__ = [
-    "HandleNewDailyDM",
-    "HandleNewDailyDMA",
-    "HandleNewDailyDKurt",
-    "HandleNewDailyDMax",
-    "HandleNewDailyDMed",
-    "HandleNewDailyDMid",
-    "HandleNewDailyDMin",
-    "HandleNewDailyDPLast",
-    "HandleNewDailyDQile",
-    "HandleNewDailyDRank",
-    "HandleNewDailyDRms",
-    "HandleNewDailyDRng",
-    "HandleNewDailyDSDev",
-    "HandleNewDailyDSkew",
-    "HandleNewDailyDVar",
+    "HandleNewDailyDEM",
+    "HandleNewDailyDEMA",
+    "HandleNewDailyDEMax",
+    "HandleNewDailyDEMid",
+    "HandleNewDailyDEMin",
+    "HandleNewDailyDEPLast",
+    "HandleNewDailyDERms",
+    "HandleNewDailyDERng",
+    "HandleNewDailyDESDev",
+    "HandleNewDailyDEVar",
 ]
