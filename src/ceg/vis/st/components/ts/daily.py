@@ -103,6 +103,7 @@ class DailyLinePlot(ExploreDailyComponent):
     explorer: ExploreDaily
 
     norm: str | None = None
+    cum: bool | None = None
 
     # TODO: downsample params?
 
@@ -117,12 +118,25 @@ class DailyLinePlot(ExploreDailyComponent):
 
         kws = {}
 
-        if self.norm == "pct":
+        if self.norm == "pct" and not self.cum:
             df = df.with_columns(
                 pl.col(exp.value_key)
                 .pct_change()
                 .add(1)
                 .cum_prod()
+                .over(exp.label_key)
+            )
+        elif self.norm == "pct" and self.cum:
+            df = df.with_columns(
+                pl.col(exp.value_key)
+                .add(1)
+                .cum_prod()
+                .over(exp.label_key)
+            )
+        elif self.cum:
+            df = df.with_columns(
+                pl.col(exp.value_key)
+                .cum_sum()
                 .over(exp.label_key)
             )
         elif self.norm is None:
@@ -144,6 +158,18 @@ class DailyLinePlot(ExploreDailyComponent):
 
 @dataclass(frozen=True)
 class DailyLinePlotPct(DailyLinePlot):
+    norm: str | None = "pct"
+
+
+@dataclass(frozen=True)
+class DailyLinePlotCum(DailyLinePlot):
+    cum: bool | None = True
+
+@dataclass(frozen=True)
+class DailyLinePlotCumPct(
+    DailyLinePlotPct, DailyLinePlotCum
+):
+    cum: bool | None = True
     norm: str | None = "pct"
 
 @dataclass(frozen=True)
@@ -399,6 +425,57 @@ class DailyBackTestTableRx(DailyBackTest):
 
         return self
 
+
+@dataclass(frozen=True)
+class DailyPerformance(ExploreDailyComponent):
+    key: str
+    df: t.pl.DataFrame
+    explorer: ExploreDaily
+
+    # TODO: downsample params?
+
+    def render(self) -> DailyPerformance:
+        
+        df = self.df
+        if not len(df):
+            return self
+        
+        exp = self.explorer
+        df = self.render_date_filter(df)
+
+        rs = []
+        for (label,), label_df in df.partition_by(
+            exp.label_key,
+            as_dict=True
+        ).items():
+            r = perf.perf_row(
+                label_df,
+                k=label,
+                sig=True,
+                rx=exp.value_key,
+            )
+            rs.append(r)
+
+        st.table(pl.DataFrame(rs))
+
+        df_rx = df.with_columns(
+            pl.col(exp.value_key)
+            .cum_sum()
+            .over(exp.label_key)
+        )
+
+        kws = {}
+        fig = px.line(
+            df_rx,
+            x=exp.date_key,
+            y=exp.value_key,
+            color=exp.label_key,
+            **kws,
+        )
+
+        st.plotly_chart(fig)
+        
+        return self
 # TODO: scatter blot, similar notion as the above
 
 # so the alias will be used to facet split, the groups to plot x and y
@@ -418,9 +495,12 @@ EXPLORER_COMPONENTS: dict[
 ] = {
     "line": DailyLinePlot,
     "line_pct": DailyLinePlotPct,
+    "line_cum": DailyLinePlotCum,
+    "line_cum_pct": DailyLinePlotCumPct,
     "hist": DailyHistogram,
     "bt_line_rx": DailyBackTestLineRx,
     "bt_table": DailyBackTestTableRx,
+    "perf": DailyPerformance
 }
 
 @dataclass(frozen=True)
@@ -478,7 +558,7 @@ class ExploreDailyFromRows(
             widths = {
                 "graph": 50,
                 "obj": 300,
-                "label": 100,
+                "label": 200,
                 "group": 100,
                 "params": 200,
                 # TODO: take this from caller

@@ -33,6 +33,7 @@ from ......apis import t
 from ......apis import kv
 from ......engine import *
 
+from ....bars import *
 from ...root import *
 from ....calc import *
 
@@ -43,22 +44,11 @@ from ....calc import *
 class FutDailyOrdinal(
     HasFutDailyParent,
     DailyChunked,
+    BarDaily,
 ):
-    """FutDailyOrdinal(UseRootConfigs):\n
-    parent: FutDaily\n
-    symbol: str\n
-    field: str\n
-    adjust: str\n
-    fx: str | None = None # ccy to convert to\n
-    source: str | None = None\n
-    """
     parent: FutDaily | str
 
     tags: FutDailyOrdinalTags
-
-    # NOTE: chunk not in path, as doesnt change value
-    # only back-end layout
-    # NOTE: likewise for back-end type: np vs pq etc.
 
     version: int = 0
     type: Literal["FutDailyOrdinal"] = "FutDailyOrdinal"
@@ -80,7 +70,6 @@ class FutDailyOrdinal(
         ident: int | str | None = None,
         field: str | None = None,
         adjust: str | None = None,
-        # NOTE: just for contracts?
         source: str | None = None,
         fx: str | None = None,
     ):
@@ -104,6 +93,7 @@ class FutDailyOrdinal(
             expect=ORD
         )
         assert ord == 1, ord # TODO: for now only first
+        assert adjust in ORD_ADJUSTMENTS, adjust
         return cls(
             path=parent.extend_path(ident),
             parent=parent,
@@ -112,7 +102,6 @@ class FutDailyOrdinal(
                 ident=ord,
                 field=field,
                 adjust=adjust,
-                # expiry=expiry, # NOTE: just for contracts?
                 fx=fx,
                 source=source,
             ),
@@ -288,7 +277,7 @@ class FutDailyOrdinalDomain(FutDailyDomainOnlyOrdinal):
     ) -> FutDailyOrdinalDomain:
         eng = EngineRoot.new(ROOT)
         self = FutDailyOrdinalDomain.empty(eng)
-        for adj in ["pct", "abs", "raw"]:
+        for adj in ORD_ADJUSTMENTS:
             obj = FutDailyOrdinal.new(
                 eng,
                 symbol=symbol, 
@@ -306,6 +295,8 @@ class HasFutDailyOrdinalParent(Object):
 
     def get_parent(self, domain: Domain) -> FutDailyOrdinal:
         return domain.get(self.parent, FutDailyOrdinal)
+
+ORD_ADJUSTMENTS = ["pct", "abs", "raw"]
 
 #  ------------------
 

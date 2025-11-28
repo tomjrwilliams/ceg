@@ -1,4 +1,6 @@
 
+from . import bars
+
 from . import calc
 from . import fut
 

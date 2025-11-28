@@ -249,6 +249,50 @@ class Project:
 
     def with_root(self, root: str):
         return replace(self, root=root)
+    
+    def with_page(
+        self,
+        page: str | ExplorerPage,
+        type: str | None=None,
+        domain: str | None=None,
+    ) -> Project:
+        assert self.config is not None, self
+        config = self.config.with_page(
+            page, type=type, domain=domain,
+        )
+        return self.with_config(config)
+    
+    def with_object(
+        self,   
+        obj: str | ExplorerObject,
+        graph: int | None = None,
+        label: str | None = None,
+        group: str | None = None,
+        params: str | None = None,
+    ) -> Project:
+        assert self.config is not None, self
+        config = self.config.with_object(
+            obj=obj,
+            graph=graph,
+            label=label,
+            group=group,
+            params=params,
+        )
+        return self.with_config(config)
+
+    def with_graph(
+        self,   
+        graph: int | ExplorerGraph | None = None,
+        type: str | None = None,
+        params: str | None = None,
+    ) -> Project:
+        assert self.config is not None, self
+        config = self.config.with_graph(
+            graph=graph,
+            type=type,
+            params=params,
+        )
+        return self.with_config(config)
 
 def prepare_app(
     name: str,
@@ -300,7 +344,7 @@ def prepare_app(
         )
         d0, d1 = snap.first, snap.last # type: ignore
         df = pl.DataFrame([
-            v.ser.alias("value"),
+            v.ser.alias("value").fill_nan(None),
         ]).with_columns(
             pl.lit(o.path).alias("key"),
             pl.date_range(d0, d1).alias("date")

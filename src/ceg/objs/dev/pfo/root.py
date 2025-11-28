@@ -47,10 +47,10 @@ class Universe(
     # TODO: daily chunked not just object?
 
     scale: tuple[Object | str, ...]
-    signal: tuple[Object | str, ...] | None=None
-    rebalance: tuple[Object | str, ...] | None=None
-    calendar: tuple[Object | str, ...] | None=None
-    weight: tuple[Object | str, ...] | None=None
+    signal: tuple[Object | str, ...] = ()
+    rebalance: tuple[Object | str, ...] = ()
+    calendar: tuple[Object | str, ...] = ()
+    weight: tuple[Object | str, ...] = ()
     
     # rx_label, scale_label, etc.?
 
@@ -69,10 +69,10 @@ class Universe(
         name: str,
         ident: int,
         scale: tuple[Object | str, ...] = (),
-        signal: tuple[Object | str, ...] | None=None,
-        rebalance: tuple[Object | str, ...] | None=None,
-        calendar: tuple[Object | str, ...] | None=None,
-        weight: tuple[Object | str, ...] | None=None,
+        signal: tuple[Object | str, ...] = (),
+        rebalance: tuple[Object | str, ...] = (),
+        calendar: tuple[Object | str, ...] = (),
+        weight: tuple[Object | str, ...] = (),
     ):
         return cls(
             parent=parent,

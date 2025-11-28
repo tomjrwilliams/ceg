@@ -766,13 +766,16 @@ def perf_row(
         pos = pos or f"{k}_pos"
         rx = rx or f"{k}_rx"
 
-    assert pos in df.schema, df.schema
+    # assert pos in df.schema, df.schema
     assert rx in df.schema, df.schema
 
     df = df.with_columns(
-        pl.col(pos).fill_nan(None),
         pl.col(rx).fill_nan(None)
     )
+    if pos in df.schema:
+        df = df.with_columns(
+            pl.col(pos).fill_nan(None),
+        )
 
     (
         r_mu,
@@ -783,9 +786,6 @@ def perf_row(
         r_sort,
         r_dd,
         r_calm,
-        r_pos_mu,
-        r_pos_sd,
-        r_pos_skew,
     ) = df.select(
         rx_mu(rx=rx)
         .mul(252)
@@ -816,25 +816,40 @@ def perf_row(
         .alias("calm")
         .item(),
         # *([
-        pl.col(pos)
-        .mean()
-        .alias("pos_mu")
-        .item(),
-        pl.col(pos)
-        .std()
-        .alias("pos_sd")
-        .item(),
-        pl.col(pos)
-        .skew()
-        .alias("pos_skew")
-        .item(),
-        # ]
-        # if row_sig else [
-        #     pl.lit(1.).alias("pos_mu").item(),
-        #     pl.lit(0.).alias("pos_sd").item(),
-        #     pl.lit(0.).alias("pos_skew").item(),
-        # ])
     ).row(0, named=False)
+
+    if pos in df.schema:
+        (
+            r_pos_mu,
+            r_pos_sd,
+            r_pos_skew,
+        ) = df.select(
+            pl.col(pos)
+            .mean()
+            .alias("pos_mu")
+            .item(),
+            pl.col(pos)
+            .std()
+            .alias("pos_sd")
+            .item(),
+            pl.col(pos)
+            .skew()
+            .alias("pos_skew")
+            .item(),
+            # ]
+            # if row_sig else [
+            #     pl.lit(1.).alias("pos_mu").item(),
+            #     pl.lit(0.).alias("pos_sd").item(),
+            #     pl.lit(0.).alias("pos_skew").item(),
+            # ])
+        ).row(0, named=False)
+        pos_r = dict(
+            pos_mu = r_pos_mu,
+            pos_sd = r_pos_sd,
+            pos_skew = r_pos_skew,
+        )
+    else:
+        pos_r = {}
 
     r = {} if k is None else dict(key=k)
     perf = dict(
@@ -846,9 +861,7 @@ def perf_row(
         sort = r_sort,
         dd=r_dd,
         calm = r_calm,
-        pos_mu = r_pos_mu,
-        pos_sd = r_pos_sd,
-        pos_skew = r_pos_skew,
+        **pos_r,
     )
     if round:
         perf = {

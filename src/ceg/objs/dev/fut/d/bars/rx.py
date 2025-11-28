@@ -34,7 +34,7 @@ from ......apis import kv
 from ......engine import *
 
 from ...root import *
-from .ord import FutDailyOrdinal, HasFutDailyOrdinalParent
+from .ord import FutDailyOrdinal, HasFutDailyOrdinalParent, BarDaily
 
 from ....calc import *
 
@@ -45,6 +45,7 @@ from ....calc import *
 class FutDailyRx(
     HasFutDailyOrdinalParent,
     DailyChunked,
+    BarDaily,
 ):
     parent: FutDailyOrdinal | str
     # TODO: or contract
@@ -71,10 +72,8 @@ class FutDailyRx(
         ident: int | str | None = None,
         field: str | None = None,
         adjust: str | None = None,
-        # NOTE: just for contracts?
         source: str | None = None,
         fx: str | None = None,
-        # TODO: expect, to decide on ordinal
     ):
         if isinstance(parent, EngineRoot):
             assert isinstance(symbol, str), symbol

@@ -223,6 +223,28 @@ class UseChunkedValues(UseRootConfigs):
 
         raise ValueError(self, db)
 
+@dataclass(frozen=True)
+class DomainWithEngineRoot(Domain):
+    
+    @dataclass(frozen=True)
+    class Root(UseRootConfigs):
+
+        SUFFIX: ClassVar[str] = "TODO"
+
+        @classmethod
+        def new(
+            cls, engine: EngineRoot
+        ) -> DomainWithEngineRoot.Root:
+            return cls(
+                parent=engine,
+                path=engine.extend_path(cls.SUFFIX)
+            )
+    
+    @classmethod
+    def empty(cls, engine: EngineRoot):
+        root = cls.Root.new(engine)
+        return cls(root)
+
 __all__ = [
     "SQLite",
     "EngineStorageConfig",
@@ -232,4 +254,5 @@ __all__ = [
     "UseChunkedValues",
     "ROOT",
     "ROOT_DB",
+    "DomainWithEngineRoot",
 ]

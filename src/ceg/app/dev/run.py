@@ -18,6 +18,7 @@ app_cache: str = "./__local__/cache"
 
 if __name__ == "__main__":
     args = sys.argv[1:]
+
     if len(args):
         app_name = project_name = args[0]
         # TODO: dev in path?
@@ -28,9 +29,12 @@ if __name__ == "__main__":
 
     if len(args) > 1:
         command = args[1]
+        command_args = args[2:]
         if command == "reset":
             project.reset()
-            os.kill(os.getpid(), signal.SIGINT)
+        if len(command_args):
+            if command_args[0] == "die":
+                os.kill(os.getpid(), signal.SIGINT)
 
     app = ceg.objs.vis.explorer.prepare_app(
         app_name,

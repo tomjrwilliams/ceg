@@ -6,7 +6,9 @@ from .depends import *
 from .objects import *
 from .root import *
 from .handlers import *
+from .d import *
 
 from . import handlers
+
 
 NEW_LINE = "\n"

@@ -122,7 +122,7 @@ logger, log_kw = logs.prepare_logger(__file__)
 # https://firstratedata.com/api/ticker_listing?type=futures&userid=Gp66_esi0E-jz_-_mfmW0Q
 
 class Folders:
-    EQ = "eq" # NOTE: tbc, stock?
+    STOCK = "stock" # NOTE: tbc, stock?
     ETF = "etf"
     FUT = "futures"
     FUTC = "individual_contracts_archive"
@@ -141,18 +141,6 @@ suffix_maps = cast(
     frozendict[str, SuffixMap],
     frozendict(
         {
-            Folders.ETF: SuffixMap(
-                file=frozendict(
-                    # NOTE: just for type detection
-                    empty=""
-                ),
-                folder=frozendict(
-                    adj="adjsplitdiv",
-                    splits="adjsplit",
-                    raw="unadj",
-                    default="adj",
-                ),
-            ),
             Folders.FUT: SuffixMap(
                 file=frozendict(
                     pct="continuous_ratio_adjusted",
@@ -166,6 +154,46 @@ suffix_maps = cast(
                     raw="contin_UNadj",
                     default="pct",
                 ),
+            ),
+            Folders.ETF: SuffixMap(
+                file=frozendict(
+                    # NOTE: just for type detection
+                    empty=""
+                ),
+                folder=frozendict(
+                    full="adjsplitdiv",
+                    split="adjsplit",
+                    raw="unadj",
+                    default="adj",
+                ),
+            ),
+            Folders.STOCK: SuffixMap(
+                file=frozendict(
+                    # NOTE: just for type detection
+                    empty=""
+                ),
+                folder=frozendict(
+                    full="adjsplitdiv",
+                    split="adjsplit",
+                    raw="unadj",
+                    default="adj",
+                ),
+            ),
+            Folders.IND: SuffixMap(
+                file=frozendict(
+                    empty=""
+                ),
+                folder=frozendict(
+                    raw="",
+                )
+            ),
+            Folders.FX: SuffixMap(
+                file=frozendict(
+                    empty=""
+                ),
+                folder=frozendict(
+                    raw="",
+                )
             ),
         }
     ),
@@ -273,14 +301,38 @@ def parse_daily_file(
         f,
         has_header=False,
         schema_overrides=dict(
-            column_1=polars.Date,
+            # column_1=polars.Date,
             column_2=polars.Float64,
             column_3=polars.Float64,
             column_4=polars.Float64,
             column_5=polars.Float64,
         ),
-        try_parse_dates=True,
+        # try_parse_dates=True,
+        ignore_errors=True,
     )
+    d0 = df.get_column("column_1")[0]
+    try:
+        if isinstance(d0, int):
+            df = df.with_columns(
+                pl.col("column_1")
+                .cast(pl.String)
+                .str.to_date("%Y%m%d")
+            )
+        elif len(d0) == 8:
+            df = df.with_columns(
+                pl.col("column_1").str.to_date("%Y%m%d")
+            )
+        elif "/" in d0:
+            df = df.with_columns(
+                pl.col("column_1").str.to_date("%Y/%m/%d")
+            )
+        else:
+            df = df.with_columns(
+                pl.col("column_1").str.to_date()
+            )
+    except:
+        raise ValueError((df, d0))
+    df = df.with_columns()
     df = df.rename(
         {
             "column_1": "date",

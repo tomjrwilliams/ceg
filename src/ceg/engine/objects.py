@@ -224,7 +224,10 @@ class Object:
 
     # NOTE: not a classmethod, so can be overriden with more specific type by child
     def get_snap(self, domain: Domain) -> Snap | None:
-        return self.snap_key_val(domain).get(self.path)
+        try:
+            return self.snap_key_val(domain).get(self.path)
+        except:
+            raise ValueError(self)
 
     def set_snap(self, snap: Snap, domain: Domain) -> Snap:
         return self.snap_key_val(domain).set(self.path, snap)
@@ -439,20 +442,27 @@ class Domain:
         assert isinstance(obj, t), (obj, t)
         return obj
     
-    def with_objs(self, *obj: Object) -> Domain:
+    def with_objs(
+        self, *obj: Object | None, force: bool = False
+    ) -> Domain:
         for o in obj:
-            self = self.with_obj(o)
+            if o is None:
+                continue
+            self = self.with_obj(o, force=force)
         return self
 
-    def with_obj(self, obj: Object) -> Domain:
+    def with_obj(
+        self, obj: Object, force: bool = False
+    ) -> Domain:
         # TODO: proper frozendict subtpye -> replace with set rather than dict spread
+        if not force and obj.path in self.objects:
+            return self
         if isinstance(obj.parent, Object):
             if not obj.parent.path in self.objects:
-                self = self.with_obj(obj.parent)
+                self = self.with_obj(
+                    obj.parent, force=force
+                )
         obj = obj.check().alias_parents()
-        if obj.path in self.objects:
-            return self
-        assert obj.path not in self.objects, obj.path
         objects={
             **self.objects,
             obj.path: obj
