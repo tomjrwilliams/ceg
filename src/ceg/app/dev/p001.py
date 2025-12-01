@@ -6,7 +6,7 @@ else:
     from pydantic.dataclasses import dataclass
 
 from ...objs.vis import explorer
-from ...objs.dev import fut
+from ...objs.dev import bars
 from ...objs.dev import pfo
 
 from ...objs.dev.strat.mom import eosc as strat
@@ -14,6 +14,19 @@ from ...objs.dev.strat.mom import eosc as strat
 from .core import PROJECTS
 
 PROJECT = "p001-mom"
+
+# TODO: put all the bars under bars module
+
+# d -> d/root.py
+# then asset classes
+# then the calc (moved up a dir, drop calc parent container, eg. straight m, em etc.)
+
+# calc stays as calc, with just base and handlers
+
+# asset classes can then in time have eg. chain
+# but for now will 
+
+# have to move the root in with the asset class, but its only one file
 
 @dataclass(frozen=True)
 class Project_001(explorer.Project):

@@ -33,8 +33,7 @@ from .....apis import t
 from .....apis import kv
 from .....engine import *
 
-from ...calc.d.bars.prelude import *
-from ...calc.d import bars
+from ...bars.d import *
 from ...pfo import *
 
 #  ------------------
@@ -87,7 +86,7 @@ class MomEOscFutBtObjects:
     params: MomEOscFutBtParams
     fut_px: FutDailyOrdinal
     fut_rx: FutDailyRx
-    scale: FutDailyOrdinal | bars.BarDailyERms
+    scale: FutDailyOrdinal | BarDailyERms
     signal: Object | None
     bt: PfolioDailyBt
     pos: PfolioDailyPos
@@ -178,8 +177,8 @@ class StratMomEOscFut(Domain):
             EngineRoot
             | FutDailyOrdinal
             | FutDailyRx
-            | bars.BarDailyEOsc
-            | bars.BarDailyERms
+            | BarDailyEOsc
+            | BarDailyERms
             | PfolioDailyBt
             | PfolioDailyPos
             | PfolioDailyRx
@@ -190,8 +189,8 @@ class StratMomEOscFut(Domain):
         snap: (
             FutDailyOrdinal.Snap
             | FutDailyRx.Snap
-            | bars.BarDailyEOsc.Snap
-            | bars.BarDailyERms.Snap
+            | BarDailyEOsc.Snap
+            | BarDailyERms.Snap
             | PfolioDailyBt.Snap
             | PfolioDailyPos.Snap
             | PfolioDailyRx.Snap
@@ -245,7 +244,7 @@ class StratMomEOscFut(Domain):
                 )
                 unit = 100.
             elif isinstance(bt.scale, EOscScaleVolParams):
-                scale = bars.BarDailyERms.new(
+                scale = BarDailyERms.new(
                     fut_rx,
                     span=bt.scale.span
                 )
@@ -254,7 +253,7 @@ class StratMomEOscFut(Domain):
                 raise ValueError(bt)
             universe = universe.with_scale(scale)
             if bt.signal is not None:
-                sig = bars.BarDailyEOsc.new(
+                sig = BarDailyEOsc.new(
                     fut_px,
                     fast=bt.signal.fast,
                     slow=bt.signal.slow,
