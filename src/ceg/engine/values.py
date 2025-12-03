@@ -345,6 +345,10 @@ class ValuePlSeries(Value):
     @classmethod
     def new(cls, k: str, ser: pl.Series) -> ValuePlSeries:
         return cls(k, t.pl.Series.cast(ser))
+    
+    @classmethod
+    def synthetic(cls, ser: pl.Series) -> ValuePlSeries:
+        return cls.new("SYNTHETIC", ser)
 
     @property
     def size(self):

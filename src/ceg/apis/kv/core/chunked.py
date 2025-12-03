@@ -147,17 +147,38 @@ class KeyChunk(
     on_create: Callable[[KeyO, ValO, int], None] | None = None
     on_update: Callable[[KeyO, ValO, int], None] | None = None
 
+    @overload
     def get(
         self,
         key: KeyO,
         chunk: int,
+        t: None = None,
         # TODO: default value if not found
-    ) -> ValO | None:
+    ) -> ValO | None: ...
+    @overload
+    def get(
+        self,
+        key: KeyO,
+        chunk: int,
+        t: Type[T],
+        # TODO: default value if not found
+    ) -> T: ...
+    def get(
+        self,
+        key: KeyO,
+        chunk: int,
+        t: Type[T] | None = None,
+        # TODO: default value if not found
+    ) -> ValO | T | None:
         key_i = self.encode_key(key)
         val_i = self.select(key_i, chunk)
         if val_i is None:
+            assert t is None, (val_i, key, t)
             return val_i
-        return self.decode_val(key, val_i)
+        val_o = self.decode_val(key, val_i)
+        if t is not None:
+            assert isinstance(val_o, t), (val_o, key, t)
+        return val_o
 
     def get_head(self, key: KeyO) -> ValO | None:
         return self.get(key, HEAD)

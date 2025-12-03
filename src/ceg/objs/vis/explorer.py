@@ -4,6 +4,7 @@ from typing import (
     TypeVar,
     Callable,
 )
+import shutil
 import json
 from pathlib import Path
 import polars as pl
@@ -122,6 +123,10 @@ class ExplorerConfig:
 
     def write(self, root: str = "./__local__/apps"):
         dp = Path(root) / self.app
+        if "__local__" in str(dp):
+            assert "frd" not in str(dp), dp
+            shutil.rmtree(dp)
+            dp.mkdir(exist_ok=True, parents=True)
         for page in self.pages:
             name = page.name
             dp_page = dp / name

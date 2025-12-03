@@ -13,81 +13,112 @@ from ...objs.dev.strat.mom import eosc as strat
 
 from .core import PROJECTS
 
-PROJECT = "p001-mom"
+PROJECT = "p001"
 
-# TODO: put all the bars under bars module
+SPAN_VOL_SCALE = [
+    # 16,
+    48,
+    # 48 * 4
+]
+SPAN_VOL_SIG = [
+    # 16,
+    48, 
+    # 48 * 4
+]
+SPAN_POW_2 = [4, 8, 16, 32, 64, 128, 256, 512]
+SPAN_POW_2_EVEN = [4, 16, 64, 256]
+SPAN_POW_2_ODD = [8, 32, 128, 512]
 
-# d -> d/root.py
-# then asset classes
-# then the calc (moved up a dir, drop calc parent container, eg. straight m, em etc.)
-
-# calc stays as calc, with just base and handlers
-
-# asset classes can then in time have eg. chain
-# but for now will 
-
-# have to move the root in with the asset class, but its only one file
+SPAN_RATIO = [
+    1.5, 
+    # 3
+]
 
 @dataclass(frozen=True)
 class Project_001(explorer.Project):
     def with_mom_eosc_page(
-        self, symbol: str
+        self,
+        name: str,
+        product_symbols: list[tuple[str, str]],
+        span_fast: list[int]=SPAN_POW_2,
+        span_ratio: list[float]=SPAN_RATIO,
+        span_vol_sig: list[int]=SPAN_VOL_SIG,
+        span_vol_scale: list[int]=SPAN_VOL_SCALE,
+        span_vol_rescale: list[int] | None = None,
+        rebal: str | None = None,
+        with_agg_rx: bool = False,
+        # TODO: rebal rules
     ):
         bts: list[strat.MomEOscFutBtObjects]
-
-        vol_spans = [
-            # 16,
-            48,
-            # 48 * 4
-        ]
-        vols = [
-            # 16,
-            48, 
-            # 48 * 4
-        ]
-        fasts = [4, 8, 16, 32, 64, 128, 256, 512]
-        ratios = [
-            1.5, 
-            # 3
-        ]
 
         signals = [None] + [
             strat.EOscSignalParams(
                 fast, int(fast * ratio), vol
             )
-            for fast in fasts
-            for vol in vols
-            for ratio in ratios
+            for fast in span_fast
+            for vol in span_vol_sig
+            for ratio in span_ratio
         ]
         scales = [
             strat.EOscScaleVolParams(span=span)
-            for span in vol_spans
+            for span in span_vol_scale
         ]
-        d, bts = strat.StratMomEOscFut.new(
+        rescales = [
+            None
+        ] if span_vol_rescale is None else [
+            strat.EOscScaleVolParams(span=span)
+            for span in span_vol_rescale
+        ]
+
+        d, bts, rx_agg = strat.StratMomEOscFut.new(
             *[
                 strat.MomEOscFutBtParams(
+                    product,
                     symbol,
                     scale=scale,
                     signal=signal,
+                    rescale=rescale,
+                    rebal=rebal,
                 )
+                for rescale in rescales
                 for scale in scales
                 for signal in signals
-            ]
+                for product, symbol in product_symbols
+            ],
+            name=f"mom-eosc-fut-{name}"
         )
         self = self.with_domains(**{
-            symbol: lambda sync: explorer.AppDomain(
+            name: lambda sync: explorer.AppDomain(
                 [d], sync
             )
         }).with_page(
-            symbol,
+            name,
             type="daily",
-            domain=symbol,
+            domain=name,
         )
+        if with_agg_rx:
+            self = self.with_object(
+                rx_agg.path,
+                graph=0,
+                label=name,
+                group="rx",
+            ).with_object(
+                rx_agg.path,
+                graph=0,
+                label=name,
+                group="pos"
+            )
         for bt in bts:
             self = self.with_object(
-                bt.rx.path,
+                bt.res.rx.path,
                 graph=0,
-                label=bt.params.label()
+                label=bt.params.label(),
+                group="rx",
+            ).with_object(
+                bt.res.pos.path,
+                graph=0,
+                label=bt.params.label(),
+                group="pos"
             )
         self = self.with_graph(
             0,
@@ -95,8 +126,57 @@ class Project_001(explorer.Project):
         )
         return cast(Project_001, self)
 
-PROJECTS[PROJECT] = (
+
+project = (
     Project_001()
     .with_config(explorer.ExplorerConfig(PROJECT))
-    .with_mom_eosc_page("ES")
 )
+
+i = 0
+for name, product_symbols, spans in [
+    ("es", [("FUT", "ES")], SPAN_POW_2),
+    ("tn", [("FUT", "TN")], SPAN_POW_2),
+    ("spy", [("ETF", "SPY")], SPAN_POW_2),
+    ("tlt", [("ETF", "TLT")], SPAN_POW_2),
+    (
+        "es-tn",
+        [("FUT", "ES"), ("FUT", "TN")],
+        SPAN_POW_2_ODD
+    ),
+    (
+        "spy-tlt",
+        [("ETF", "SPY"), ("ETF", "TLT")],
+        SPAN_POW_2_ODD
+    ),
+    (
+        "es-spy",
+        [("FUT", "ES"), ("ETF", "SPY")],
+        SPAN_POW_2_ODD
+    ),
+    (
+        "tn-tlt",
+        [("FUT", "TN"), ("ETF", "TLT")],
+        SPAN_POW_2_ODD
+    ),
+]:
+    for suff, rebal in [
+        ("", None),
+        ("-w", "3D"),
+        # ("-m", "3D1W"),
+    ]:
+        i_str = str(i).rjust(3, "0") + "-"
+        # project = project.with_mom_eosc_page(
+        #     i_str + name + suff,
+        #     product_symbols,
+        #     spans,
+        # )
+        project = project.with_mom_eosc_page(
+            i_str + name + "-v" + suff,
+            product_symbols,
+            spans,
+            span_vol_rescale=[256],
+            rebal=rebal,
+        )
+    i += 1
+
+PROJECTS[PROJECT] = project

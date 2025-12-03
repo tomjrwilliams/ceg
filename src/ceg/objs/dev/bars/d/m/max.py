@@ -34,28 +34,8 @@ from ......apis import kv
 from ......engine import *
 
 from ..prelude import *
-from ..calc.m import *
+
 from ....calc.d import *
-
-@dataclass(frozen=True)
-class BarDailyMax(BarDailyM):
-    version: int = 0
-    type: Literal["BarDailyMax"] = "BarDailyMax"
-
-    SUFFIX: ClassVar[str] = "max"
-
-    @dataclass(frozen=True)
-    class Snap(DailySnap):
-        type: Literal["BarDailyMaxSnap"] = "BarDailyMaxSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewBarDailyMax:
-        return HandleNewBarDailyMax()
-
-@dataclass(frozen=True)
-class HandleNewBarDailyMax(HandleNewDailyMax):
-    pass
 
 @dataclass(frozen=True)
 class BarDailyMaxDomain(DailyChunkedDomain):
@@ -69,7 +49,7 @@ class BarDailyMaxDomain(DailyChunkedDomain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = BarDailyMax.new(ord, window=4)
+    >>> obj = DailyMax.new(ord, window=4)
     >>> domain = (
     ...     BarDailyMaxDomain.empty(eng)
     ...     .with_obj(obj)
@@ -105,20 +85,18 @@ class BarDailyMaxDomain(DailyChunkedDomain):
         obj: (
             EngineRoot
             | TBar
-            | BarDailyMax
+            | DailyMax
         )
 
     @dataclass(frozen=True)
     class snap_parser(SnapParser):
         snap: (
             TBarSnap
-            | BarDailyMax.Snap
+            | DailyMax.Snap
         )
 
 # TODO: if __name__ == __main__:
 # run domain by name
 __all__ = [
-    "BarDailyMax",
-    "HandleNewBarDailyMax",
     "BarDailyMaxDomain",
 ]

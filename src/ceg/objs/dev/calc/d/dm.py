@@ -8,6 +8,9 @@ from typing import (
     ClassVar,
     Literal,
     Protocol,
+    ParamSpec,
+    Callable,
+    Concatenate,
     overload,
     cast,
     final,
@@ -28,13 +31,16 @@ from frozendict import frozendict
 import numpy as np
 import polars as pl
 
-from ...... import apis
-from ......apis import t
-from ......apis import kv
-from ......engine import *
+from ..... import apis
+from .....apis import t
+from .....apis import kv
+from .....engine import *
 
-from ..m import *
 from .m import *
+
+@dataclass(frozen=True)
+class DailyDM(DailyM):
+    pass
 
 #  ------------------
 
@@ -49,6 +55,21 @@ class HandleNewDailyDM(
 #  ------------------
 
 @dataclass(frozen=True)
+class DailyDMA(DailyDM):
+    version: int = 0
+    type: Literal["DailyDMA"] = "DailyDMA"
+
+    SUFFIX: ClassVar[str] = "dma"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyDMASnap"] = "DailyDMASnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyDMA:
+        return HandleNewDailyDMA()
+@dataclass(frozen=True)
 class HandleNewDailyDMA(
     HandleNewDailyDM,
     HandleNewDailyMA,
@@ -58,7 +79,7 @@ class HandleNewDailyDMA(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -78,7 +99,7 @@ class HandleNewDailyDKurt(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -87,6 +108,22 @@ class HandleNewDailyDKurt(
             obj,
             domain,
         )
+
+@dataclass(frozen=True)
+class DailyDMax(DailyDM):
+    version: int = 0
+    type: Literal["DailyDMax"] = "DailyDMax"
+
+    SUFFIX: ClassVar[str] = "dmax"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyDMaxSnap"] = "DailyDMaxSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyDMax:
+        return HandleNewDailyDMax()
 
 
 @dataclass(frozen=True)
@@ -99,7 +136,7 @@ class HandleNewDailyDMax(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -108,6 +145,22 @@ class HandleNewDailyDMax(
             obj,
             domain,
         )    
+
+@dataclass(frozen=True)
+class DailyDMed(DailyDM):
+    version: int = 0
+    type: Literal["DailyDMed"] = "DailyDMed"
+
+    SUFFIX: ClassVar[str] = "dmed"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyDMedSnap"] = "DailyDMedSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyDMed:
+        return HandleNewDailyDMed()
 
 @dataclass(frozen=True)
 class HandleNewDailyDMed(
@@ -119,7 +172,7 @@ class HandleNewDailyDMed(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -127,6 +180,89 @@ class HandleNewDailyDMed(
             event,
             obj,
             domain,
+        )
+
+@dataclass(frozen=True)
+class DailyDMid(DailyDM):
+    params: DailyMidParams
+
+    version: int = 0
+    type: Literal["DailyDMid"] = "DailyDMid"
+
+    SUFFIX: ClassVar[str] = "dmid"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyDMidSnap"] = "DailyDMidSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyDMid:
+        return HandleNewDailyDMid()
+    
+    @classmethod
+    def params_suffix(
+        cls,
+        window: int | None = None,
+        width: float | None = None,
+    ):
+        if window is None:
+            params = "ex"
+        else:
+            params = str(window)
+        return f"{cls.SUFFIX}-" + params + (
+            ""
+            if width is None
+            else f"-{width}"
+        )
+    @overload
+    @classmethod
+    def new(
+        cls,
+        parent: EngineRoot | Object,
+        t: None = None,
+        window: int | None = None,
+        width: float | None = None,
+    ): ...
+    @overload
+    @classmethod
+    def new(
+        cls,
+        parent: EngineRoot | Object,
+        t: Callable[
+            Concatenate[EngineRoot, P], O
+        ] | None = None,
+        window: int | None = None,
+        width: float | None = None,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ): ...
+    @classmethod
+    def new(
+        cls,
+        parent: EngineRoot | Object,
+        t: Callable[
+            Concatenate[EngineRoot, P], O
+        ] | None = None,
+        window: int | None = None,
+        width: float | None = None,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ):
+        if isinstance(parent, EngineRoot):
+            assert t is not None, t
+            parent = t(parent, *args, **kwargs)
+        return cls(
+            path=parent.extend_path(cls.params_suffix(
+                window=window,
+                width=width,
+            )),
+            parent=parent,
+            params=DailyMidParams(
+                window=window,
+                width=width,
+
+            ),
         )
 
 @dataclass(frozen=True)
@@ -139,7 +275,7 @@ class HandleNewDailyDMid(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedMid,
+        obj: DailyMid,
         domain: Domain,
     ) -> pl.DataFrame:
         df = df.with_columns(
@@ -161,6 +297,22 @@ class HandleNewDailyDMid(
     
 
 @dataclass(frozen=True)
+class DailyDMin(DailyDM):
+    version: int = 0
+    type: Literal["DailyDMin"] = "DailyDMin"
+
+    SUFFIX: ClassVar[str] = "dmin"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyDMinSnap"] = "DailyDMinSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyDMin:
+        return HandleNewDailyDMin()
+
+@dataclass(frozen=True)
 class HandleNewDailyDMin(
     HandleNewDailyDM,
     HandleNewDailyMin,
@@ -170,7 +322,7 @@ class HandleNewDailyDMin(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -191,7 +343,7 @@ class HandleNewDailyDPLast(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyM,
         domain: Domain,
     ) -> pl.DataFrame:
         df = df.with_columns(
@@ -211,6 +363,85 @@ class HandleNewDailyDPLast(
             .alias(VALUE)
         )
     
+@dataclass(frozen=True)
+class DailyDQile(DailyDM):
+
+    params: DailyQileParams
+
+    version: int = 0
+    type: Literal["DailyDQile"] = "DailyDQile"
+
+    SUFFIX: ClassVar[str] = "dqile"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyDQileSnap"] = "DailyDQileSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyDQile:
+        return HandleNewDailyDQile()
+    
+    @classmethod
+    def params_suffix(
+        cls,
+        window: int | None = None,
+        quantile: float | None = None,
+    ):
+        assert quantile is not None, (cls, quantile)
+        if window is None:
+            params = "ex"
+        else:
+            params = str(window)
+        return f"{cls.SUFFIX}-" + params + f"-{quantile}"
+    @overload
+    @classmethod
+    def new(
+        cls,
+        parent: EngineRoot | Object,
+        t: None = None,
+        window: int | None = None,
+        quantile: float | None = None,
+    ): ...
+    @overload
+    @classmethod
+    def new(
+        cls,
+        parent: EngineRoot | Object,
+        t: Callable[
+            Concatenate[EngineRoot, P], O
+        ],
+        window: int | None = None,
+        quantile: float | None = None,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ): ...
+    @classmethod
+    def new(
+        cls,
+        parent: EngineRoot | Object,
+        t: Callable[
+            Concatenate[EngineRoot, P], O
+        ] | None = None,
+        window: int | None = None,
+        quantile: float | None = None,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ):
+        if isinstance(parent, EngineRoot):
+            assert t is not None, t
+            parent = t(parent, *args, **kwargs)
+        return cls(
+            path=parent.extend_path(cls.params_suffix(
+                window=window,
+                quantile=quantile,
+            )),
+            parent=parent,
+            params=DailyQileParams(
+                window=window,
+                quantile=quantile,
+            ),
+        )
 
 @dataclass(frozen=True)
 class HandleNewDailyDQile(
@@ -222,7 +453,7 @@ class HandleNewDailyDQile(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedQile,
+        obj: DailyQile,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -243,7 +474,7 @@ class HandleNewDailyDRank(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -264,7 +495,7 @@ class HandleNewDailyDRms(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -286,7 +517,7 @@ class HandleNewDailyDRng(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedMRng,
+        obj: DailyRng,
         domain: Domain,
     ) -> pl.DataFrame:
         df = df.with_columns(
@@ -316,7 +547,7 @@ class HandleNewDailyDSDev(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -337,7 +568,7 @@ class HandleNewDailyDSkew(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -359,7 +590,7 @@ class HandleNewDailyDVar(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedM,
+        obj: DailyM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -372,15 +603,23 @@ class HandleNewDailyDVar(
 #  ------------------
 
 __all__ = [
+    # "DailyDMParams",
+    "DailyDM",
     "HandleNewDailyDM",
     "HandleNewDailyDMA",
+    "DailyDMA",
     "HandleNewDailyDKurt",
     "HandleNewDailyDMax",
+    "DailyDMax",
     "HandleNewDailyDMed",
+    "DailyDMed",
     "HandleNewDailyDMid",
+    "DailyDMid",
     "HandleNewDailyDMin",
+    "DailyDMin",
     "HandleNewDailyDPLast",
     "HandleNewDailyDQile",
+    "DailyDQile",
     "HandleNewDailyDRank",
     "HandleNewDailyDRms",
     "HandleNewDailyDRng",

@@ -150,7 +150,13 @@ class HandleNewEqDailyRx(
 
         e = (
             pl.col(VALUE).forward_fill().pct_change()
-            if parent.tags.adjust == "full"
+            if parent.tags.adjust in [
+                "pct", "split"
+            ]
+            else pl.col(VALUE).forward_fill().diff()
+            if parent.tags.adjust in [
+                "raw", "price", "full"
+            ]
             # TODO: split only, raw
             else None
         )

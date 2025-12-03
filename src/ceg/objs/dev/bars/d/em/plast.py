@@ -34,29 +34,8 @@ from ......apis import kv
 from ......engine import *
 
 from ..prelude import *
-from ..calc.em import *
+
 from ....calc.d import *
-
-@dataclass(frozen=True)
-class BarDailyEPLast(BarDailyEM):
-
-    version: int = 0
-    type: Literal["BarDailyEPLast"] = "BarDailyEPLast"
-
-    SUFFIX: ClassVar[str] = "eplast"
-
-    @dataclass(frozen=True)
-    class Snap(DailySnap):
-        type: Literal["BarDailyEPLastSnap"] = "BarDailyEPLastSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewBarDailyEPLast:
-        return HandleNewBarDailyEPLast()
-
-@dataclass(frozen=True)
-class HandleNewBarDailyEPLast(HandleNewDailyEPLast):
-    pass
 
 
 @dataclass(frozen=True)
@@ -71,7 +50,7 @@ class BarDailyEPLastDomain(DailyChunkedDomain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = BarDailyEPLast.new(ord, span=4)
+    >>> obj = DailyEPLast.new(ord, span=4)
     >>> domain = (
     ...     BarDailyEPLastDomain.empty(eng)
     ...     .with_obj(obj)
@@ -107,20 +86,18 @@ class BarDailyEPLastDomain(DailyChunkedDomain):
         obj: (
             EngineRoot
             | TBar
-            | BarDailyEPLast
+            | DailyEPLast
         )
 
     @dataclass(frozen=True)
     class snap_parser(SnapParser):
         snap: (
             TBarSnap
-            | BarDailyEPLast.Snap
+            | DailyEPLast.Snap
         )
 
 # TODO: if __name__ == __main__:
 # run domain by name
 __all__ = [
-    "BarDailyEPLast",
-    "HandleNewBarDailyEPLast",
     "BarDailyEPLastDomain",
 ]

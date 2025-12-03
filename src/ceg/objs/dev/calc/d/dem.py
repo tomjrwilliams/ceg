@@ -8,6 +8,9 @@ from typing import (
     ClassVar,
     Literal,
     Protocol,
+    ParamSpec,
+    Callable,
+    Concatenate,
     overload,
     cast,
     final,
@@ -28,13 +31,16 @@ from frozendict import frozendict
 import numpy as np
 import polars as pl
 
-from ...... import apis
-from ......apis import t
-from ......apis import kv
-from ......engine import *
+from ..... import apis
+from .....apis import t
+from .....apis import kv
+from .....engine import *
 
-from ..em import *
 from .em import *
+
+@dataclass(frozen=True)
+class DailyDEM(DailyEM):
+    pass
 
 #  ------------------
 
@@ -49,6 +55,22 @@ class HandleNewDailyDEM(
 #  ------------------
 
 @dataclass(frozen=True)
+class DailyDEMA(DailyDEM):
+    version: int = 0
+    type: Literal["DailyDEMA"] = "DailyDEMA"
+
+    SUFFIX: ClassVar[str] = "dema"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyDEMASnap"] = "DailyDEMASnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyDEMA:
+        return HandleNewDailyDEMA()
+
+@dataclass(frozen=True)
 class HandleNewDailyDEMA(
     HandleNewDailyDEM,
     HandleNewDailyEMA
@@ -58,7 +80,7 @@ class HandleNewDailyDEMA(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedEM,
+        obj: DailyEM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -69,6 +91,21 @@ class HandleNewDailyDEMA(
         )
 
 @dataclass(frozen=True)
+class DailyDEMax(DailyDEM):
+    version: int = 0
+    type: Literal["DailyDEMax"] = "DailyDEMax"
+
+    SUFFIX: ClassVar[str] = "demax"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyDEMaxSnap"] = "DailyDEMaxSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyDEMax:
+        return HandleNewDailyDEMax()
+@dataclass(frozen=True)
 class HandleNewDailyDEMax(
     HandleNewDailyDEM,
     HandleNewDailyEMax
@@ -78,7 +115,7 @@ class HandleNewDailyDEMax(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedEM,
+        obj: DailyEM,
         domain: Domain,
     ) -> pl.DataFrame:
         
@@ -100,6 +137,21 @@ class HandleNewDailyDEMax(
         )
 
 @dataclass(frozen=True)
+class DailyDEMid(DailyDEM):
+    version: int = 0
+    type: Literal["DailyDEMid"] = "DailyDEMid"
+
+    SUFFIX: ClassVar[str] = "demid"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyDEMidSnap"] = "DailyDEMidSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyDEMid:
+        return HandleNewDailyDEMid()
+@dataclass(frozen=True)
 class HandleNewDailyDEMid(
     HandleNewDailyDEM,
     HandleNewDailyEMid
@@ -109,7 +161,7 @@ class HandleNewDailyDEMid(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedEM,
+        obj: DailyEM,
         domain: Domain,
     ) -> pl.DataFrame:
         
@@ -131,6 +183,22 @@ class HandleNewDailyDEMid(
         )
     
 @dataclass(frozen=True)
+class DailyDEMin(DailyDEM):
+    version: int = 0
+    type: Literal["DailyDEMin"] = "DailyDEMin"
+
+    SUFFIX: ClassVar[str] = "demin"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyDEMinSnap"] = "DailyDEMinSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyDEMin:
+        return HandleNewDailyDEMin()
+
+@dataclass(frozen=True)
 class HandleNewDailyDEMin(
     HandleNewDailyDEM,
     HandleNewDailyEMin
@@ -140,7 +208,7 @@ class HandleNewDailyDEMin(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedEM,
+        obj: DailyEM,
         domain: Domain,
     ) -> pl.DataFrame:
         df = df.with_columns(
@@ -171,7 +239,7 @@ class HandleNewDailyDEPLast(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedEM,
+        obj: DailyEM,
         domain: Domain,
     ) -> pl.DataFrame:
         
@@ -202,7 +270,7 @@ class HandleNewDailyDERms(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedEM,
+        obj: DailyEM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -223,7 +291,7 @@ class HandleNewDailyDERng(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedEM,
+        obj: DailyEM,
         domain: Domain,
     ) -> pl.DataFrame:
         
@@ -254,7 +322,7 @@ class HandleNewDailyDESDev(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedEM,
+        obj: DailyEM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -274,7 +342,7 @@ class HandleNewDailyDEVar(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: DailyChunkedEM,
+        obj: DailyEM,
         domain: Domain,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
@@ -285,11 +353,17 @@ class HandleNewDailyDEVar(
         )
     
 __all__ = [
+    # "DailyDEMParams",
+    "DailyDEM",
     "HandleNewDailyDEM",
     "HandleNewDailyDEMA",
+    "DailyDEMA",
     "HandleNewDailyDEMax",
+    "DailyDEMax",
     "HandleNewDailyDEMid",
+    "DailyDEMid",
     "HandleNewDailyDEMin",
+    "DailyDEMin",
     "HandleNewDailyDEPLast",
     "HandleNewDailyDERms",
     "HandleNewDailyDERng",

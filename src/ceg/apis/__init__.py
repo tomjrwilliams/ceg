@@ -11,3 +11,4 @@ from . import data
 from . import pl
 
 from . import perf
+from . import eq

@@ -35,28 +35,8 @@ from ......apis import kv
 from ......engine import *
 
 from ..prelude import *
-from ..calc.m import *
+
 from ....calc.d import *
-
-@dataclass(frozen=True)
-class BarDailySkew(BarDailyM):
-    version: int = 0
-    type: Literal["BarDailySkew"] = "BarDailySkew"
-
-    SUFFIX: ClassVar[str] = "skew"
-
-    @dataclass(frozen=True)
-    class Snap(DailySnap):
-        type: Literal["BarDailySkewSnap"] = "BarDailySkewSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewBarDailySkew:
-        return HandleNewBarDailySkew()
-
-@dataclass(frozen=True)
-class HandleNewBarDailySkew(HandleNewDailySkew):
-    pass
 
 
 @dataclass(frozen=True)
@@ -71,7 +51,7 @@ class BarDailySkewDomain(DailyChunkedDomain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = BarDailySkew.new(ord, window=4)
+    >>> obj = DailySkew.new(ord, window=4)
     >>> domain = (
     ...     BarDailySkewDomain.empty(eng)
     ...     .with_obj(obj)
@@ -107,20 +87,18 @@ class BarDailySkewDomain(DailyChunkedDomain):
         obj: (
             EngineRoot
             | TBar
-            | BarDailySkew
+            | DailySkew
         )
 
     @dataclass(frozen=True)
     class snap_parser(SnapParser):
         snap: (
             TBarSnap
-            | BarDailySkew.Snap
+            | DailySkew.Snap
         )
 
 # TODO: if __name__ == __main__:
 # run domain by name
 __all__ = [
-    "BarDailySkew",
-    "HandleNewBarDailySkew",
     "BarDailySkewDomain",
 ]

@@ -36,7 +36,7 @@ from ......apis import kv
 from ......engine import *
 
 from ..prelude import *
-from ..calc.m import *
+
 from ....calc.d import *
 
 @dataclass(frozen=True)
@@ -51,15 +51,7 @@ class DailyMOscParams(DailyMParams):
     activation: str | None = None
 
 @dataclass(frozen=True)
-class BarDailyOsc(BarDailyM):
-    """BarDailyOsc(UseRootConfigs):\n
-    parent: BarDaily\n
-    symbol: str\n
-    field: str\n
-    adjust: str\n
-    fx: str | None = None # ccy to convert to\n
-    source: str | None = None\n
-    """
+class BarDailyOsc(DailyM):
     parent: (
         str
         | FutDailyOrdinal

@@ -41,3 +41,5 @@ if __name__ == "__main__":
         app_cache,
         project.domains
     ).run()
+
+# py -m streamlit run ./src/ceg/app/dev/run.py p001 reset

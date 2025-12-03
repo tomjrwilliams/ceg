@@ -448,15 +448,31 @@ class DailyPerformance(ExploreDailyComponent):
             exp.label_key,
             as_dict=True
         ).items():
-            r = perf.perf_row(
-                label_df,
-                k=label,
-                sig=True,
-                rx=exp.value_key,
-            )
+            if "group" in df.schema:
+                label_df = label_df.pivot(
+                    on="group",
+                    values=exp.value_key,
+                )
+                r = perf.perf_row(
+                    label_df,
+                    k=label,
+                    sig="Y",
+                    pos="pos",
+                    rx="rx"
+                )
+            else:
+                r = perf.perf_row(
+                    label_df,
+                    k=label,
+                    sig="Y",
+                    rx=exp.value_key,
+                )
             rs.append(r)
 
         st.table(pl.DataFrame(rs))
+
+        if "group" in df.schema:
+            df = df.filter(pl.col("group") == "rx")
 
         df_rx = df.with_columns(
             pl.col(exp.value_key)

@@ -442,20 +442,49 @@ class Domain:
         assert isinstance(obj, t), (obj, t)
         return obj
     
+    @overload
     def with_objs(
-        self, *obj: Object | None, force: bool = False
-    ) -> Domain:
+        self,
+        *obj: Object | None,
+        t: None=None,
+        force: bool = False
+    ) -> Domain: ...
+    @overload
+    def with_objs(
+        self,
+        *obj: Object | None,
+        t: Type[D],
+        force: bool = False
+    ) -> D: ...
+    def with_objs(
+        self,
+        *obj: Object | None,
+        t: Type[D] | None = None,
+        force: bool = False
+    ) -> Domain | D:
         for o in obj:
             if o is None:
                 continue
             self = self.with_obj(o, force=force)
+        if t is not None:
+            assert isinstance(self, t), (self, t)
         return self
 
+    @overload
     def with_obj(
-        self, obj: Object, force: bool = False
-    ) -> Domain:
+        self, obj: Object, t: None=None, force: bool = False, 
+    ) -> Domain: ...
+    @overload
+    def with_obj(
+        self, obj: Object, t: Type[D], force: bool = False, 
+    ) -> D: ...
+    def with_obj(
+        self, obj: Object, t: Type[D] | None = None, force: bool = False
+    ) -> Domain | D:
         # TODO: proper frozendict subtpye -> replace with set rather than dict spread
         if not force and obj.path in self.objects:
+            if t is not None:
+                assert isinstance(self, t), (self, t)
             return self
         if isinstance(obj.parent, Object):
             if not obj.parent.path in self.objects:
@@ -480,9 +509,12 @@ class Domain:
                         obj.path: dep
                     }
                 }
-        return replace(
+        self = replace(
             self, objects=objects, depends=depends
         )
+        if t is not None:
+            assert isinstance(self, t), (self, t)
+        return self
     
     # NOTE: we dont need to diff the domain itself
     # if we add objects then their depends will be picked up on sync, and we know to iter the whole queue again, regardless of the domains own latest
@@ -568,6 +600,7 @@ class Domain:
         
         return self
 
+D = TypeVar("D", bound=Domain)
 P = ParamSpec("P")
 
 def sync_object_def(

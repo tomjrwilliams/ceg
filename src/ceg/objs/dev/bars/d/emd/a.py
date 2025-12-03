@@ -33,31 +33,9 @@ from ......apis import kv
 from ......engine import *
 
 from ..prelude import *
-from ..calc.emd import *
+
 from ....calc.d import *
 
-# TODO: technicalyl given parent dont need the fields themselves?
-# the parent string contains all of that implicitly?
-
-@dataclass(frozen=True)
-class BarDailyDEMA(BarDailyDEM):
-    version: int = 0
-    type: Literal["BarDailyDEMA"] = "BarDailyDEMA"
-
-    SUFFIX: ClassVar[str] = "dema"
-
-    @dataclass(frozen=True)
-    class Snap(DailySnap):
-        type: Literal["BarDailyDEMASnap"] = "BarDailyDEMASnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewBarDailyDEMA:
-        return HandleNewBarDailyDEMA()
-
-@dataclass(frozen=True)
-class HandleNewBarDailyDEMA(HandleNewDailyDEMA):
-    pass
 
 @dataclass(frozen=True)
 class BarDailyDEMADomain(DailyChunkedDomain):
@@ -71,7 +49,7 @@ class BarDailyDEMADomain(DailyChunkedDomain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = BarDailyDEMA.new(ord, span=4)
+    >>> obj = DailyDEMA.new(ord, span=4)
     >>> domain = (
     ...     BarDailyDEMADomain.empty(eng)
     ...     .with_obj(obj)
@@ -107,20 +85,18 @@ class BarDailyDEMADomain(DailyChunkedDomain):
         obj: (
             EngineRoot
             | TBar
-            | BarDailyDEMA
+            | DailyDEMA
         )
 
     @dataclass(frozen=True)
     class snap_parser(SnapParser):
         snap: (
             TBarSnap
-            | BarDailyDEMA.Snap
+            | DailyDEMA.Snap
         )
 
 # TODO: if __name__ == __main__:
 # run domain by name
 __all__ = [
-    "BarDailyDEMA",
-    "HandleNewBarDailyDEMA",
     "BarDailyDEMADomain",
 ]

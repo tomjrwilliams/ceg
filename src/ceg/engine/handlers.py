@@ -197,7 +197,7 @@ class HandleNewChunkedGivenPlSeries(Handler):
         # TODO: or return ValueNew?
 
         df = self.calc_df(
-            pl.DataFrame({VALUE: v.ser}),
+            pl.DataFrame({VALUE: v.ser.fill_nan(None)}),
             event,
             obj,
             domain,

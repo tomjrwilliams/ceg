@@ -52,13 +52,12 @@ class PfolioDailyMetric(
     parent: PfolioDaily | str
     
     name: str
-    
-    metric: tuple[PfolioPositionMetric, ...]
+    values: tuple[PfolioPositionMetric, ...]
     # calc however you see fit, eg. dv01
     # NOTE: optional: eg. if name=dd, will use returns instead
 
     version: int = 0
-    type: Literal["PfolioDailyBtMetric"] = "PfolioDailyBtMetric"
+    type: Literal["PfolioDailyMetric"] = "PfolioDailyMetric"
 
     def get_parent(self, domain: Domain) -> PfolioDaily:
         return domain.get(self.parent, t=PfolioDaily)
@@ -68,18 +67,20 @@ class PfolioDailyMetric(
         cls,
         parent: PfolioDaily,
         name: str,
-        metric: tuple[PfolioPositionMetric, ...] = (),
+        values: tuple[PfolioPositionMetric, ...] = (),
     ):
         return cls(
             parent=parent,
             path=parent.extend_path(name),
             name=name,
-            metric=metric,
+            values=values,
         )
 
 @dataclass(frozen=True)
 class PfolioDailyAggregate(
-    UseRootConfigs,
+    UseChunkedValues,
+    DependsSelfNew,
+    DependsDomainSync,
 ):
     parent: PfolioDailyMetric | str
     
@@ -88,9 +89,13 @@ class PfolioDailyAggregate(
     version: int = 0
     type: Literal["PfolioDailyAggregate"] = "PfolioDailyAggregate"
 
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["PfolioDailyAggregateSnap"] = "PfolioDailyAggregateSnap"
+
     def get_parent(self, domain: Domain) -> PfolioDailyMetric:
         return domain.get(self.parent, t=PfolioDailyMetric)
-    
+
     @classmethod
     def new(
         cls,
@@ -104,15 +109,129 @@ class PfolioDailyAggregate(
             index=index,
         )
     
-# TODO: handler to calc
+    def depends(self, domain: Domain) -> list[Dependency]:
+        return (
+            self.depends_self(domain)
+            + self.depends_domain(domain)
+        )
+    
+    def handlers(self, event: Event, domain: Domain) -> list[Handler]:
+        parent = self.get_parent(domain)
+        res: list[Handler] = []
 
-# handler is name dependent
+        object_new = isinstance(event, ObjectNew)
+        object_change = isinstance(event, ObjectChange)
 
-# eg. for rx, we dont need metrics, and handler just sums
-# likewise for rx_vol
-# likewise for drawdown, also dont need metrics, handler sums and calcs dd (etc.)
+        if object_new and parent.name == "rx":
+            assert self.path == event.obj, (self, event)
+            res.append(HandleNewPfolioDailySumRx())
 
-# TODO: domain
+        # TODO: if upstream target change
+
+        elif object_change:
+            # TODO: throw? unless only chunk change
+            # then just rechunk
+            # or backend type / loc, then move
+            raise ValueError((self, event))
+        return res
+    
+@dataclass(frozen=True)
+class HandleNewPfolioDailyAggRx(Handler):
+
+    def agg_rx(
+        self,
+        rxs: list[ValuePlSeries],
+        first: dt.date,
+        last: dt.date,
+    ) -> pl.DataFrame:
+        ...
+
+    def handle(
+        self,
+        event: ObjectNew,
+        obj: PfolioDailyAggregate,
+        domain: Domain,
+    ):
+        snap = obj.get_snap(domain)
+
+        if snap is not None:
+            # NOTE: should already be handled?
+            return None
+        
+        parent = obj.get_parent(domain)
+
+        assert parent.name == "rx", parent
+        assert len(parent.values)== 0, parent
+
+        pfolio = parent.get_parent(domain)
+
+        agg = pfolio.agg[obj.index]
+
+        if len(agg.bt) == 0:
+            bts = [
+                PfolioDailyBt.new(pfolio, bt)
+                for bt in range(len(pfolio.bt))
+            ]
+        
+        bts = [
+            PfolioDailyBt.new(pfolio, bt)
+            for bt in agg.bt
+        ]
+        rxs = [
+            PfolioDailyRx.new(bt) for bt in bts
+        ]
+
+        rx_snap = rxs[0].get_snap(domain)
+        assert rx_snap is not None, rx_snap
+        assert isinstance(rx_snap, PfolioDailyRx.Snap), rx_snap
+
+        rx_v = [
+            rx.value_key_val(domain)
+            .get(rx.path, kv.BODY, t=ValuePlSeries)
+            for rx in rxs
+        ]
+
+        df = self.agg_rx(rx_v, rx_snap.first, rx_snap.last)
+
+        e, _ = set_value_chunk_from_df(
+            obj,
+            domain,
+            df,
+            VALUE,
+            chunk=kv.BODY,
+            publish=True,
+        )
+
+        snap = (
+            obj.snap_key_val(domain)
+            .set(obj.path, type(obj).Snap(
+                event,
+                obj.path,
+                dt.datetime.now(),
+                rx_snap.first,
+                rx_snap.last,
+            ), PfolioDailyAggregate.Snap)
+        )
+
+        return e
+    
+@dataclass(frozen=True)
+class HandleNewPfolioDailySumRx(
+    HandleNewPfolioDailyAggRx
+):
+
+    def agg_rx(
+        self,
+        rxs: list[ValuePlSeries],
+        first: dt.date,
+        last: dt.date,
+    ) -> pl.DataFrame:
+        return pl.DataFrame([
+            rx.ser.alias(rx.obj)
+            for rx in rxs
+        ]).select(
+            pl.sum_horizontal(pl.all()).alias(VALUE)
+        )
 
 __all__ = [
     "PfolioPositionMetric",

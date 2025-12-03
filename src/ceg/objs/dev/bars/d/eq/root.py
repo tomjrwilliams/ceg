@@ -116,9 +116,13 @@ class EqDailyDomainBase(Domain):
         value: ValueNumPy | ValuePlSeries
 
 EQ_ADJUSTMENTS = [
-    "full",
+    "pct",
     "split",
     "raw",
+    "price", # unsplit
+    "full", # unsplit, with div adjustments
+    "divs",
+    "splits",
 ]
 
 __all__ = [

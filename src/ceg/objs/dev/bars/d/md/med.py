@@ -33,28 +33,9 @@ from ......apis import kv
 from ......engine import *
 
 from ..prelude import *
-from ..calc.md import *
+
 from ....calc.d import *
 
-@dataclass(frozen=True)
-class BarDailyDMed(BarDailyMD):
-    version: int = 0
-    type: Literal["BarDailyDMed"] = "BarDailyDMed"
-
-    SUFFIX: ClassVar[str] = "dmed"
-
-    @dataclass(frozen=True)
-    class Snap(DailySnap):
-        type: Literal["BarDailyDMedSnap"] = "BarDailyDMedSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewBarDailyDMed:
-        return HandleNewBarDailyDMed()
-
-@dataclass(frozen=True)
-class HandleNewBarDailyDMed(HandleNewDailyDMed):
-    pass
     
 
 @dataclass(frozen=True)
@@ -69,7 +50,7 @@ class BarDailyDMedDomain(DailyChunkedDomain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = BarDailyDMed.new(ord, window=4)
+    >>> obj = DailyDMed.new(ord, window=4)
     >>> domain = (
     ...     BarDailyDMedDomain.empty(eng)
     ...     .with_obj(obj)
@@ -105,20 +86,18 @@ class BarDailyDMedDomain(DailyChunkedDomain):
         obj: (
             EngineRoot
             | TBar
-            | BarDailyDMed
+            | DailyDMed
         )
 
     @dataclass(frozen=True)
     class snap_parser(SnapParser):
         snap: (
             TBarSnap
-            | BarDailyDMed.Snap
+            | DailyDMed.Snap
         )
 
 # TODO: if __name__ == __main__:
 # run domain by name
 __all__ = [
-    "BarDailyDMed",
-    "HandleNewBarDailyDMed",
     "BarDailyDMedDomain",
 ]

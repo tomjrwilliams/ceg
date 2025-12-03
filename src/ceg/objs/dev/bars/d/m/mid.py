@@ -35,107 +35,8 @@ from ......apis import kv
 from ......engine import *
 
 from ..prelude import *
-from ..calc.m import *
+
 from ....calc.d import *
-
-@dataclass(frozen=True)
-class BarDailyMid(BarDailyM):
-    version: int = 0
-    type: Literal["BarDailyMid"] = "BarDailyMid"
-
-    SUFFIX: ClassVar[str] = "mid"
-
-    @dataclass(frozen=True)
-    class Snap(DailySnap):
-        type: Literal["BarDailyMidSnap"] = "BarDailyMidSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewBarDailyMid:
-        return HandleNewBarDailyMid()
-
-    @classmethod
-    def params_suffix(
-        cls,
-        window: int | None = None,
-        width: float | None = None,
-    ):
-        if window is None:
-            params = "ex"
-        else:
-            params = str(window)
-        return f"{cls.SUFFIX}-" + params + (
-            ""
-            if width is None
-            else f"-{width}"
-        )
-    
-    @classmethod
-    def new(
-        cls,
-        parent: (
-            EngineRoot
-            | FutDailyOrdinal
-            | FutDailyRx
-            | EqDailyEtf
-            | EqDailyStock
-            | EqDailyRx
-            | IndexDailyPx
-            | IndexDailyRx
-            | FxDailyPx
-            | FxDailyRx
-        ),
-        symbol: str | None = None,
-        ident: int | str | None = None,
-        field: str | None = None,
-        adjust: str | None = None,
-        source: str | None = None,
-        fx: str | None = None,
-        # --
-        window: int | None = None,
-        width: float | None = None,
-        #
-        t: (
-            None
-            | Type[FutDailyOrdinal]
-            | Type[FutDailyRx]
-            | Type[EqDailyEtf]
-            | Type[EqDailyStock]
-            | Type[EqDailyRx]
-            | Type[IndexDailyPx]
-            | Type[IndexDailyRx]
-            | Type[FxDailyPx]
-            | Type[FxDailyRx]
-        ) = None,
-    ):
-        if isinstance(parent, EngineRoot):
-            assert t is not None, t
-            assert isinstance(symbol, str), (cls, t)
-            assert adjust is not None, adjust
-            parent = t.new(
-                parent,
-                symbol,
-                ident=ident,
-                field=field,
-                adjust=adjust,
-                source=source,
-                fx=fx,
-            )
-        return cls(
-            path=parent.extend_path(cls.params_suffix(
-                window=window,
-                width=width,
-            )),
-            parent=parent,
-            params=DailyMidParams(
-                window=window,
-                width=width,
-            ),
-        )
-    
-@dataclass(frozen=True)
-class HandleNewBarDailyMid(HandleNewDailyMid):
-    pass
 
 @dataclass(frozen=True)
 class BarDailyMidDomain(DailyChunkedDomain):
@@ -149,7 +50,7 @@ class BarDailyMidDomain(DailyChunkedDomain):
     ...     adjust="pct",
     ...     source="frd"
     ... )
-    >>> obj = BarDailyMid.new(ord, window=4)
+    >>> obj = DailyMid.new(ord, window=4)
     >>> domain = (
     ...     BarDailyMidDomain.empty(eng)
     ...     .with_obj(obj)
@@ -185,20 +86,18 @@ class BarDailyMidDomain(DailyChunkedDomain):
         obj: (
             EngineRoot
             | TBar
-            | BarDailyMid
+            | DailyMid
         )
 
     @dataclass(frozen=True)
     class snap_parser(SnapParser):
         snap: (
             TBarSnap
-            | BarDailyMid.Snap
+            | DailyMid.Snap
         )
 
 # TODO: if __name__ == __main__:
 # run domain by name
 __all__ = [
-    "BarDailyMid",
-    "HandleNewBarDailyMid",
     "BarDailyMidDomain",
 ]

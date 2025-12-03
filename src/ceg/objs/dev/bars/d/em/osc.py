@@ -34,7 +34,7 @@ from ......apis import kv
 from ......engine import *
 
 from ..prelude import *
-from ..calc.em import *
+
 from ....calc.d import *
 
 from ......apis.pl import null_mask
@@ -53,9 +53,7 @@ class DailyEMOscParams(DailyEMParams):
     activation: str | None = None
 
 @dataclass(frozen=True)
-class BarDailyEOsc(
-    BarDailyEM,
-):
+class BarDailyEOsc(DailyEM):
     params: DailyEMOscParams
 
     version: int = 0
@@ -191,27 +189,41 @@ class HandleNewBarDailyEOsc(
     ) -> pl.DataFrame:
         params = obj.params
         parent = obj.get_parent(domain)
-        if isinstance(parent, FutDailyRx):
-            tags = parent.get_parent(domain).tags
+        if isinstance(parent, (
+            FutDailyRx,
+            EqDailyRx,
+        )):
+            if isinstance(parent, FutDailyRx):
+                tags = parent.get_parent(domain).tags
+                adjust = tags.adjust
+            else:
+                adjust = "pct"
             rx = pl.col(VALUE)
-            if tags.adjust == "pct":
+            if adjust == "pct":
                 px = (1 + rx).cum_prod().pipe(
                     null_mask, rx
                 )
-            elif tags.adjust == "abs":
+            elif adjust == "abs":
                 px = rx.cum_sum().pipe(
                     null_mask, rx
                 )
             else:
                 raise ValueError(obj)
-        elif isinstance(parent, FutDailyOrdinal):
-            tags = parent.tags
+        elif isinstance(parent, (
+            FutDailyOrdinal,
+            EqDailyEtf,
+        )):
+            if isinstance(parent, FutDailyOrdinal):
+                tags = parent.tags
+                adjust = tags.adjust
+            else:
+                adjust = "pct"
             px = pl.col(VALUE)
-            if tags.adjust == "pct":
+            if adjust == "pct":
                 rx = px.forward_fill().pct_change().pipe(
                     null_mask, px
                 )
-            elif tags.adjust == "abs":
+            elif adjust == "abs":
                 rx = px.forward_fill().diff().pipe(
                     null_mask, px
                 )

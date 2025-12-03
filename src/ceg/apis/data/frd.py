@@ -161,10 +161,10 @@ suffix_maps = cast(
                     empty=""
                 ),
                 folder=frozendict(
-                    full="adjsplitdiv",
-                    split="adjsplit",
-                    raw="unadj",
-                    default="adj",
+                    pct="adjsplitdiv_",
+                    split="adjsplit_",
+                    raw="UNADJUSTED",
+                    default="pct",
                 ),
             ),
             Folders.STOCK: SuffixMap(
@@ -173,10 +173,10 @@ suffix_maps = cast(
                     empty=""
                 ),
                 folder=frozendict(
-                    full="adjsplitdiv",
-                    split="adjsplit",
-                    raw="unadj",
-                    default="adj",
+                    pct="adjsplitdiv_",
+                    split="adjsplit_",
+                    raw="UNADJUSTED",
+                    default="pct",
                 ),
             ),
             Folders.IND: SuffixMap(
@@ -215,10 +215,11 @@ def folder_stem(
     if suffix is not None:
         suffix_folder = suffixes.get(suffix)
 
-    if folder == Folders.ETF:
+    if folder == Folders.ETF or folder == Folders.STOCK:
         folder = f"{folder}_{symbol[0]}"
 
     stem = f"{folder}_{snap}_{freq}"
+
     if suffix_folder is not None:
         stem = f"{stem}_{suffix_folder}"
 
@@ -259,7 +260,7 @@ def find_folder(
         if fp.name.startswith(stem):
             fps.append(fp)
 
-    assert len(fps) == 1, fps
+    assert len(fps) == 1, (fps, stem)
     fp = fps[0]
 
     return fp

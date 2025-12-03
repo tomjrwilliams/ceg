@@ -34,6 +34,8 @@ from .....apis import kv
 from .....engine import *
 
 from ...bars.d import *
+from ...calc.d import *
+
 from ...pfo import *
 
 #  ------------------
@@ -63,11 +65,14 @@ class EOscSignalParams:
         return f"osc-{self.fast}-{self.slow}-{self.vol}-{self.activation}"
 
 @dataclass(frozen=True)
-class MomEOscFutBtParams:
+class MomEOscFutBtParams(DailyBtParams):
+    product: str
     symbol: str
     pct: bool = False
     scale: EOscScaleNotionalParams | EOscScaleVolParams = EOscScaleNotionalParams()
     signal: EOscSignalParams | None = None
+    rescale: EOscScaleVolParams | None = None
+    rebal: str | None = None
 
     def label(self):
         pct = "-pct" if self.pct else ""
@@ -78,34 +83,100 @@ class MomEOscFutBtParams:
                 if self.signal is None 
                 else f"-{self.signal.label()}"
             )
+            + (
+                "" 
+                if self.rescale is None 
+                else f"-{self.rescale.label()}"
+            )
+            + (
+                "" 
+                if self.rebal is None 
+                else f"-{self.rebal}"
+            )
         )
 
 @dataclass(frozen=True)
-class MomEOscFutBtObjects:
-    symbol: str
+class MomEOscFutBtObjects(DailyBtObjects):
     params: MomEOscFutBtParams
-    fut_px: FutDailyOrdinal
-    fut_rx: FutDailyRx
-    scale: FutDailyOrdinal | BarDailyERms
-    signal: Object | None
-    bt: PfolioDailyBt
-    pos: PfolioDailyPos
-    rx: PfolioDailyRx
+    rx: Object
+    scale: (
+        EqDailyEtf | FutDailyOrdinal | DailyERms 
+    ) | tuple[
+        EqDailyEtf | FutDailyOrdinal | DailyERms, ...
+    ]
+    signal: BarDailyEOsc | None
+    rebalance: str | None
+    res: PfolioDailyBtRes
+
+    @classmethod
+    def new(
+        cls,
+        params: MomEOscFutBtParams,
+        rx_bt: Object,
+        scale: Object | tuple[Object, ...],
+        signal: Object | None,
+        rebalance: str | None,
+        i_bt: int,
+        bt: PfolioDailyBt,
+        pos: PfolioDailyPos,
+        rx: PfolioDailyRx,
+    ):
+        assert signal is None or isinstance(signal, BarDailyEOsc), signal
+        if isinstance(scale, tuple):
+            assert all([
+                isinstance(sc, (
+                    EqDailyEtf,
+                    FutDailyOrdinal,
+                    DailyERms,
+                )) for sc in scale
+            ]), scale
+            scale = cast(
+                tuple[
+                    EqDailyEtf
+                    | FutDailyOrdinal
+                    | DailyERms, ...
+                ], scale
+            )
+        else:
+            assert isinstance(scale, (
+                EqDailyEtf,
+                FutDailyOrdinal,
+                DailyERms,
+            )), scale
+        return cls(
+            params=params,
+            rx=rx_bt,
+            scale=scale,
+            signal=signal,
+            rebalance=rebalance,
+            res = PfolioDailyBtRes(
+                i_bt,
+                bt=bt,
+                pos=pos,
+                rx=rx,
+            )
+        )
+
+    # symbol: str
+    # fut_px: FutDailyOrdinal
+    # fut_rx: FutDailyRx
 
 @dataclass(frozen=True)
-class StratMomEOscFut(Domain):
+class StratMomEOscFut(DailyBtDomain):
     """
     >>> spec = MomEOscFutBtParams(
+    ...     "FUT",
     ...     "ES", 
     ...     signal=EOscSignalParams(32, 96, 48),
     ...     scale=EOscScaleVolParams(span=48)
     ... )
-    >>> dom, (res,) = StratMomEOscFut.new(spec)
+    >>> dom, (res,), agg = StratMomEOscFut.new(spec)
     >>> dom = dom.sync()
-    >>> pos = res.pos
-    >>> rx = res.rx
+    >>> pos = res.res.pos
+    >>> rx = res.res.rx
     >>> v_pos = pos.value_key_val(dom).get(pos.path, 1).ser
     >>> v_rx = rx.value_key_val(dom).get(rx.path, 1).ser
+    >>> v_agg = agg.value_key_val(dom).get(agg.path, 1).ser
     >>> v_pos.tail(8)
     shape: (8,)
     Series: 'pf.mom.eosc.fut.0-d-000-bt-000-pos' [f64]
@@ -118,6 +189,19 @@ class StratMomEOscFut(Domain):
         -0.043145
         -0.044309
         -0.04657
+    ]
+    >>> v_agg.tail(8)
+    shape: (8,)
+    Series: 'pf.mom.eosc.fut.0-d-000-rx-000' [f64]
+    [
+        -0.201154
+        0.0
+        0.0
+        -3.835789
+        -0.464287
+        2.795036
+        0.873693
+        5.150923
     ]
     >>> v_rx.tail(8)
     shape: (8,)
@@ -143,9 +227,9 @@ class StratMomEOscFut(Domain):
     sort 0.4375
     dd 166.3657
     calm 0.1585
-    pos_mu 0.1831
-    pos_sd 0.213
-    pos_skew 0.1727
+    p_mu 0.1831
+    p_sd 0.213
+    p_skew 0.1727
     """
     
     @classmethod
@@ -163,11 +247,10 @@ class StratMomEOscFut(Domain):
         def new(
             cls,
             parent: EngineRoot,
+            name: str = "mom.eosc.fut",
         ):
             return cls(
-                path = parent.extend_path(
-                    "strat.mom.eosc.fut"
-                ),
+                path = parent.extend_path(name),
                 parent=parent
             )
 
@@ -177,11 +260,15 @@ class StratMomEOscFut(Domain):
             EngineRoot
             | FutDailyOrdinal
             | FutDailyRx
+            | EqDailyEtf
+            | EqDailyRx
             | BarDailyEOsc
-            | BarDailyERms
+            | DailyERms
             | PfolioDailyBt
             | PfolioDailyPos
             | PfolioDailyRx
+            | PfolioDailyMetric
+            | PfolioDailyAggregate
         )
 
     @dataclass(frozen=True)
@@ -189,11 +276,14 @@ class StratMomEOscFut(Domain):
         snap: (
             FutDailyOrdinal.Snap
             | FutDailyRx.Snap
+            | EqDailyEtf.Snap
+            | EqDailyRx.Snap
             | BarDailyEOsc.Snap
-            | BarDailyERms.Snap
+            | DailyERms.Snap
             | PfolioDailyBt.Snap
             | PfolioDailyPos.Snap
             | PfolioDailyRx.Snap
+            | PfolioDailyAggregate.Snap
         )
 
     @classmethod
@@ -206,31 +296,64 @@ class StratMomEOscFut(Domain):
     ):
         if eng is None:
             eng = EngineRoot.new(ROOT)
-        res = []
+
+        res: list[MomEOscFutBtObjects] = []
+        
         self = cls.empty(eng)
         universe = Universe.new(
             eng, name, ident=ident
         )
+
         pfolio = PfolioDaily.new(universe, ident=ident)
+
         for bt in bts:
             symbol = bt.symbol
             px_adj = "pct" if bt.pct else "abs"
-            fut_px = FutDailyOrdinal.new(
-                eng,
-                symbol=symbol,
-                ident = 1,
-                field="close",
-                adjust=px_adj,
-                source="frd"
+            px = (
+                FutDailyOrdinal.new(
+                    eng,
+                    symbol=symbol,
+                    ident = 1,
+                    field="close",
+                    adjust=px_adj,
+                    source="frd"
+                )
+                if bt.product == "FUT"
+                else EqDailyEtf.new(
+                    eng,
+                    symbol=symbol,
+                    field="close",
+                    adjust="price",
+                    source="frd"
+                )
+                if bt.product == "ETF"
+                else None
             )
-            fut_rx = FutDailyRx.new(
-                eng,
-                symbol=symbol,
-                ident = 1,
-                field="close",
-                adjust="abs",
-                source="frd"
+            assert px is not None, bt
+            self = self.with_objs(
+                px, t=StratMomEOscFut
             )
+            rx = (
+                FutDailyRx.new(
+                    eng,
+                    symbol=symbol,
+                    ident = 1,
+                    field="close",
+                    adjust="abs",
+                    source="frd"
+                )
+                if bt.product == "FUT"
+                else EqDailyRx.new(
+                    eng,
+                    symbol=symbol,
+                    field="close",
+                    adjust="full",
+                    source="frd"
+                )
+                if bt.product == "ETF"
+                else None
+            )
+            assert rx is not None, bt
             if isinstance(
                 bt.scale, EOscScaleNotionalParams
             ):
@@ -244,62 +367,81 @@ class StratMomEOscFut(Domain):
                 )
                 unit = 100.
             elif isinstance(bt.scale, EOscScaleVolParams):
-                scale = BarDailyERms.new(
-                    fut_rx,
-                    span=bt.scale.span
+                scale = DailyERms.new(
+                    rx,
+                    span=bt.scale.span,
+                    alpha=None,
                 )
                 unit = 100. / 16 # because not annualised
             else:
                 raise ValueError(bt)
-            universe = universe.with_scale(scale)
+            
             if bt.signal is not None:
                 sig = BarDailyEOsc.new(
-                    fut_px,
+                    px,
                     fast=bt.signal.fast,
                     slow=bt.signal.slow,
                     vol=bt.signal.vol,
                     activation=bt.signal.activation
                 )
-                universe = universe.with_signal(sig)
-                pfolio = pfolio.with_pos(
-                    scale=len(universe.scale) - 1,
-                    signal=len(universe.signal) - 1,
-                    unit=unit,
-                )
             else:
-                pfolio = pfolio.with_pos(
-                    scale=len(universe.scale) - 1,
-                    unit=unit,
-                )
                 sig = None
-            pfolio = pfolio.with_bt(
-                len(pfolio.pos) - 1, rx = fut_rx
-            )
-            bt_params = bt
-            bt = PfolioDailyBt.new(pfolio, len(res))
-            pos = PfolioDailyPos.new(bt)
-            rx = PfolioDailyRx.new(bt)
-            bt_res = MomEOscFutBtObjects(
-                symbol=bt_params.symbol,
-                params = bt_params,
-                fut_px=fut_px,
-                fut_rx=fut_rx,
-                scale=scale,
+
+            (
+                self, universe, pfolio, bt_res
+            ) = self.with_bt_objs(
+                universe,
+                pfolio,
+                bt,
+                rx,
+                scale,
+                t=MomEOscFutBtObjects.new,
                 signal=sig,
-                bt=bt,
-                pos=pos,
-                rx=rx,
+                rebalance=bt.rebal,
+                unit=unit,
             )
-            self = self.with_objs(
-                bt_res.fut_px,
-                bt_res.fut_rx,
-                bt_res.scale,
-                bt_res.signal,
-                bt_res.bt,
-                bt_res.pos,
-                bt_res.rx,
+
+            if bt.rescale is None:
+                res.append(bt_res)
+                continue
+
+            rescale = DailyERms.new(
+                bt_res.res.rx,
+                span=bt.rescale.span,
+            )
+            (
+                self, universe, pfolio, bt_res
+            ) = self.with_bt_objs(
+                universe,
+                pfolio,
+                bt,
+                rx,
+                (
+                    "prod", (scale, rescale)
+                ),
+                t=MomEOscFutBtObjects.new,
+                signal=sig,
+                rebalance=bt.rebal,
+                unit=unit / 16,
             )
             res.append(bt_res)
         
-        self = self.with_objs(universe, pfolio, force=True)
-        return self, res
+        # TODO: return on notional is relevant when vol scaling
+
+        pfolio, i_agg = pfolio.with_agg(
+            tuple([r.res.i for r in res])
+        )
+
+        rx_metric = PfolioDailyMetric.new(pfolio, "rx")
+        rx_agg = PfolioDailyAggregate.new(rx_metric, i_agg)
+
+        self = self.with_objs(
+            universe,
+            pfolio,
+            rx_metric,
+            rx_agg,
+            force=True,
+            t=StratMomEOscFut
+        )
+
+        return self, res, rx_agg

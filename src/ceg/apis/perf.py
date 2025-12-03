@@ -115,8 +115,11 @@ def backtest_rx(
     for t in range(len(rx)):
         if rebal[t]:
             reb = True
+
+        # TODO: distinguish rebal first after including, versus rebal exactly
         # TODO: if rebal[t] = False, reset? (latest limit)
         # then have to disambiguate none from false
+
         if not calendar[t]:
             # cant rebal on non trading, no signal
             # do we have returns on non cal days?
@@ -826,15 +829,15 @@ def perf_row(
         ) = df.select(
             pl.col(pos)
             .mean()
-            .alias("pos_mu")
+            .alias("p_mu")
             .item(),
             pl.col(pos)
             .std()
-            .alias("pos_sd")
+            .alias("s_sd")
             .item(),
             pl.col(pos)
             .skew()
-            .alias("pos_skew")
+            .alias("p_skew")
             .item(),
             # ]
             # if row_sig else [
@@ -844,9 +847,9 @@ def perf_row(
             # ])
         ).row(0, named=False)
         pos_r = dict(
-            pos_mu = r_pos_mu,
-            pos_sd = r_pos_sd,
-            pos_skew = r_pos_skew,
+            p_mu = r_pos_mu,
+            p_sd = r_pos_sd,
+            p_skew = r_pos_skew,
         )
     else:
         pos_r = {}
