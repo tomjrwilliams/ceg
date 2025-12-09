@@ -214,6 +214,7 @@ class HandleNewChunkedGivenPlSeries(Handler):
 
         return e
 
+
 __all__ = [
     "VALUE",
     "set_value_chunk_from_df",

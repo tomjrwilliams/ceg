@@ -793,6 +793,280 @@ class HandleNewDailyEVar(HandleNewDailyEM):
             )
         )
 
+@dataclass(frozen=True)
+class DailyEZ(DailyEM):
+
+    version: int = 0
+    type: Literal["DailyEZ"] = "DailyEZ"
+
+    SUFFIX: ClassVar[str] = "ez"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyEZSnap"] = "DailyEZSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyEZ:
+        return HandleNewDailyEZ()
+    
+@dataclass(frozen=True)
+class HandleNewDailyEZ(HandleNewDailyEM):
+
+    def calc_expr(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyEM,
+        domain: Domain,
+    ) -> pl.Expr:
+        return self._calc_expr(
+            df,
+            event,
+            obj,
+            domain,
+        )
+
+    def _calc_expr(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyEM,
+        domain: Domain,
+    ) -> pl.Expr:
+        params = obj.params
+        mu = (
+            pl.col(VALUE).ewm_mean(
+                span=params.span,
+                alpha=params.alpha,
+                min_samples=1, # TODO: or more?
+                ignore_nulls=True,
+            )
+        )
+        sig = (
+            pl.col(VALUE)
+            .forward_fill()
+            .diff()
+            .pipe(apis.pl.null_mask, pl.col(VALUE))
+            .ewm_std(
+                span=params.span,
+                alpha=params.alpha,
+                min_samples=1, # TODO: or more?
+                ignore_nulls=True,
+            )
+        )
+        return (
+            (pl.col(VALUE) - mu) / sig
+        ).fill_nan(None)
+
+@dataclass(frozen=True)
+class DailyERZParams(DailyEMParams):
+    chunk: int = 32
+    # TODO: db?
+
+    span: float | None = None
+    alpha: float | None = None
+    width: float = 0.5
+    symmetric: bool = True
+    rescale: bool = False
+
+@dataclass(frozen=True)
+class DailyERZ(DailyEM):
+
+    params: DailyERZParams
+
+    version: int = 0
+    type: Literal["DailyERZ"] = "DailyERZ"
+
+    SUFFIX: ClassVar[str] = "erz"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyERZSnap"] = "DailyERZSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyERZ:
+        return HandleNewDailyERZ()
+    
+    @classmethod
+    def params_suffix(
+        cls,
+        span: float | None=None,
+        alpha: float | None=None,
+        width: float | None = None,
+        symmetric: bool = True,
+        rescale: bool = False,
+    ):
+        i = apis.t.only_index_not_none(
+            span, alpha, strict=True
+        )
+        if i == 0:
+            assert span is not None, span
+            assert span >= 1, span
+            params = f"{span}"
+        elif i == 1:
+            assert alpha is not None, alpha
+            assert 0 < alpha < 1, alpha
+            params = f"{alpha}"
+        else:
+            raise ValueError((span, alpha))
+        return f"{cls.SUFFIX}-" + params + (
+            ""
+            if width is None
+            else f"-{width}"
+        ) + (
+            "-sym"
+            if symmetric
+            else ""
+        ) + (
+            "-norm"
+            if rescale
+            else ""
+        )
+    
+    @overload
+    @classmethod
+    def new(
+        cls,
+        parent: EngineRoot | Object,
+        t: None = None,
+        span: float | None=None,
+        alpha: float | None=None,
+        width: float = 0.5,
+        symmetric: bool = False,
+        rescale: bool = False,
+    ) -> DailyEM: ...
+
+    @overload
+    @classmethod
+    def new(
+        cls,
+        parent: EngineRoot | Object,
+        t: Callable[
+            Concatenate[EngineRoot, P], O
+        ],
+        span: float | None=None,
+        alpha: float | None=None,
+        width: float = 0.5,
+        symmetric: bool = False,
+        rescale: bool = False,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> DailyEM: ...
+
+    @classmethod
+    def new(
+        cls,
+        parent: EngineRoot | Object,
+        t: Callable[
+            Concatenate[EngineRoot, P], O
+        ] | None = None,
+        span: float | None=None,
+        alpha: float | None=None,
+        width: float = 0.5,
+        symmetric: bool = False,
+        rescale: bool = False,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> DailyEM:
+        if isinstance(parent, EngineRoot):
+            assert t is not None, t
+            parent = t(parent, *args, **kwargs)
+        return cls(
+            path=parent.extend_path(cls.params_suffix(
+                span=span,
+                alpha=alpha,
+                width=width,
+                symmetric=symmetric,
+                rescale=rescale,
+            )),
+            parent=parent,
+            params=DailyERZParams(
+                span=span,
+                alpha=alpha,
+                width=width,
+                symmetric=symmetric,
+                rescale=rescale,
+            ),
+        )
+    
+@dataclass(frozen=True)
+class HandleNewDailyERZ(HandleNewDailyEM):
+
+    def calc_df(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyERZ,
+        domain: Domain,
+    ) -> pl.DataFrame:
+        return self._calc_df(
+            df,
+            event,
+            obj,
+            domain,
+        )
+        
+    def _calc_df(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyERZ,
+        domain: Domain,
+    ) -> pl.DataFrame:
+        params = obj.params
+
+        assert params.width == 0.5, params
+
+        if params.rescale:
+            scale = apis.stats.iqr_ratio(
+                width=params.width
+            )
+        else:
+            scale = 1
+
+        s = df.get_column(VALUE)
+        v = s.fill_null(0).to_numpy()
+        is_null = s.is_null().to_numpy()
+
+        mx = calc_max(v, is_null, alpha=obj.calc_alpha())
+        mn = calc_min(v, is_null, alpha=obj.calc_alpha())
+
+        v_ex = pl.col("OLD")
+
+        df = pl.DataFrame({
+            "OLD": s,
+            "max": mx,
+            "min": mn,
+        }).with_columns(
+            (pl.col("max") - pl.col("min"))
+            .mul(1/2)
+            .mul(scale)
+            .alias("rng")
+        )
+
+        if params.symmetric:
+            mid = (pl.col("max") + pl.col("min")) / 2
+        else:
+            mid = v_ex.ewm_mean(
+                alpha=obj.calc_alpha(),
+                min_samples=1, # TODO: or more?
+                ignore_nulls=True,
+            )
+
+        df = df.with_columns(
+            ((v_ex - mid) / pl.col("rng"))
+            .alias(VALUE)
+        )
+        return df.with_columns(
+            pl.when(v_ex.is_null())
+            .then(None)
+            .otherwise(pl.col(VALUE))
+            .fill_nan(None)
+            .alias(VALUE)
+        )
+
 __all__ = [
     "P", "O",
     "DailyEMParams",
@@ -819,4 +1093,8 @@ __all__ = [
     "DailyESDev",
     "HandleNewDailyEVar",
     "DailyEVar",
+    "HandleNewDailyEZ",
+    "DailyEZ",
+    "HandleNewDailyERZ",
+    "DailyERZ",
 ]

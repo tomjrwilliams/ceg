@@ -53,7 +53,7 @@ class PfolioDailyScale(PfolioScale):
 class PfolioDailyPosition(
 ):
     scale: int | PfolioDailyScale
-    signal: int | None=None
+    signal: int | PfolioSignal | None=None
     rebalance: int | str | None=None
     calendar: int | None=None
     weight: int | None=None
@@ -142,7 +142,7 @@ class PfolioDaily(
     def with_pos(
         self, 
         scale: int | PfolioScale | PfolioDailyPosition,
-        signal: int | None=None,
+        signal: int | PfolioSignal | None=None,
         rebalance: int | str | None=None,
         calendar: int | None=None,
         weight: int | None=None,
@@ -266,9 +266,11 @@ class HandleNewPfolioDailyBt(Handler):
             pos.rebalance, domain, 
             value=rx
         )
-        signal = univ.get_signal(
-            pos.signal, domain, DailyChunked
+        v_signal = (
+            None if pos.signal is None 
+            else univ.signal_value(pos.signal, domain)
         )
+
         calendar = univ.get_calendar(
             pos.calendar, domain, DailyChunked
         )
@@ -282,10 +284,6 @@ class HandleNewPfolioDailyBt(Handler):
         v_rx = (
             rx.value_key_val(domain)
             .get(rx.path, kv.BODY)
-        )
-        v_signal = None if signal is None else (
-            signal.value_key_val(domain)
-            .get(signal.path, kv.BODY)
         )
         v_calendar = None if calendar is None else (
             calendar.value_key_val(domain)
@@ -301,17 +299,35 @@ class HandleNewPfolioDailyBt(Handler):
         assert v_calendar is None or isinstance(v_calendar, ValuePlSeries), v_calendar
         assert v_weight is None or isinstance(v_weight, ValuePlSeries), v_weight
 
+        # TODO: parametrise out the lag
+
         df = pl.DataFrame({
             "rx": v_rx.ser,
             "scale": (
                 v_scale.ser.forward_fill()
                 .shift(1, fill_value=0)
             )
-        })
+        }).with_columns(
+            pl.date_range(rx_snap.first, rx_snap.last)
+            .alias("date")
+        )
         if v_signal is not None:
-            df = df.with_columns(
+            df_sig = pl.DataFrame({
+                "signal": v_signal.ser
+            }).with_columns(
+                pl.date_range(
+                    v_signal.start, # type: ignore
+                    v_signal.end, # type: ignore
+                ).alias("date")
+            )
+            df = df.join(
+                df_sig,
+                on="date",
+                coalesce=True,
+                how="left"
+            ).with_columns(
                 signal=(
-                    v_signal.ser.forward_fill()
+                    pl.col("signal").forward_fill()
                     .shift(1, fill_value=0)
                 )
             )
@@ -339,7 +355,7 @@ class HandleNewPfolioDailyBt(Handler):
             cum=False,
             rx="rx",
             scale="scale",
-            signal=None if signal is None else "signal",
+            signal=None if pos.signal is None else "signal",
             rebal=None if v_rebalance is None else "rebalance",
             calendar=None if calendar is None else "calendar",
             unit=pos.unit
@@ -428,49 +444,6 @@ class PfolioDailyPos(
             path=parent.extend_path("pos"),
         )
     
-# TODO: need separate bt implementations per asset class
-
-# futures assert dollar returns and implicitly dollar alloc
-
-# equities:
-# given dollar fully adjusted pct return vol
-# can scale by the preceding close price to get dollar vol
-
-# then on the next day, adjust by split value
-# ie. div 4 if split into four
-# but also adjust up the pos
-
-# so you both need to pre-calc the dollar vol series, including splits
-# and you need to pass the splits into the backtest, to auto-adjust (rather than effectively rebalancing itself)
-
-# and then you can just take value(t) - value(t-1) to get pnl
-
-
-# on a div day, you can either take it as a pct of prev close
-# apply to the value
-# net off against the price change (so essentially you add back the div)
-
-# or you can just for that day take the fully adjusted pct change, applied to the previous value
-# but still change the value using the naive price change (including the div drop out), and continue from there
-
-
-
-# alternatively i guess if you track the position and position value separately
-
-# so you need a starting price, and then pct returns (fully adjusted?) - ie. assume the splits net out
-
-
-# ie. given a starting raw price, you recompose what the dollar price would have been, without splits
-# thats probably the simplest approach
-
-# then the question is just how to deal with dividends - in your scaling term (eg. rolling dollar vol), you probably do pct vol and multiply by the unsplit synthetic price (so does include div drop, not in vol but in the t-1 unit value)
-
-# but in your pnl you need a different rx series
-# ie. your rx series and your unsplit synthetic price aren't quite equivalent
-# they differ on the dividend days, where your pnl rx series will have a (fully adjusted) pct return applied to the previous close
-# so you cant just sum the pnl rx series to get back to the unsplit
-
-
 @dataclass(frozen=True)
 class PfolioDailyRx(
     UseChunkedValues,
@@ -552,7 +525,7 @@ class DailyBtDomain(Domain):
             ],
             TDailyBtObjects
         ],
-        signal: Object | None=None,
+        signal: Object | tuple[Object, float, str | None] | None=None,
         rebalance: str | None = None,
         unit: float = 100.,
     ) -> tuple[
@@ -575,7 +548,21 @@ class DailyBtDomain(Domain):
         else:
             universe, i_scale = universe.with_scale(scale)
             scale_res = scale
-        if signal is not None:
+        if isinstance(signal, tuple):
+            signal, signal_scale, activation = signal
+            universe, i_sig = universe.with_signal(signal)
+            i_sig = PfolioSignal(
+                (i_sig,),
+                scale=signal_scale,
+                activation=activation
+            )
+            pfolio, i_pos = pfolio.with_pos(
+                scale=i_scale,
+                signal=i_sig,
+                unit=unit,
+                rebalance=rebalance,
+            )
+        elif signal is not None:
             universe, i_sig = universe.with_signal(signal)
             pfolio, i_pos = pfolio.with_pos(
                 scale=i_scale,

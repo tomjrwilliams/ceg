@@ -1160,6 +1160,252 @@ class HandleNewDailyVar(HandleNewDailyM):
             )
         )
 
+@dataclass(frozen=True)
+class DailyZ(DailyM):
+    version: int = 0
+    type: Literal["DailyZ"] = "DailyZ"
+
+    SUFFIX: ClassVar[str] = "z"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyZSnap"] = "DailyZSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyZ:
+        return HandleNewDailyZ()
+    
+@dataclass(frozen=True)
+class HandleNewDailyZ(HandleNewDailyM):
+
+    def calc_expr(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyM,
+        domain: Domain,
+    ) -> pl.Expr:
+        return self._calc_expr(
+            df,
+            event,
+            obj,
+            domain,
+        )
+
+    def _calc_expr(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyM,
+        domain: Domain,
+    ) -> pl.Expr:
+        params = obj.params
+        mu = pl.col(VALUE).rolling_mean(
+            len(df) if params.window is None else params.window,
+            min_samples=1, # TODO: or more?
+        )
+        sig = (
+            pl.col(VALUE)
+            .forward_fill()
+            .diff()
+            .pipe(apis.pl.null_mask, pl.col(VALUE))
+            .rolling_std(
+                len(df) if params.window is None else params.window,
+                min_samples=1, # TODO: or more?
+            )
+        )
+        return (
+            (pl.col(VALUE) - mu) / sig
+        ).fill_nan(None)
+
+    
+    
+@dataclass(frozen=True)
+class DailyRZParams(DailyMParams):
+    chunk: int = 32
+    # TODO: db?
+
+    window: int | None = None
+    width: float = 0.25
+    symmetric: bool = True
+    rescale: bool = False
+
+@dataclass(frozen=True)
+class DailyRZ(DailyM):
+
+    params: DailyRZParams
+
+    version: int = 0
+    type: Literal["DailyRZ"] = "DailyRZ"
+
+    SUFFIX: ClassVar[str] = "rz"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyRZSnap"] = "DailyRZSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyRZ:
+        return HandleNewDailyRZ()
+    
+    @classmethod
+    def params_suffix(
+        cls,
+        window: int | None = None,
+        width: float = 0.25,
+        symmetric: bool = True,
+        rescale: bool = False,
+    ):
+        if window is None:
+            params = "ex"
+        else:
+            params = str(window)
+        return f"{cls.SUFFIX}-" + params + (
+            ""
+            if width is None
+            else f"-{width}"
+        ) + (
+            "-sym"
+            if symmetric
+            else ""
+        ) + (
+            "-norm"
+            if rescale
+            else ""
+        )
+    
+    @overload
+    @classmethod
+    def new(
+        cls,
+        parent: EngineRoot | Object,
+        t: None = None,
+        window: int | None = None,
+        width: float = 0.25,
+        symmetric: bool = True,
+        rescale: bool = False,
+    ): ...
+    
+    @overload
+    @classmethod
+    def new(
+        cls,
+        parent: EngineRoot | Object,
+        t: Callable[
+            Concatenate[EngineRoot, P], O
+        ],
+        window: int | None = None,
+        width: float = 0.25,
+        symmetric: bool = True,
+        rescale: bool = False,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ): ...
+    @classmethod
+    def new(
+        cls,
+        parent: EngineRoot | Object,
+        t: Callable[
+            Concatenate[EngineRoot, P], O
+        ] | None = None,
+        window: int | None = None,
+        width: float = 0.25,
+        symmetric: bool = True,
+        rescale: bool = False,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ):
+        if isinstance(parent, EngineRoot):
+            assert t is not None, t
+            parent = t(parent, *args, **kwargs)
+        return cls(
+            path=parent.extend_path(cls.params_suffix(
+                window=window,
+                width=width,
+                symmetric=symmetric,
+                rescale=rescale,
+            )),
+            parent=parent,
+            params=DailyRZParams(
+                window=window,
+                width=width,
+                symmetric=symmetric,
+                rescale=rescale,
+            ),
+        )
+    
+@dataclass(frozen=True)
+class HandleNewDailyRZ(HandleNewDailyM):
+
+    def calc_expr(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyRZ,
+        domain: Domain,
+    ) -> pl.Expr:
+        return self._calc_expr(
+            df,
+            event,
+            obj,
+            domain,
+        )
+
+    def _calc_expr(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyRZ,
+        domain: Domain,
+    ) -> pl.Expr:
+        params = obj.params
+        assert params.width is not None, params
+        v = pl.col(VALUE)
+        med = v.rolling_median(
+            len(df) if params.window is None else params.window,
+            min_samples=1, # TODO: or more?
+        )
+        if params.symmetric:
+            q_up = v.rolling_quantile(
+                0.5 + params.width,
+                interpolation="linear",
+                window_size=len(df) if params.window is None else params.window,
+                min_samples=1, # TODO: or more?
+            )
+            q_dn = v.rolling_quantile(
+                0.5 - params.width,
+                interpolation="linear",
+                window_size=len(df) if params.window is None else params.window,
+                min_samples=1, # TODO: or more?
+            )
+            iqr = q_up - q_dn
+            mad = iqr / 2
+            # for symmetric, where median=average(up, dn):
+            # iqr/2 == mad
+        else:
+            med = v.rolling_median(
+                len(df) if params.window is None else params.window,
+                min_samples=1, # TODO: or more?
+            )
+            mad = (
+                (v - med).abs()
+            ).rolling_median(
+                len(df) if params.window is None else params.window,
+                min_samples=1, # TODO: or more?
+            )
+        
+        if params.rescale:
+            if not params.symmetric:
+                mad = mad * 1.4826
+            else:
+                mad = mad * apis.stats.iqr_ratio(
+                    params.width
+                )
+
+        return ((v - med) / mad).fill_nan(None)
+
 #  ------------------
 
 __all__ = [
@@ -1178,7 +1424,6 @@ __all__ = [
     "DailyMidParams",
     "DailyMid",
     "HandleNewDailyMid",
-    "DailyMid",
     "HandleNewDailyMin",
     "DailyMin",
     "HandleNewDailyPLast",
@@ -1202,4 +1447,8 @@ __all__ = [
     "DailySkew",
     "HandleNewDailyVar",
     "DailyVar",
+    "HandleNewDailyZ",
+    "DailyZ",
+    "HandleNewDailyRZ",
+    "DailyRZ",
 ]

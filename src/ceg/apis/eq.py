@@ -48,7 +48,7 @@ def calc_div(
     adj: np.ndarray,
     mask: np.ndarray,
 ):
-    res = np.empty(ref.shape, dtype=ref.dtype) * np.nan
+    res = np.zeros(ref.shape, dtype=ref.dtype) * np.nan
 
     p_ref: float = 0.
     p_adj: float = 0.

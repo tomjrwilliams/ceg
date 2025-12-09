@@ -38,6 +38,11 @@ from .root import *
 
 #  ------------------
 
+# VXTLT = tlt bond vol (from 2020 only)
+# GVZ = gold
+# EVZ eurocurrency
+# OVX = crude vol
+# vvix = vix vol
 
 @dataclass(frozen=True)
 class IndexDailyPx(

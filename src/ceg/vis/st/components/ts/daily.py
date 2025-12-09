@@ -28,6 +28,8 @@ from ...variables import *
 from ..core import *
 from ..dates import *
 from ..dfs import *
+
+from ..... import apis
 from .....apis import t
 from .....apis import perf
 
@@ -121,30 +123,35 @@ class DailyLinePlot(ExploreDailyComponent):
         if self.norm == "pct" and not self.cum:
             df = df.with_columns(
                 pl.col(exp.value_key)
+                .forward_fill()
                 .pct_change()
                 .add(1)
                 .cum_prod()
                 .over(exp.label_key)
+                .pipe(apis.pl.null_mask, pl.col(exp.value_key))
             )
         elif self.norm == "pct" and self.cum:
             df = df.with_columns(
                 pl.col(exp.value_key)
+                .fill_null(0)
                 .add(1)
                 .cum_prod()
                 .over(exp.label_key)
+                .pipe(apis.pl.null_mask, pl.col(exp.value_key))
             )
         elif self.cum:
             df = df.with_columns(
                 pl.col(exp.value_key)
                 .cum_sum()
                 .over(exp.label_key)
+                .pipe(apis.pl.null_mask, pl.col(exp.value_key))
             )
         elif self.norm is None:
             pass
         else:
             raise ValueError(self)
 
-        fig = px.line(
+        fig = px.scatter(
             df,
             x=exp.date_key,
             y=exp.value_key,

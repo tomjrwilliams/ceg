@@ -12,3 +12,7 @@ from . import pl
 
 from . import perf
 from . import eq
+
+from . import stats
+
+from . import cal

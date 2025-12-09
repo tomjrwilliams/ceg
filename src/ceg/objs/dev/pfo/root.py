@@ -38,7 +38,16 @@ from ....engine import *
 @dataclass(frozen=True)
 class PfolioScale():
     index: tuple[int, ...]
-    method: str
+    method: str | None = None
+    scale: float = 1.
+    activation: str | None = None
+
+@dataclass(frozen=True)
+class PfolioSignal():
+    index: tuple[int, ...]
+    method: str | None = None
+    scale: float = 1.
+    activation: str | None = None
 
 # TODO: rename daily, move under d
 
@@ -54,6 +63,121 @@ def find_object(
         elif isinstance(o, Object) and o.path == path:
             return i
     return None
+
+def apply_activation(
+    ser: pl.Series,
+    activation: str | None = None
+):
+    if activation is None:
+        return ser.fill_nan(None)
+    activation = (
+        activation.replace("ng", "neg")
+        .replace("tnlog", "tanhlog")
+    )
+    if activation == "tanh":
+        return ser.tanh().fill_nan(None)
+    if activation == "neg":
+        return (-1 * ser).fill_nan(None)
+    elif activation == "neg_tanhlog":
+        return (
+            -1 * ser.log().tanh()
+        ).fill_nan(None)
+    elif activation == "neg_tanhlog_neg":
+        return (
+            -1 * (-1 * ser).log().tanh()
+        ).fill_nan(None)
+    elif activation == "n_tanh_p_one":
+        return (
+            pl.DataFrame({VALUE: ser.tanh()})
+            .select(
+                pl.when(pl.col(VALUE).is_null())
+                .then(None)
+                .when(pl.col(VALUE) < 0)
+                .then(pl.col(VALUE))
+                .otherwise(1)
+                .alias(VALUE)
+            )
+            .get_column(VALUE).fill_nan(None)
+        )
+    elif activation == "n_one_p_tanh":
+        return (
+            pl.DataFrame({VALUE: ser.tanh()})
+            .select(
+                pl.when(pl.col(VALUE).is_null())
+                .then(None)
+                .when(pl.col(VALUE) > 0)
+                .then(pl.col(VALUE))
+                .otherwise(-1)
+                .alias(VALUE)
+            )
+            .get_column(VALUE).fill_nan(None)
+        )
+    else:
+        raise ValueError((ser, activation))
+
+
+def get_value(
+    obj: DailyChunked | list[DailyChunked],
+    domain: Domain,
+    scale: float = 1.0,
+    method: str | None = None,
+    activation: str | None = None,
+):
+    if isinstance(obj, Object):
+        ser = (
+            obj.value_key_val(domain)
+            .get(obj.path, kv.BODY, ValuePlSeries)
+            .ser
+        )
+        ser = apply_activation(ser, activation) * scale
+        snap = obj.snap_key_val(domain).get(
+            obj.path, DailySnap
+        )
+        assert snap is not None, obj
+        return ValuePlSeries.synthetic(
+            ser, start=snap.first, end=snap.last
+        )
+    vs = [
+        o.value_key_val(domain)
+        .get(o.path, kv.BODY, ValuePlSeries)
+        for o in obj
+    ]
+    snap = obj[0].snap_key_val(domain).get(
+        obj[0].path, DailySnap
+    )
+    assert snap is not None, obj
+
+    # TODO: df join if given diff dates by snap
+
+    df = pl.DataFrame([v.ser.alias(v.obj) for v in vs])
+    if method == "sum":
+        df = df.select(
+            pl.sum_horizontal(pl.all()).alias("res")
+        )
+    elif method == "mean":
+        df = df.select(
+            pl.mean_horizontal(pl.all()).alias("res")
+        )
+    elif method == "prod":
+        df = df.select(
+            pl.fold(
+                acc=pl.lit(1), 
+                function=lambda acc, x: acc * x, 
+                exprs=pl.all(),
+                return_dtype=pl.Float64,
+            )
+            .alias("res")
+        )
+    else:
+        assert len(obj) == 1, obj
+        df = df.select(
+            pl.col(vs[0].obj).alias("res")
+        )
+    ser = df.get_column("res")
+    ser = apply_activation(ser, activation) * scale
+    return ValuePlSeries.synthetic(
+        ser, start=snap.first, end=snap.last
+    )
 
 @dataclass(frozen=True)
 class Universe(
@@ -171,43 +295,21 @@ class Universe(
     ) -> ValuePlSeries:
         if isinstance(i, int):
             obj = self.get_scale(i, domain, DailyChunked)
-            v = (
-                obj.value_key_val(domain)
-                .get(obj.path, kv.BODY, ValuePlSeries)
+            return get_value(
+                obj,
+                domain,
             )
-            return v
         objs = [
             self.get_scale(ii, domain, DailyChunked)
             for ii in i.index
         ]
-        vs = [
-            o.value_key_val(domain)
-            .get(o.path, kv.BODY, ValuePlSeries)
-            for o in objs
-        ]
-        df = pl.DataFrame([v.ser.alias(v.obj) for v in vs])
-        if i.method == "sum":
-            df = df.select(
-                pl.sum_horizontal(pl.all()).alias("res")
-            )
-        elif i.method == "mean":
-            df = df.select(
-                pl.mean_horizontal(pl.all()).alias("res")
-            )
-        elif i.method == "prod":
-            df = df.select(
-                pl.fold(
-                    acc=pl.lit(1), 
-                    function=lambda acc, x: acc * x, 
-                    exprs=pl.all(),
-                    return_dtype=pl.Float64,
-                )
-                .alias("res")
-            )
-        else:
-            raise ValueError(i)
-        ser = df.get_column("res")
-        return ValuePlSeries.synthetic(ser)
+        return get_value(
+            objs,
+            domain,
+            method=i.method,
+            scale=i.scale,
+            activation=i.activation,
+        )
 
     def get_signal(
         self, i: int | None, domain: Domain, t: Type[O]
@@ -215,6 +317,29 @@ class Universe(
         if i is None or self.signal is None:
             return None
         return domain.get(self.signal[i], t=t)
+    
+    def signal_value(
+        self, i: int | PfolioSignal, domain: Domain, 
+    ) -> ValuePlSeries:
+        if isinstance(i, int):
+            obj = self.get_signal(i, domain, DailyChunked)
+            assert obj is not None, obj
+            return get_value(
+                obj,
+                domain,
+            )
+        objs = [
+            self.get_signal(ii, domain, DailyChunked)
+            for ii in i.index
+        ]
+        assert all([obj is not None for obj in objs]), objs
+        return get_value(
+            objs, # type: ignore
+            domain,
+            method=i.method,
+            scale=i.scale,
+            activation=i.activation,
+        )
     
     def get_rebalance(
         self, i: int | None, domain: Domain, t: Type[O]
@@ -247,7 +372,7 @@ class Universe(
                 pl.date_range(snap.first, snap.last)
                 .alias("date")
             ).select(
-                rebalance_mask(i)
+                apis.cal.rebalance_mask(i)
                 .alias("mask")
             )
             return ValuePlSeries.synthetic(
@@ -270,35 +395,4 @@ class Universe(
 
 #  ------------------
 
-def rebalance_mask(s: str):
-    # TODO: range selection, set selection
-    # TODO: every n (second month, etc.)
-
-    d = pl.col("date")
-    w = d.dt.week()
-    m = d.dt.month()
-    y = d.dt.year()
-    m_start = d.dt.month_start()
-    m_weekday = m_start.dt.weekday()
-    w_in_m = (
-        (d - m_start).dt.total_days() / 7
-    ).floor() + 1
-    exprs = []
-    n_d = n_w = n_m = None
-
-    if "D" in s:
-        n_d, s = s.split("D")
-        n_d = int(n_d)
-        # TODO: many?
-        exprs.append(d.dt.weekday() == n_d)
-    if "W" in s:
-        n_w, s = s.split("W")
-        n_w = int(n_w)
-        exprs.append(w_in_m == n_w)
-    if "M" in s:
-        n_m, s = s.split("M")
-        n_m = int(n_m)
-        exprs.append(m == n_m)
-    return pl.all_horizontal(*exprs)
-
-__all__ = ["Universe", "PfolioScale"]
+__all__ = ["Universe", "PfolioScale", "PfolioSignal"]

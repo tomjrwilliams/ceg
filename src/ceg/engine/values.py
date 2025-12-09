@@ -335,6 +335,9 @@ class ValueKeyChunkNumPySQLite( # TODO: f64?
 @dataclass(frozen=True)
 class ValuePlSeries(Value):
     ser: pl_types.Series
+
+    start: Any | None = None
+    end: Any | None = None
     
     def head(self, n: int) -> pl.Series:
         return self.ser.head(n)
@@ -343,12 +346,12 @@ class ValuePlSeries(Value):
         return self.ser.tail(n)
 
     @classmethod
-    def new(cls, k: str, ser: pl.Series) -> ValuePlSeries:
-        return cls(k, t.pl.Series.cast(ser))
+    def new(cls, k: str, ser: pl.Series, **kwargs) -> ValuePlSeries:
+        return cls(k, t.pl.Series.cast(ser), **kwargs)
     
     @classmethod
-    def synthetic(cls, ser: pl.Series) -> ValuePlSeries:
-        return cls.new("SYNTHETIC", ser)
+    def synthetic(cls, ser: pl.Series, **kwargs) -> ValuePlSeries:
+        return cls.new("SYNTHETIC", ser, **kwargs)
 
     @property
     def size(self):

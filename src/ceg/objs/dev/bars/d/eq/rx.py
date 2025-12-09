@@ -223,14 +223,14 @@ class EqDailyRxDomain(EqDailyDomain):
     shape: (8,)
     Series: 'test-eq-d-SPY-close-full-frd-rx' [f64]
     [
-        0.000329
+        9.375071
+        6.945601
+        null
+        5.529652
         null
         null
-        0.017908
-        0.002404
-        -0.011938
-        -0.002656
-        -0.020138
+        -4.650274
+        1.877995
     ]
     """
 

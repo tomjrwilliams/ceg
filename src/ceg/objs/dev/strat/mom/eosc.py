@@ -35,6 +35,7 @@ from .....engine import *
 
 from ...bars.d import *
 from ...calc.d import *
+from ...eco.d import *
 
 from ...pfo import *
 
@@ -55,6 +56,20 @@ class EOscScaleVolParams:
         return f"cv-{self.span}"
 
 @dataclass(frozen=True)
+class EcoSignalParams:
+    symbol: str
+    method: str
+    speed: int # span or window
+    activation: str | None = "tanh"
+    scale: float = 1.
+
+    def label(self):
+        s = f"{self.symbol}-{self.method}-{self.speed}"
+        if self.activation is not None:
+            return f"{s}-{self.activation}"
+        return s
+    
+@dataclass(frozen=True)
 class EOscSignalParams:
     fast: int
     slow: int
@@ -65,12 +80,12 @@ class EOscSignalParams:
         return f"osc-{self.fast}-{self.slow}-{self.vol}-{self.activation}"
 
 @dataclass(frozen=True)
-class MomEOscFutBtParams(DailyBtParams):
+class MomEOscBtParams(DailyBtParams):
     product: str
     symbol: str
     pct: bool = False
     scale: EOscScaleNotionalParams | EOscScaleVolParams = EOscScaleNotionalParams()
-    signal: EOscSignalParams | None = None
+    signal: EOscSignalParams | EcoSignalParams | None = None
     rescale: EOscScaleVolParams | None = None
     rebal: str | None = None
 
@@ -96,22 +111,28 @@ class MomEOscFutBtParams(DailyBtParams):
         )
 
 @dataclass(frozen=True)
-class MomEOscFutBtObjects(DailyBtObjects):
-    params: MomEOscFutBtParams
+class MomEOscBtObjects(DailyBtObjects):
+    params: MomEOscBtParams
     rx: Object
     scale: (
         EqDailyEtf | FutDailyOrdinal | DailyERms 
     ) | tuple[
         EqDailyEtf | FutDailyOrdinal | DailyERms, ...
     ]
-    signal: BarDailyEOsc | None
+    signal: (
+        BarDailyEOsc | DailyZ | DailyEZ | DailyRZ | DailyERZ
+        | DailyDEMax
+        | DailyDEMA
+        | EcoDailyObservation
+        | None
+    )
     rebalance: str | None
     res: PfolioDailyBtRes
 
     @classmethod
     def new(
         cls,
-        params: MomEOscFutBtParams,
+        params: MomEOscBtParams,
         rx_bt: Object,
         scale: Object | tuple[Object, ...],
         signal: Object | None,
@@ -121,7 +142,15 @@ class MomEOscFutBtObjects(DailyBtObjects):
         pos: PfolioDailyPos,
         rx: PfolioDailyRx,
     ):
-        assert signal is None or isinstance(signal, BarDailyEOsc), signal
+        assert signal is None or isinstance(
+            signal, (
+                BarDailyEOsc,
+                DailyZ | DailyEZ | DailyRZ | DailyERZ
+                | DailyDEMax
+                | DailyDEMA
+                | EcoDailyObservation
+            )
+        ), signal
         if isinstance(scale, tuple):
             assert all([
                 isinstance(sc, (
@@ -164,7 +193,7 @@ class MomEOscFutBtObjects(DailyBtObjects):
 @dataclass(frozen=True)
 class StratMomEOscFut(DailyBtDomain):
     """
-    >>> spec = MomEOscFutBtParams(
+    >>> spec = MomEOscBtParams(
     ...     "FUT",
     ...     "ES", 
     ...     signal=EOscSignalParams(32, 96, 48),
@@ -269,6 +298,11 @@ class StratMomEOscFut(DailyBtDomain):
             | PfolioDailyRx
             | PfolioDailyMetric
             | PfolioDailyAggregate
+            | DailyZ | DailyEZ
+            | DailyRZ | DailyERZ
+            | DailyDEMax
+            | DailyDEMA
+            | EcoDailyObservation
         )
 
     @dataclass(frozen=True)
@@ -284,12 +318,17 @@ class StratMomEOscFut(DailyBtDomain):
             | PfolioDailyPos.Snap
             | PfolioDailyRx.Snap
             | PfolioDailyAggregate.Snap
+            | DailyZ.Snap | DailyEZ.Snap
+            | DailyRZ.Snap | DailyERZ.Snap
+            | DailyDEMax.Snap
+            | DailyDEMA.Snap
+            | EcoDailyObservation.Snap
         )
 
     @classmethod
     def new(
         cls,
-        *bts: MomEOscFutBtParams,
+        *bts: MomEOscBtParams,
         name: str = "mom.eosc.fut",
         ident: int = 0,
         eng: EngineRoot | None = None,
@@ -297,7 +336,7 @@ class StratMomEOscFut(DailyBtDomain):
         if eng is None:
             eng = EngineRoot.new(ROOT)
 
-        res: list[MomEOscFutBtObjects] = []
+        res: list[MomEOscBtObjects] = []
         
         self = cls.empty(eng)
         universe = Universe.new(
@@ -376,7 +415,7 @@ class StratMomEOscFut(DailyBtDomain):
             else:
                 raise ValueError(bt)
             
-            if bt.signal is not None:
+            if isinstance(bt.signal, EOscSignalParams):
                 sig = BarDailyEOsc.new(
                     px,
                     fast=bt.signal.fast,
@@ -384,6 +423,73 @@ class StratMomEOscFut(DailyBtDomain):
                     vol=bt.signal.vol,
                     activation=bt.signal.activation
                 )
+            elif isinstance(bt.signal, EcoSignalParams):
+                v_eco = EcoDailyObservation.new(
+                    eng,
+                    symbol=bt.signal.symbol,
+                    source="fred",
+                )
+                if bt.signal.method == "z":
+                    sig = (
+                        DailyZ.new(
+                            v_eco, window=bt.signal.speed
+                        ), 
+                        bt.signal.scale, 
+                        bt.signal.activation)
+                elif bt.signal.method == "ez":
+                    sig = (
+                        DailyEZ.new(
+                            v_eco, span=bt.signal.speed
+                        ), 
+                        bt.signal.scale, 
+                        bt.signal.activation)
+                elif bt.signal.method == "rz":
+                    sig = (
+                        DailyRZ.new(
+                            v_eco, window=bt.signal.speed
+                        ), 
+                        bt.signal.scale, 
+                        bt.signal.activation)
+                elif bt.signal.method == "erz":
+                    sig = (
+                        DailyERZ.new(
+                            v_eco,
+                            span=bt.signal.speed
+                        ),
+                        bt.signal.scale,
+                        bt.signal.activation)
+                elif bt.signal.method == "dema":
+                    sig = (
+                        DailyDEMA.new(
+                            v_eco, span=bt.signal.speed
+                        ),
+                        bt.signal.scale,
+                        bt.signal.activation
+                    )
+                elif bt.signal.method == "demax":
+                    sig = (
+                        DailyDEMax.new(
+                            v_eco, span=bt.signal.speed
+                        ),
+                        bt.signal.scale,
+                        bt.signal.activation
+                    )
+                elif bt.signal.method == "zdemax":
+                    demax = DailyDEMax.new(
+                        v_eco, span=bt.signal.speed
+                    )
+                    sig = (
+                        DailyEZ.new(
+                            demax, span=bt.signal.speed
+                        ), 
+                        bt.signal.scale, 
+                        bt.signal.activation
+                    )
+                elif bt.signal.method == "raw":
+                    sig = (v_eco, bt.signal.scale, bt.signal.activation)
+                else:
+                    raise ValueError((bt))
+
             else:
                 sig = None
 
@@ -395,7 +501,7 @@ class StratMomEOscFut(DailyBtDomain):
                 bt,
                 rx,
                 scale,
-                t=MomEOscFutBtObjects.new,
+                t=MomEOscBtObjects.new,
                 signal=sig,
                 rebalance=bt.rebal,
                 unit=unit,
@@ -419,7 +525,7 @@ class StratMomEOscFut(DailyBtDomain):
                 (
                     "prod", (scale, rescale)
                 ),
-                t=MomEOscFutBtObjects.new,
+                t=MomEOscBtObjects.new,
                 signal=sig,
                 rebalance=bt.rebal,
                 unit=unit / 16,
@@ -445,3 +551,144 @@ class StratMomEOscFut(DailyBtDomain):
         )
 
         return self, res, rx_agg
+
+from ....vis import explorer
+
+@dataclass(frozen=True)
+class MomEOscProject(explorer.Project):
+
+    SPAN_FAST: ClassVar[list[int]] = []
+    SPAN_RATIO: ClassVar[list[float]] = []
+    SPAN_VOL_SIG: ClassVar[list[int]] = []
+    SPAN_VOL_SCALE: ClassVar[list[int]] = []
+
+    def with_mom_eosc_page(
+        self,
+        name: str,
+        product_symbols: list[tuple[str, str]],
+        span_fast: list[int]=[],
+        span_ratio: list[float]=[],
+        span_vol_sig: list[int]=[],
+        span_vol_scale: list[int]=[],
+        span_vol_rescale: list[int] | None = None,
+        rebal: str | None = None,
+        with_agg_rx: bool = False,
+        with_no_signal: bool = True,
+        # TODO: rebal rules
+    ):
+        cls = type(self)
+
+        if not len(span_fast):
+            span_fast = cls.SPAN_FAST
+        if not len(span_ratio):
+            span_ratio = cls.SPAN_RATIO
+        if not len(span_vol_sig):
+            span_vol_sig = cls.SPAN_VOL_SIG
+        if not len(span_vol_scale):
+            span_vol_scale = cls.SPAN_VOL_SCALE
+
+        signals = (
+            [None]
+            if with_no_signal
+            else []
+        ) + [
+            EOscSignalParams(
+                fast, int(fast * ratio), vol
+            )
+            for fast in span_fast
+            for vol in span_vol_sig
+            for ratio in span_ratio
+        ]
+        scales = [
+            EOscScaleVolParams(span=span)
+            for span in span_vol_scale
+        ]
+        rescales = [
+            None
+        ] if span_vol_rescale is None else [
+            EOscScaleVolParams(span=span)
+            for span in span_vol_rescale
+        ]
+
+        params = [
+            MomEOscBtParams(
+                product,
+                symbol,
+                scale=scale,
+                signal=signal,
+                rescale=rescale,
+                rebal=rebal,
+            )
+            for rescale in rescales
+            for scale in scales
+            for signal in signals
+            for product, symbol in product_symbols
+        ]
+
+        return self.with_mom_eosc_page_from_params(
+            params,
+            name,
+            with_agg_rx=with_agg_rx
+        )
+
+    def with_mom_eosc_page_from_params(
+        self,
+        params: list[MomEOscBtParams],
+        name: str,
+        with_agg_rx: bool = False,
+    ):
+        bts: list[MomEOscBtObjects]
+
+        d, bts, rx_agg = StratMomEOscFut.new(
+            *params,
+            name=f"mom-eosc-fut-{name}"
+        )
+        self = self.with_domains(**{
+            name: lambda sync: explorer.AppDomain(
+                [d], sync
+            )
+        }).with_page(
+            name,
+            type="daily",
+            domain=name,
+        )
+        if with_agg_rx:
+            self = self.with_object(
+                rx_agg.path,
+                graph=0,
+                label=name,
+                group="rx",
+            ).with_object(
+                rx_agg.path,
+                graph=0,
+                label=name,
+                group="pos"
+            )
+        for bt in bts:
+            self = self.with_object(
+                bt.res.rx.path,
+                graph=0,
+                label=bt.params.label(),
+                group="rx",
+            ).with_object(
+                bt.res.pos.path,
+                graph=0,
+                label=bt.params.label(),
+                group="pos"
+            )
+            if bt.signal is not None:
+                self = self.with_object(
+                    bt.signal.path,
+                    graph=1,
+                    label=bt.params.label(),
+                    group="sig"
+                )
+        self = self.with_graph(
+            0,
+            "perf"
+        )
+        self = self.with_graph(
+            1,
+            "line"
+        )
+        return cast(MomEOscProject, self)

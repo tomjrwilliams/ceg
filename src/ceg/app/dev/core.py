@@ -4,7 +4,7 @@ from typing import (
     Callable,
 )
 from ...objs.vis import explorer
-from ...objs.dev import fut
+from ...objs.dev.bars import *
 
 from dataclasses import replace, field
 if TYPE_CHECKING:
@@ -14,14 +14,14 @@ else:
 
 
 PROJECTS = {
-    "": explorer.Project().with_domains(
+    "": lambda: explorer.Project().with_domains(
         es= lambda sync: explorer.AppDomain([
-            fut.d.bars.ord.FutDailyOrdinalDomain.new(),
-            fut.d.bars.rx.FutDailyRxDomain.new(),
+            FutDailyOrdinalDomain.new(),
+            FutDailyRxDomain.new(),
         ], sync),
         tn= lambda sync: explorer.AppDomain([
-            fut.d.bars.ord.FutDailyOrdinalDomain.new("TN"),
-            fut.d.bars.rx.FutDailyRxDomain.new("TN"),
+            FutDailyOrdinalDomain.new("TN"),
+            FutDailyRxDomain.new("TN"),
         ], sync),
     )
 }

@@ -25,7 +25,7 @@ if __name__ == "__main__":
         app_cache = f"./__local__/apps/{app_name}"
         Path(app_cache).mkdir(exist_ok=True, parents=True)
 
-    project = ceg.app.dev.PROJECTS[project_name]
+    project = ceg.app.dev.PROJECTS[project_name]()
 
     if len(args) > 1:
         command = args[1]

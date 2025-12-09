@@ -28,6 +28,7 @@ from frozendict import frozendict
 import numpy as np
 import polars as pl
 
+from ..... import apis
 from .....apis import t
 from .....apis import kv
 from .....engine import *
@@ -140,7 +141,7 @@ class HandleNewPfolioDailyAggRx(Handler):
 
     def agg_rx(
         self,
-        rxs: list[ValuePlSeries],
+        rxs: pl.DataFrame,
         first: dt.date,
         last: dt.date,
     ) -> pl.DataFrame:
@@ -185,13 +186,19 @@ class HandleNewPfolioDailyAggRx(Handler):
         assert rx_snap is not None, rx_snap
         assert isinstance(rx_snap, PfolioDailyRx.Snap), rx_snap
 
-        rx_v = [
-            rx.value_key_val(domain)
-            .get(rx.path, kv.BODY, t=ValuePlSeries)
+        rx_dfs = [
+            chunked_daily_to_df(rx, domain)
             for rx in rxs
         ]
+        rx_df = apis.pl.join_dfs(
+            *rx_dfs,
+            on="date",
+            how="full",
+            coalesce=True,
+            maintain_order="left_right",
+        )
 
-        df = self.agg_rx(rx_v, rx_snap.first, rx_snap.last)
+        df = self.agg_rx(rx_df, rx_snap.first, rx_snap.last)
 
         e, _ = set_value_chunk_from_df(
             obj,
@@ -214,7 +221,8 @@ class HandleNewPfolioDailyAggRx(Handler):
         )
 
         return e
-    
+
+
 @dataclass(frozen=True)
 class HandleNewPfolioDailySumRx(
     HandleNewPfolioDailyAggRx
@@ -222,14 +230,11 @@ class HandleNewPfolioDailySumRx(
 
     def agg_rx(
         self,
-        rxs: list[ValuePlSeries],
+        rxs: pl.DataFrame,
         first: dt.date,
         last: dt.date,
     ) -> pl.DataFrame:
-        return pl.DataFrame([
-            rx.ser.alias(rx.obj)
-            for rx in rxs
-        ]).select(
+        return rxs.drop("date").select(
             pl.sum_horizontal(pl.all()).alias(VALUE)
         )
 

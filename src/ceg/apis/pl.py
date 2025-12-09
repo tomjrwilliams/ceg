@@ -84,6 +84,18 @@ def drop_zero(
         expr = expr.round(dp)
     return df.filter(expr != 0)
 
+def join_dfs(
+    *_dfs: pl.DataFrame,
+    **kwargs,
+):
+    dfs = list(_dfs)
+    df, *dfs = dfs
+    for df_r in dfs:
+        df = df.join(
+            df_r,**kwargs
+        )
+    return df
+
 __all__ = [
     "assert_is",
     "null_mask",

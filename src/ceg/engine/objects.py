@@ -82,6 +82,8 @@ def object_parser(cls: Type[Object]) -> Type[ObjectParser]:
         }
     ))
 
+TSnap = TypeVar("TSnap", bound=Snap)
+
 @dataclass(frozen=True)
 class Object:
     """
@@ -223,9 +225,16 @@ class Object:
         return self.obj_key_val(domain).set(self.path, self)
 
     # NOTE: not a classmethod, so can be overriden with more specific type by child
-    def get_snap(self, domain: Domain) -> Snap | None:
+    @overload
+    def get_snap(self, domain: Domain, t: None = None) -> Snap | None: ...
+    @overload
+    def get_snap(self, domain: Domain, t: Type[TSnap]) -> TSnap: ...
+    def get_snap(self, domain: Domain, t: Type[TSnap] | None =None) -> Snap | None:
         try:
-            return self.snap_key_val(domain).get(self.path)
+            o = self.snap_key_val(domain).get(self.path)
+            if t is not None:
+                assert isinstance(o, t), (o, t)
+            return o
         except:
             raise ValueError(self)
 

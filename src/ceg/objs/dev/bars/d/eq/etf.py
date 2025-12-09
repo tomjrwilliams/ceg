@@ -170,16 +170,13 @@ def load_join_dfs(
         f_df(symbol, field, adjust, alias)
         for adjust, alias in adjust_aliases
     ]
-    df, *dfs = dfs
-    for df_r in dfs:
-        df = df.join(
-            df_r,
-            on="date",
-            how="full",
-            coalesce=True,
-            maintain_order="left_right",
-        )
-    return df
+    return apis.pl.join_dfs(
+        *dfs,
+        on="date",
+        how="full",
+        coalesce=True,
+        maintain_order="left_right",
+    )
 
 @dataclass(frozen=True)
 class HandleNewEqDailyEtf(Handler):

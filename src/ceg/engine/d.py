@@ -116,6 +116,20 @@ class HandleNewDaily( # suffix with from df etc.?
         domain: Domain,
     ) -> pl.DataFrame: ...
 
+def chunked_daily_to_df(
+    obj: UseChunkedValues,
+    domain: Domain,
+):
+    snap = obj.get_snap(domain, t = DailySnap)
+    v = (
+        obj.value_key_val(domain)
+        .get(obj.path, kv.BODY, t=ValuePlSeries)
+    )
+    return pl.DataFrame({
+        v.obj: v.ser
+    }).with_columns(
+        pl.date_range(snap.first, snap.last).alias("date")
+    )
 
 __all__ = [
     "DailyChunkedDomain",
@@ -123,4 +137,5 @@ __all__ = [
     "DailyParams",
     "DailyChunked",
     "HandleNewDaily",
+    "chunked_daily_to_df",
 ]

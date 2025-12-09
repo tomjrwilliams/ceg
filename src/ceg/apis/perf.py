@@ -126,8 +126,15 @@ def backtest_rx(
             continue
         if np.isnan(rx[t]):
             continue
+        
         sig = signal[t]
         sca = scale[t]
+
+        if np.isnan(sig) or not np.isfinite(sig):
+            continue
+        if np.isnan(sca) or not np.isfinite(sca):
+            continue
+
         res_rx[t] = rx[t] * pos
         if not live:
             live = True

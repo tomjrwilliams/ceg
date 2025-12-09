@@ -173,3 +173,6 @@ cython_debug/
 __local__/*
 
 .vscode/*
+
+*FRED_API.py
+*tickers.txt
