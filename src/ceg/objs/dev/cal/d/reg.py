@@ -49,7 +49,7 @@ class CalDailyPattern:
 
 @dataclass(frozen=True)
 class CalDailyRegular(
-    DailyChunked,
+    Daily,
 ):
     parent: CalDaily | str
 
@@ -140,7 +140,7 @@ class HandleNewCalDailyRegular(Handler):
         raise ValueError(self)
         d_min, d_max = None
 
-        e, v = handlers.set_value_chunk_from_df(
+        e, v = handlers.set_value_from_df(
             obj,
             domain,
             df,
@@ -201,7 +201,7 @@ class CalDailyDomainOnlyEtf(Domain):
 #     ...     .with_obj(obj)
 #     ...     .sync()
 #     ... )
-#     >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+#     >>> obj.value_key_val(domain).get(obj.path).tail(8)
 #     shape: (8,)
 #     Series: 'test-eq-d-SPY-close-full-frd' [f64]
 #     [

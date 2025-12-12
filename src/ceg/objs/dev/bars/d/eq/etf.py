@@ -45,7 +45,6 @@ from ......apis.eq import *
 @dataclass(frozen=True)
 class EqDailyEtf(
     HasEqDailyParent,
-    DailyChunked,
     BarDaily,
 ):
     parent: EqDaily | str
@@ -179,7 +178,10 @@ def load_join_dfs(
     )
 
 @dataclass(frozen=True)
-class HandleNewEqDailyEtf(Handler):
+class HandleNewEqDailyEtf(
+    HandleNewValueFromPl,
+    HandleNewDailyFromDf,
+):
     def handle(
         self,
         event: ObjectNew,
@@ -271,33 +273,17 @@ class HandleNewEqDailyEtf(Handler):
         else:
             raise ValueError(tags)
 
-        d_min, d_max = df.pipe(
-            apis.pl.select_items,
-            (
-                pl.col("date").min(),
-                pl.col("date").max(),
-            ),
-            t=dt.date
-        )
-
-        e, v = handlers.set_value_chunk_from_df(
+        e, v = self.set_value_from_df(
             obj,
             domain,
             df,
             tags.field,
-            chunk=kv.BODY,
             publish=True,
+            t = self.key_value_type(obj, domain),
         )
 
-        snap = (
-            obj.snap_key_val(domain)
-            .set(obj.path, EqDailyEtf.Snap(
-                event,
-                obj.path,
-                dt.datetime.now(),
-                d_min,
-                d_max,
-            ))
+        snap = self.set_snap_from_df(
+            df, event, obj, domain
         )
 
         return e
@@ -367,7 +353,7 @@ class EqDailyEtfDomain(EqDailyDomainOnlyEtf):
     ...     .with_objs(*objs)
     ...     .sync()
     ... )
-    >>> f_v = lambda o: o.value_key_val(dom).get(o.path, 1)
+    >>> f_v = lambda o: o.value_key_val(dom).get(o.path)
     >>> f_v(spy).tail(8)
     shape: (8,)
     Series: 'test-eq-d-SPY-close-pct-frd' [f64]

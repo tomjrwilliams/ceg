@@ -54,7 +54,7 @@ class DailyMParams(DailyParams):
 
 
 @dataclass(frozen=True)
-class DailyM(DailyChunked):
+class DailyM(DailyWithDailyParent, DailyChunked):
     parent: Object | str
     # tags: DailyTags
     params: DailyMParams
@@ -125,10 +125,9 @@ class DailyM(DailyChunked):
 
 @dataclass(frozen=True)
 class HandleNewDailyM(
-    HandleNewChunkedGivenPlSeries,
-    HandleNewDailyChunkedFromChunkedParent,
-
+    HandleNewDailyFromDailyParentPl,
 ):
+    
     pass
 
 #  ------------------
@@ -1207,6 +1206,63 @@ class HandleNewDailyZ(HandleNewDailyM):
         )
         sig = (
             pl.col(VALUE)
+            .rolling_std(
+                len(df) if params.window is None else params.window,
+                min_samples=1, # TODO: or more?
+            )
+        )
+        return (
+            (pl.col(VALUE) - mu) / sig
+        ).fill_nan(None)
+
+    
+@dataclass(frozen=True)
+class DailyZW(DailyM):
+    version: int = 0
+    type: Literal["DailyZW"] = "DailyZW"
+
+    SUFFIX: ClassVar[str] = "zw"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyZWSnap"] = "DailyZWSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyZ:
+        return HandleNewDailyZ()
+    
+@dataclass(frozen=True)
+class HandleNewDailyZW(HandleNewDailyM):
+
+    def calc_expr(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyM,
+        domain: Domain,
+    ) -> pl.Expr:
+        return self._calc_expr(
+            df,
+            event,
+            obj,
+            domain,
+        )
+
+    def _calc_expr(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyM,
+        domain: Domain,
+    ) -> pl.Expr:
+        params = obj.params
+        mu = pl.col(VALUE).rolling_mean(
+            len(df) if params.window is None else params.window,
+            min_samples=1, # TODO: or more?
+        )
+        sig = (
+            pl.col(VALUE)
             .forward_fill()
             .diff()
             .pipe(apis.pl.null_mask, pl.col(VALUE))
@@ -1406,6 +1462,52 @@ class HandleNewDailyRZ(HandleNewDailyM):
 
         return ((v - med) / mad).fill_nan(None)
 
+@dataclass(frozen=True)
+class DailyRZW(DailyRZ):
+
+    params: DailyRZParams
+
+    version: int = 0
+    type: Literal["DailyRZW"] = "DailyRZW"
+
+    SUFFIX: ClassVar[str] = "rzw"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyRZWSnap"] = "DailyRZWSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyRZW:
+        return HandleNewDailyRZW()
+    
+@dataclass(frozen=True)
+class HandleNewDailyRZW(HandleNewDailyM):
+
+    def calc_expr(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyRZ,
+        domain: Domain,
+    ) -> pl.Expr:
+        return self._calc_expr(
+            df,
+            event,
+            obj,
+            domain,
+        )
+
+    def _calc_expr(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyRZ,
+        domain: Domain,
+    ) -> pl.Expr:
+        params = obj.params
+        raise NotImplementedError()
+    
 #  ------------------
 
 __all__ = [
@@ -1451,4 +1553,8 @@ __all__ = [
     "DailyZ",
     "HandleNewDailyRZ",
     "DailyRZ",
+    "HandleNewDailyZW",
+    "DailyZW",
+    "HandleNewDailyRZW",
+    "DailyRZW",
 ]

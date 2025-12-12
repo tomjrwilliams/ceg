@@ -38,7 +38,7 @@ from ....calc.d import *
 
 
 @dataclass(frozen=True)
-class BarDailyDQileDomain(DailyChunkedDomain):
+class BarDailyDQileDomain(DailyDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
@@ -55,7 +55,7 @@ class BarDailyDQileDomain(DailyChunkedDomain):
     ...     .with_obj(obj)
     ...     .sync()
     ... )
-    >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+    >>> obj.value_key_val(domain).get(obj.path).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-dqile-4-0.5' [f64]
     [
@@ -72,7 +72,7 @@ class BarDailyDQileDomain(DailyChunkedDomain):
 
     @dataclass(frozen=True)
     class Root(
-        DailyChunkedDomain.Root,
+        DailyDomain.Root,
     ):
 
         version: int = 0

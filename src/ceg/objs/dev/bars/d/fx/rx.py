@@ -44,7 +44,6 @@ from .px import FxDailyPx, HasFxDailyPxParent
 @dataclass(frozen=True)
 class FxDailyRx(
     HasFxDailyPxParent,
-    DailyChunked,
     BarDaily,
 ):
     parent: FxDailyPx | str
@@ -134,8 +133,7 @@ class HandleUpdateFxDailyRx(Handler):
 
 @dataclass(frozen=True)
 class HandleNewFxDailyRx(
-    HandleNewChunkedGivenPlSeries,
-    HandleNewDailyChunkedFromChunkedParent,
+    HandleNewDailyFromDailyParentPl
 ):
     
     def calc_df(
@@ -214,7 +212,7 @@ class FxDailyRxDomain(FxDailyDomain):
     ...     .with_obj(obj)
     ...     .sync()
     ... )
-    >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+    >>> obj.value_key_val(domain).get(obj.path).tail(8)
     shape: (8,)
     Series: 'test-fx-d-EURUSD-close-raw-frd-rx' [f64]
     [

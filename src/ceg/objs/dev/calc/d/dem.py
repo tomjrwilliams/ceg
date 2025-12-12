@@ -46,8 +46,8 @@ class DailyDEM(DailyEM):
 
 @dataclass(frozen=True)
 class HandleNewDailyDEM(
-    HandleNewChunkedGivenPlSeries,
-    HandleNewDailyChunkedFromChunkedParent,
+    HandleNewValueFromPl,
+    HandleNewDailyFromDailyParent,
 
 ):
     pass

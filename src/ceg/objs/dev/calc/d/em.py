@@ -55,7 +55,7 @@ class DailyEMParams(DailyParams):
 
 
 @dataclass(frozen=True)
-class DailyEM(DailyChunked):
+class DailyEM(DailyWithDailyParent, DailyChunked):
     parent: Object | str
     # tags: DailyTags
     
@@ -155,8 +155,7 @@ class DailyEM(DailyChunked):
 
 @dataclass(frozen=True)
 class HandleNewDailyEM(
-    HandleNewChunkedGivenPlSeries,
-    HandleNewDailyChunkedFromChunkedParent,
+    HandleNewDailyFromDailyParentPl,
 
 ):
     pass
@@ -845,6 +844,69 @@ class HandleNewDailyEZ(HandleNewDailyEM):
         )
         sig = (
             pl.col(VALUE)
+            .ewm_std(
+                span=params.span,
+                alpha=params.alpha,
+                min_samples=1, # TODO: or more?
+                ignore_nulls=True,
+            )
+        )
+        return (
+            (pl.col(VALUE) - mu) / sig
+        ).fill_nan(None)
+
+@dataclass(frozen=True)
+class DailyEZW(DailyEM):
+
+    version: int = 0
+    type: Literal["DailyEZW"] = "DailyEZW"
+
+    SUFFIX: ClassVar[str] = "ezw"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyEZWSnap"] = "DailyEZWSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyEZW:
+        return HandleNewDailyEZW()
+    
+@dataclass(frozen=True)
+class HandleNewDailyEZW(HandleNewDailyEM):
+
+    def calc_expr(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyEM,
+        domain: Domain,
+    ) -> pl.Expr:
+        return self._calc_expr(
+            df,
+            event,
+            obj,
+            domain,
+        )
+
+    def _calc_expr(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyEM,
+        domain: Domain,
+    ) -> pl.Expr:
+        params = obj.params
+        mu = (
+            pl.col(VALUE).ewm_mean(
+                span=params.span,
+                alpha=params.alpha,
+                min_samples=1, # TODO: or more?
+                ignore_nulls=True,
+            )
+        )
+        sig = (
+            pl.col(VALUE)
             .forward_fill()
             .diff()
             .pipe(apis.pl.null_mask, pl.col(VALUE))
@@ -1067,6 +1129,53 @@ class HandleNewDailyERZ(HandleNewDailyEM):
             .alias(VALUE)
         )
 
+@dataclass(frozen=True)
+class DailyERZW(DailyERZ):
+
+    params: DailyERZParams
+
+    version: int = 0
+    type: Literal["DailyERZW"] = "DailyERZW"
+
+    SUFFIX: ClassVar[str] = "erzw"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyERZWSnap"] = "DailyERZWSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyERZW:
+        return HandleNewDailyERZW()
+    
+
+@dataclass(frozen=True)
+class HandleNewDailyERZW(HandleNewDailyEM):
+
+    def calc_df(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyERZ,
+        domain: Domain,
+    ) -> pl.DataFrame:
+        return self._calc_df(
+            df,
+            event,
+            obj,
+            domain,
+        )
+        
+    def _calc_df(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: DailyERZ,
+        domain: Domain,
+    ) -> pl.DataFrame:
+        params = obj.params
+        raise ValueError((obj))
+    
 __all__ = [
     "P", "O",
     "DailyEMParams",
@@ -1097,4 +1206,8 @@ __all__ = [
     "DailyEZ",
     "HandleNewDailyERZ",
     "DailyERZ",
+    "HandleNewDailyEZW",
+    "DailyEZW",
+    "HandleNewDailyERZW",
+    "DailyERZW",
 ]

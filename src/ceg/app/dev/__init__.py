@@ -4,6 +4,7 @@ from . import core
 from . import p001
 from . import p002
 from . import p003
+from . import p004
 
 # etc.
 

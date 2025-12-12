@@ -111,6 +111,9 @@ class Object:
 
     # NOTE: string to avoid duplication on insert
     
+    def get_parent(self, domain: Domain):
+        return domain.get(self.parent, Object)
+
     @property
     def type(self) -> str: ...
     
@@ -237,6 +240,9 @@ class Object:
             return o
         except:
             raise ValueError(self)
+        
+    def _get_snap(self, domain: Domain):
+        return self.snap_key_val(domain).get(self.path)
 
     def set_snap(self, snap: Snap, domain: Domain) -> Snap:
         return self.snap_key_val(domain).set(self.path, snap)

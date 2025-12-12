@@ -37,6 +37,38 @@ from .root import *
 
 #  ------------------
 
+
+def apply_transform(
+    df: pl.DataFrame,
+    transform: str | None = None,
+    units: str | None = None,
+    v: str = VALUE,
+) -> pl.DataFrame:
+    if transform is None:
+        return df
+    else:
+        assert units is not None, (transform, units)
+    if transform == "index" and units.startswith(
+        "Growth rate same period previous year"
+    ):
+        raise ValueError((transform, units))
+    elif transform == "index" and units.startswith(
+        "Growth rate previous period"
+    ):
+        return df.with_columns(
+            pl.col(v)
+            .fill_nan(None)
+            .fill_null(0)
+            .mul(1/100)
+            .add(1)
+            .cum_prod()
+            .pipe(apis.pl.null_mask, pl.col(v))
+            .alias(v)
+        )
+    else:
+        raise ValueError((transform, units, v))
+        
+
 @dataclass(frozen=True)
 class EcoDailyObservation(
     HasEcoDailyParent,
@@ -69,15 +101,18 @@ class EcoDailyObservation(
         source: str | None = None,
         asof: str | None = None,
         lag: dt.timedelta | None = None,
+        transform: str | None = None,
     ):
         s_lag: str | None = None
 
         if ":" in symbol:
             symbol, *asof_lag = symbol.split(":")
             for s in asof_lag:
-                if lag is None and s[0] == "L":
+                if s == "INDEX" or s == "IDX":
+                    transform = "index"
+                elif lag is None and s[0] == "L":
                     s_lag = s
-                    lag = apis.cal.parse_lag(s_lag)
+                    lag = apis.cal.parse_lag(s_lag[1:])
                 elif asof is None and s[0] != "L":
                     asof = s
             
@@ -104,6 +139,8 @@ class EcoDailyObservation(
             ident = f"{ident}-{asof}"
         if s_lag is not None:
             ident = f"{ident}-{s_lag}"
+        if transform is not None:
+            ident = f"{ident}-{transform}"
         return cls(
             path=parent.extend_path(ident),
             parent=parent,
@@ -115,6 +152,7 @@ class EcoDailyObservation(
                 seasonal=seasonal,
                 asof=asof,
                 lag=lag,
+                transform=transform,
             ),
         )
 
@@ -155,7 +193,10 @@ class HandleUpdateEcoDailyObservation(Handler):
         return
 
 @dataclass(frozen=True)
-class HandleNewEcoDailyObservation(Handler):
+class HandleNewEcoDailyObservation(
+    HandleNewValueFromPl,
+    HandleNewDailyFromDf,
+):
     def handle(
         self,
         event: ObjectNew,
@@ -186,33 +227,25 @@ class HandleNewEcoDailyObservation(Handler):
         else:
             raise ValueError(obj)
 
-        d_min, d_max = df.pipe(
-            apis.pl.select_items,
-            (
-                pl.col("date").min(),
-                pl.col("date").max(),
-            ),
-            t=dt.date
-        )
-
-        e, v = handlers.set_value_chunk_from_df(
+        if tags.transform is not None:
+            df = df.pipe(
+                apply_transform,
+                tags.transform,
+                units=tags.units,
+                v = tags.symbol
+            )
+        
+        e, v = self.set_value_from_df(
             obj,
             domain,
             df,
             tags.symbol,
-            chunk=kv.BODY,
             publish=True,
+            t = self.key_value_type(obj, domain),
         )
 
-        snap = (
-            obj.snap_key_val(domain)
-            .set(obj.path, EcoDailyObservation.Snap(
-                event,
-                obj.path,
-                dt.datetime.now(),
-                d_min,
-                d_max,
-            ))
+        snap = self.set_snap_from_df(
+            df, event, obj, domain
         )
 
         return e
@@ -253,18 +286,18 @@ class EcoDailyObservationDomain(EcoDailyDomainOnlyObservation):
     ...     .with_obj(obj)
     ...     .sync()
     ... )
-    >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+    >>> obj.value_key_val(domain).get(obj.path).tail(8)
     shape: (8,)
     Series: 'test-eco-d-VIXCLS-fred' [f64]
     [
-        17.21
-        16.35
-        null
-        null
-        17.24
-        16.59
         16.08
         15.78
+        15.41
+        null
+        null
+        16.66
+        16.93
+        15.77
     ]
     >>> obj = EcoDailyObservation.new(
     ...     eng,
@@ -277,7 +310,19 @@ class EcoDailyObservationDomain(EcoDailyDomainOnlyObservation):
     ...     .with_obj(obj)
     ...     .sync()
     ... )
-    >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+    >>> obj.value_key_val(domain).get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-eco-d-US_CAP_UTIL-fred-3W' [f64]
+    [
+        null
+        null
+        null
+        null
+        null
+        null
+        null
+        75.8847
+    ]
     """
     @dataclass(frozen=True)
     class Root(EcoDailyDomainBase.Root):

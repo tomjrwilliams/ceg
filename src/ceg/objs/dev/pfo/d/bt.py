@@ -40,166 +40,279 @@ from ..root import *
 
 #  ------------------
 
+
+def apply_activation(
+    ser: pl.Series,
+    activation: str | None = None
+):
+    if activation is None:
+        return ser.fill_nan(None)
+    activation = (
+        activation.replace("ng", "neg")
+        .replace("tnlog", "tanhlog")
+    )
+    if activation == "tanh":
+        return ser.tanh().fill_nan(None)
+    elif activation == "unit_tanh":
+        return (1 + ser.tanh().fill_nan(None)) / 2
+    elif activation == "neg":
+        return (-1 * ser).fill_nan(None)
+    elif activation == "neg_tanhlog":
+        return (
+            -1 * ser.log().tanh()
+        ).fill_nan(None)
+    elif activation == "neg_tanhlog_neg":
+        return (
+            -1 * (-1 * ser).log().tanh()
+        ).fill_nan(None)
+    elif activation == "n_tanh_p_one":
+        return (
+            pl.DataFrame({VALUE: ser.tanh()})
+            .select(
+                pl.when(pl.col(VALUE).is_null())
+                .then(None)
+                .when(pl.col(VALUE) < 0)
+                .then(pl.col(VALUE))
+                .otherwise(1)
+                .alias(VALUE)
+            )
+            .get_column(VALUE).fill_nan(None)
+        )
+    elif activation == "n_one_p_tanh":
+        return (
+            pl.DataFrame({VALUE: ser.tanh()})
+            .select(
+                pl.when(pl.col(VALUE).is_null())
+                .then(None)
+                .when(pl.col(VALUE) > 0)
+                .then(pl.col(VALUE))
+                .otherwise(-1)
+                .alias(VALUE)
+            )
+            .get_column(VALUE).fill_nan(None)
+        )
+    else:
+        raise ValueError((ser, activation))
+
+
+def get_value(
+    obj: Daily | list[Daily],
+    domain: Domain,
+    scale: float = 1.0,
+    method: str | None = None,
+    activation: str | None = None,
+):
+    if isinstance(obj, Object):
+        s = (
+            obj.value_key_val(domain)
+            .get(obj.path, ValuePlSeries)
+        )
+        assert s is not None, s
+        ser = s.ser
+        ser = apply_activation(ser, activation) * scale
+        snap = obj.snap_key_val(domain).get(
+            obj.path, DailySnap
+        )
+        assert snap is not None, obj
+        return ValuePlSeries.synthetic(
+            ser, start=snap.first, end=snap.last
+        )
+    vs = [
+        o.value_key_val(domain)
+        .get(o.path, ValuePlSeries)
+        for o in obj
+    ]
+    snap = obj[0].snap_key_val(domain).get(
+        obj[0].path, DailySnap
+    )
+    assert snap is not None, obj
+
+    # TODO: df join if given diff dates by snap
+    sers = [
+        v.ser.alias(v.obj) for v in vs if v is not None
+    ]
+    assert len(sers) == len(vs), (obj, len(sers), len(vs))
+
+    df = pl.DataFrame()
+    if method == "sum":
+        df = df.select(
+            pl.sum_horizontal(pl.all()).alias("res")
+        )
+    elif method == "mean":
+        df = df.select(
+            pl.mean_horizontal(pl.all()).alias("res")
+        )
+    elif method == "prod":
+        df = df.select(
+            pl.fold(
+                acc=pl.lit(1), 
+                function=lambda acc, x: acc * x, 
+                exprs=pl.all(),
+                return_dtype=pl.Float64,
+            )
+            .alias("res")
+        )
+    else:
+        assert len(obj) == 1, obj
+        assert len(vs) == 1, obj
+        v = vs[0]
+        assert v is not None, obj
+        df = df.select(
+            pl.col(v.obj).alias("res")
+        )
+    ser = df.get_column("res")
+    ser = apply_activation(ser, activation) * scale
+    return ValuePlSeries.synthetic(
+        ser, start=snap.first, end=snap.last
+    )
+
+@dataclass(frozen=True)
+class DailyBtValues(BtValues):
+    i: int
+    pos: str
+    rx: str
+
+@dataclass(frozen=True)
+class DailyBtResult(BtResult):
+    res: DailyBtValues | None = None
+    
+@dataclass(frozen=True)
+class UniverseDaily(Universe):
+
+    type: Literal["UniverseDaily"] = "UniverseDaily"
+
+    def finish_bt(
+        self,
+        res: BtResult
+    ):
+        assert isinstance(res, DailyBtResult), res
+        assert isinstance(self, UniverseDaily), self
+        bt = DailyBt.new(self, res.i_bt)
+        bt_pos = DailyBtPos.new(bt)
+        bt_rx = DailyBtRx.new(bt)
+        res = replace(
+            res,
+            res = DailyBtValues(
+                res.i_bt,
+                bt_pos.path,
+                bt_rx.path,
+            )
+        ).with_obj((bt_pos, bt_rx))
+        return res
+
+    def scale_value(
+        self, i: int | UniverseScale, domain: Domain, 
+    ) -> ValuePlSeries:
+        if isinstance(i, int):
+            obj = self.get_scale(i, domain, Daily)
+            return get_value(
+                obj,
+                domain,
+            )
+        objs = [
+            self.get_scale(ii, domain, Daily)
+            for ii in i.index
+        ]
+        return get_value(
+            objs,
+            domain,
+            method=i.method,
+            scale=i.scale,
+            activation=i.activation,
+        )
+
+    def signal_value(
+        self, i: int | UniverseSignal, domain: Domain, 
+    ) -> ValuePlSeries:
+        if isinstance(i, int):
+            obj = self.get_signal(i, domain, Daily)
+            assert obj is not None, obj
+            return get_value(
+                obj,
+                domain,
+            )
+        objs = [
+            self.get_signal(ii, domain, Daily)
+            for ii in i.index
+        ]
+        assert all([obj is not None for obj in objs]), objs
+        return get_value(
+            objs, # type: ignore
+            domain,
+            method=i.method,
+            scale=i.scale,
+            activation=i.activation,
+        )
+
+    def rebalance_value(
+        self, 
+        i: int | str | None, 
+        domain: Domain, 
+        value: Daily | None = None,
+    ):
+        if i is None:
+            return None
+        elif isinstance(i, int):
+            obj = self.get_rebalance(i, domain, Daily)
+            assert obj is not None, i
+            v = (
+                obj.value_key_val(domain)
+                .get(obj.path, ValuePlSeries)
+            )
+            return v
+        else:
+            assert value is not None, value
+            snap = value.get_snap(domain)
+            assert isinstance(snap, DailySnap), snap
+            df = pl.select(
+                pl.date_range(snap.first, snap.last)
+                .alias("date")
+            ).select(
+                apis.cal.rebalance_mask(i)
+                .alias("mask")
+            )
+            return ValuePlSeries.synthetic(
+                df.get_column("mask")
+            )
+        
 X = "x"
 
 # TODO: separate objects for cum, daily path dependent, etc.
 
 @dataclass(frozen=True)
-class PfolioDailyScale(PfolioScale):
-    pass
-
-
-@dataclass(frozen=True)
-class PfolioDailyPosition(
-):
-    scale: int | PfolioDailyScale
-    signal: int | PfolioSignal | None=None
-    rebalance: int | str | None=None
-    calendar: int | None=None
-    weight: int | None=None
-
-    unit: float =100.
-
-    index: int = -1
-
-@dataclass(frozen=True)
-class PfolioDailyPositionBt():
-    pos: int
-    rx: Object | str
-    index: int = -1
-
-@dataclass(frozen=True)
-class PfolioDailyPositionAgg():
-    bt: tuple[int, ...]
-    # name?
-    index: int = -1
-
-    # NOTE: if bt is empty, assume take all (for total portfolio, default)
-
-@dataclass(frozen=True)
-class PfolioDaily(
-    UseRootConfigs,
-):
-    parent: Universe | str
-
-    ident: int # unique id (so can have different variations for a fixed universe)
-
-    pos: tuple[PfolioDailyPosition, ...]
-    bt: tuple[PfolioDailyPositionBt, ...]
-    agg: tuple[PfolioDailyPositionAgg, ...]
-
-    version: int = 0
-    type: Literal["PfolioDaily"] = "PfolioDaily"
-
-    def get_parent(self, domain: Domain) -> Universe:
-        return domain.get(self.parent, t=Universe)
-    
-    @classmethod
-    def new(
-        cls,
-        parent: Universe,
-        ident: int,
-        pos: tuple[PfolioDailyPosition, ...] = (),
-        bt: tuple[PfolioDailyPositionBt, ...] = (),
-        agg: tuple[PfolioDailyPositionAgg, ...] = (),
-    ):
-        ident_pad = str(ident).zfill(3)
-        return cls(
-            parent=parent,
-            path=parent.extend_path(f"d-{ident_pad}"),
-            # TODO: left pad?
-            ident=ident,
-            pos=pos,
-            bt=bt,
-            agg=agg,
-        )
-    
-    def with_agg(
-        self, 
-        agg: tuple[int, ...] | PfolioDailyPositionAgg,
-    ):
-        i = len(self.agg)
-        if isinstance(agg, PfolioDailyPositionAgg):
-            assert agg is None, agg
-            agg = replace(agg, index=i)
-        else:
-            agg = PfolioDailyPositionAgg(agg, i)
-        return replace(self, agg=self.agg + (agg,)), i
-    
-    def with_bt(
-        self, 
-        bt: int | PfolioDailyPositionBt,
-        rx: Object | str,
-    ):
-        i = len(self.bt)
-        if isinstance(bt, PfolioDailyPositionBt):
-            assert bt is None, bt
-            bt = replace(bt, index=i)
-        else:
-            bt = PfolioDailyPositionBt(bt, rx, i)
-        return replace(self, bt=self.bt + (bt,)), i
-    
-    def with_pos(
-        self, 
-        scale: int | PfolioScale | PfolioDailyPosition,
-        signal: int | PfolioSignal | None=None,
-        rebalance: int | str | None=None,
-        calendar: int | None=None,
-        weight: int | None=None,
-        unit: float =100.,
-    ):
-        i = len(self.pos)
-        if isinstance(scale, PfolioDailyPosition):
-            assert scale is None, scale
-            pos = replace(scale, index=i)
-        else:
-            if not isinstance(scale, int):
-                scale = PfolioDailyScale(
-                    scale.index, scale.method
-                )
-            pos = PfolioDailyPosition(
-                scale=scale,
-                signal=signal,
-                rebalance=rebalance,
-                calendar=calendar,
-                weight=weight,
-                unit=unit,
-                index=i,
-            )
-        return replace(self, pos=self.pos + (pos,)), i
-    
-
-@dataclass(frozen=True)
-class PfolioDailyBt(
+class DailyBt(
     UseRootConfigs,
     DependsSelfNew,
     DependsDomainSync,
 ):
-    parent: PfolioDaily | str
+    parent: UniverseDaily | str
 
     index: int # of a bt line in parent
 
     version: int = 0
-    type: Literal["PfolioDailyBt"] = "PfolioDailyBt"
+    type: Literal["DailyBt"] = "DailyBt"
 
     @dataclass(frozen=True)
     class Snap(DailySnap):
-        type: Literal["PfolioDailyBtSnap"] = "PfolioDailyBtSnap"
+        type: Literal["DailyBtSnap"] = "DailyBtSnap"
 
     def get_snap(
         self, domain: Domain
-    ) -> PfolioDailyBt.Snap | None:
-        return self.snap_key_val(domain).get(self.path, PfolioDailyBt.Snap)
+    ) -> DailyBt.Snap | None:
+        return self.snap_key_val(domain).get(self.path, DailyBt.Snap)
     
-    def get_parent(self, domain: Domain) -> PfolioDaily:
-        return domain.get(self.parent, PfolioDaily)
+    def get_parent(self, domain: Domain) -> UniverseDaily:
+        return domain.get(self.parent, UniverseDaily)
     
     @classmethod
     def new(
         cls,
-        parent: PfolioDaily,
+        parent: Universe | UniverseDaily,
         index: int,
     ):
+        assert isinstance(parent, UniverseDaily), (
+            parent, cls
+        )
         index_pad = str(index).zfill(3)
         return cls(
             parent=parent,
@@ -215,8 +328,8 @@ class PfolioDailyBt(
     
     def handler_object_new(
         self
-    ) -> HandleNewPfolioDailyBt:
-        return HandleNewPfolioDailyBt()
+    ) -> HandleNewDailyBt:
+        return HandleNewDailyBt()
 
     def handlers(self, event: Event, domain: Domain) -> list[Handler]:
         res: list[Handler] = []
@@ -234,16 +347,18 @@ class PfolioDailyBt(
         return res
     
 @dataclass(frozen=True)
-class HandleNewPfolioDailyBt(Handler):
+class HandleNewDailyBt(
+    HandleNewValueFromPl
+):
 
     def handle(
         self,
         event: ObjectNew,
-        obj: PfolioDailyBt,
+        obj: DailyBt,
         domain: Domain,
     ):
-        obj_rx = PfolioDailyRx.new(obj)
-        obj_pos = PfolioDailyPos.new(obj)
+        obj_rx = DailyBtRx.new(obj)
+        obj_pos = DailyBtPos.new(obj)
 
         snap = obj.get_snap(domain)
 
@@ -251,13 +366,12 @@ class HandleNewPfolioDailyBt(Handler):
             # NOTE: should already be handled?
             return None
 
-        pfolio = obj.get_parent(domain)
-        univ = pfolio.get_parent(domain)
+        univ = obj.get_parent(domain)
 
-        bt = pfolio.bt[obj.index]
-        pos = pfolio.pos[bt.pos]
+        bt = univ.bt[obj.index]
+        pos = univ.pos[bt.pos]
 
-        rx = domain.get(bt.rx, DailyChunked)
+        rx = domain.get(bt.rx, Daily)
 
         v_scale = univ.scale_value(
             pos.scale, domain
@@ -272,10 +386,10 @@ class HandleNewPfolioDailyBt(Handler):
         )
 
         calendar = univ.get_calendar(
-            pos.calendar, domain, DailyChunked
+            pos.calendar, domain, Daily
         )
         weight = univ.get_weight(
-            pos.weight, domain, DailyChunked
+            pos.weight, domain, Daily
         )
 
         rx_snap = rx.get_snap(domain)
@@ -283,22 +397,18 @@ class HandleNewPfolioDailyBt(Handler):
 
         v_rx = (
             rx.value_key_val(domain)
-            .get(rx.path, kv.BODY)
+            .get(rx.path, ValuePlSeries)
         )
+        assert v_rx is not None, obj
+
         v_calendar = None if calendar is None else (
             calendar.value_key_val(domain)
-            .get(calendar.path, kv.BODY)
+            .get(calendar.path, ValuePlSeries)
         )
         v_weight = None if weight is None else (
             weight.value_key_val(domain)
-            .get(weight.path, kv.BODY)
+            .get(weight.path, ValuePlSeries)
         )
-
-        assert isinstance(v_rx, ValuePlSeries), v_rx
-        assert v_signal is None or isinstance(v_signal, ValuePlSeries), v_signal
-        assert v_calendar is None or isinstance(v_calendar, ValuePlSeries), v_calendar
-        assert v_weight is None or isinstance(v_weight, ValuePlSeries), v_weight
-
         # TODO: parametrise out the lag
 
         df = pl.DataFrame({
@@ -361,27 +471,31 @@ class HandleNewPfolioDailyBt(Handler):
             unit=pos.unit
         )
 
+        assert len(df) == (
+            (rx_snap.last - rx_snap.first).days + 1
+        ), (df, rx_snap)
+
         df_pos = df.select("pos")
         df_rx = df.select("rx")
 
-        e_pos, _ = set_value_chunk_from_df(
+        e_pos, _ = self.set_value_from_df(
             obj_pos,
             domain,
             df_pos,
             "pos",
-            chunk=kv.BODY,
+            t = self.key_value_type(obj, domain),
             publish=True,
         )
-        e_rx, _ = set_value_chunk_from_df(
+        e_rx, _ = self.set_value_from_df(
             obj_rx,
             domain,
             df_rx,
             "rx",
-            chunk=kv.BODY,
+            t = self.key_value_type(obj, domain),
             publish=True,
         )
 
-        snap_new: PfolioDailyBt.Snap = (
+        snap_new: DailyBt.Snap = (
             obj.snap_key_val(domain)
             .set(obj.path, type(obj).Snap(
                 event,
@@ -389,7 +503,7 @@ class HandleNewPfolioDailyBt(Handler):
                 dt.datetime.now(),
                 rx_snap.first,
                 rx_snap.last,
-            ), PfolioDailyBt.Snap)
+            ), DailyBt.Snap)
         )
 
         # TODO: if numpy we assume dense, use snap to infer dates
@@ -418,209 +532,70 @@ class HandleNewPfolioDailyBt(Handler):
         return e_pos, e_rx
     
 @dataclass(frozen=True)
-class PfolioDailyPos(
-    UseChunkedValues,
-    UseRootConfigs,
+class DailyBtPos(
+    DailyChunked,
 ):
-    parent: PfolioDailyBt | str
+    parent: DailyBt | str
 
     version: int = 0
-    type: Literal["PfolioDailyPos"] = "PfolioDailyPos"
+    type: Literal["DailyBtPos"] = "DailyBtPos"
 
     @dataclass(frozen=True)
     class Snap(DailySnap):
-        type: Literal["PfolioDailyPosSnap"] = "PfolioDailyPosSnap"
+        type: Literal["DailyBtPosSnap"] = "DailyBtPosSnap"
 
-    def get_parent(self, domain: Domain) -> PfolioDailyBt:
-        return domain.get(self.parent, PfolioDailyBt)
+    def get_parent(self, domain: Domain) -> DailyBt:
+        return domain.get(self.parent, DailyBt)
 
     @classmethod
     def new(
         cls,
-        parent: PfolioDailyBt,
+        parent: DailyBt,
     ):
         return cls(
             parent=parent,
             path=parent.extend_path("pos"),
         )
     
+    def depends(self, domain: Domain) -> list[Dependency]:
+        return []
+    
 @dataclass(frozen=True)
-class PfolioDailyRx(
-    UseChunkedValues,
-    UseRootConfigs,
+class DailyBtRx(
+    DailyChunked,
 ):
-    parent: PfolioDailyBt | str
+    parent: DailyBt | str
 
     version: int = 0
-    type: Literal["PfolioDailyRx"] = "PfolioDailyRx"
+    type: Literal["DailyBtRx"] = "DailyBtRx"
 
     @dataclass(frozen=True)
     class Snap(DailySnap):
-        type: Literal["PfolioDailyRxSnap"] = "PfolioDailyRxSnap"
+        type: Literal["DailyBtRxSnap"] = "DailyBtRxSnap"
 
-    def get_parent(self, domain: Domain) -> PfolioDailyBt:
-        return domain.get(self.parent, PfolioDailyBt)
+    def get_parent(self, domain: Domain) -> DailyBt:
+        return domain.get(self.parent, DailyBt)
 
     @classmethod
     def new(
         cls,
-        parent: PfolioDailyBt,
+        parent: DailyBt,
     ):
         return cls(
             parent=parent,
             path=parent.extend_path("rx"),
         )
     
-@dataclass(frozen=True)
-class DailyBtParams:
-    pass
-
-@dataclass(frozen=True)
-class PfolioDailyBtRes:
-    i: int
-    bt: PfolioDailyBt
-    pos: PfolioDailyPos
-    rx: PfolioDailyRx
-
-@dataclass(frozen=True)
-class DailyBtObjects:
-    params: DailyBtParams
-    rx: Object
-    scale: Object | tuple[Object, ...]
-    signal: Object | None
-    rebalance: str | None ## TODO: or object?
-    # TODO: weight
-
-    res: PfolioDailyBtRes
-
-TDailyBtParams = TypeVar(
-    "TDailyBtParams", bound=DailyBtParams
-)
-TDailyBtObjects = TypeVar(
-    "TDailyBtObjects", bound=DailyBtObjects
-)
-
-@dataclass(frozen=True)
-class DailyBtDomain(Domain):
+    def depends(self, domain: Domain) -> list[Dependency]:
+        return []
     
-    def with_bt_objs(
-        self,
-        universe: Universe,
-        pfolio: PfolioDaily,
-        params: TDailyBtParams,
-        rx_bt: Object,
-        scale: Object | tuple[str, tuple[Object, ...]],
-        t: Callable[
-            [
-                TDailyBtParams,
-                Object,
-                Object | tuple[Object, ...], # scale
-                Object | None, # signal
-                str | None, # rebalance
-                # rescale ?
-                int,
-                PfolioDailyBt,
-                PfolioDailyPos,
-                PfolioDailyRx,
-            ],
-            TDailyBtObjects
-        ],
-        signal: Object | tuple[Object, float, str | None] | None=None,
-        rebalance: str | None = None,
-        unit: float = 100.,
-    ) -> tuple[
-        DailyBtDomain,
-        Universe,
-        PfolioDaily,
-        TDailyBtObjects,
-    ]:
-        if isinstance(scale, tuple):
-            method, scales = scale
-            i_scales = []
-            for sc in scales:
-                universe, i_sc = universe.with_scale(sc)
-                i_scales.append(i_sc)
-            i_scale = PfolioScale(
-                tuple(i_scales),
-                method=method,
-            )
-            scale_res = scales
-        else:
-            universe, i_scale = universe.with_scale(scale)
-            scale_res = scale
-        if isinstance(signal, tuple):
-            signal, signal_scale, activation = signal
-            universe, i_sig = universe.with_signal(signal)
-            i_sig = PfolioSignal(
-                (i_sig,),
-                scale=signal_scale,
-                activation=activation
-            )
-            pfolio, i_pos = pfolio.with_pos(
-                scale=i_scale,
-                signal=i_sig,
-                unit=unit,
-                rebalance=rebalance,
-            )
-        elif signal is not None:
-            universe, i_sig = universe.with_signal(signal)
-            pfolio, i_pos = pfolio.with_pos(
-                scale=i_scale,
-                signal=i_sig,
-                unit=unit,
-                rebalance=rebalance,
-            )
-        else:
-            pfolio, i_pos = pfolio.with_pos(
-                scale=i_scale,
-                unit=unit,
-                rebalance=rebalance,
-            )
-        pfolio, i_bt = pfolio.with_bt(
-            i_pos, rx = rx_bt
-        )
-        bt = PfolioDailyBt.new(
-            pfolio, i_bt
-        )
-        pos = PfolioDailyPos.new(bt)
-        rx = PfolioDailyRx.new(bt)
-        res = t(
-            params,
-            rx_bt,
-            scale_res,
-            signal,
-            rebalance,
-            i_bt,
-            bt,
-            pos,
-            rx,
-        )
-        self = self.with_objs(
-            res.rx,
-            *(
-                res.scale
-                if isinstance(res.scale, tuple)
-                else (res.scale,)
-            ),
-            res.signal,
-            res.res.bt,
-            res.res.pos,
-            res.res.rx,
-            t=DailyBtDomain,
-        )
-        return self, universe, pfolio, res
 
 __all__ = [
-    "PfolioDailyPosition",
-    "PfolioDailyPositionBt",
-    "PfolioDailyPositionAgg",
-    "PfolioDaily",
-    "PfolioDailyBt",
-    "HandleNewPfolioDailyBt",
-    "PfolioDailyPos",
-    "PfolioDailyRx",
-    "DailyBtParams",
-    "DailyBtObjects",
-    "DailyBtDomain",
-    "PfolioDailyBtRes",
+    "UniverseDaily",
+    "DailyBt",
+    "DailyBtPos",
+    "DailyBtRx",
+    "DailyBtValues",
+    "DailyBtResult",
+    "HandleNewDailyBt",
 ]

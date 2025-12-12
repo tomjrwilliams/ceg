@@ -9,7 +9,7 @@ from ...objs.vis import explorer
 from ...objs.dev import bars
 from ...objs.dev import pfo
 
-from ...objs.dev.strat.mom import eosc as strat
+from ...objs.dev.strat import uvar as strat
 
 from .core import PROJECTS
 
@@ -35,7 +35,7 @@ SPAN_RATIO = [
 ]
 
 @dataclass(frozen=True)
-class Project_001(strat.MomEOscProject):
+class Project_001(strat.UvariateBtProject):
     SPAN_FAST: ClassVar[list[int]] = SPAN_POW_2
     SPAN_RATIO: ClassVar[list[float]] = SPAN_RATIO
     SPAN_VOL_SIG: ClassVar[list[int]] = SPAN_VOL_SIG
@@ -87,12 +87,28 @@ def load_p001():
             #     product_symbols,
             #     spans,
             # )
-            project = project.with_mom_eosc_page(
-                i_str + name + "-v" + suff,
+            params = project.mom_params(
                 product_symbols,
                 spans,
                 span_vol_rescale=[256],
                 rebal=rebal,
+            )
+            domain, univ = strat.UvariateBtDomain.new(
+                PROJECT + "-" + name,
+            )
+            domain, univ, bts = domain.with_bts(
+                univ, *params
+            )
+            domain, univ, rx_agg = domain.with_agg(
+                univ, bts
+            )
+            project = (
+                project.with_bt_page(
+                    i_str + name + "-v" + suff,
+                    domain,
+                    bts,
+                    rx_agg=rx_agg
+                )
             )
         i += 1
     return project

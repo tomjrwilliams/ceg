@@ -9,7 +9,7 @@ from ...objs.vis import explorer
 from ...objs.dev import bars
 from ...objs.dev import pfo
 
-from ...objs.dev.strat.mom import eosc as strat
+from ...objs.dev.strat import uvar as strat
 
 from .core import PROJECTS
 from .p001 import *
@@ -33,14 +33,14 @@ SPAN_RATIO = [
 ]
 
 @dataclass(frozen=True)
-class Project_002(strat.MomEOscProject):
+class Project_002(strat.UvariateBtProject):
     SPAN_FAST: ClassVar[list[int]] = SPAN_POW_2
     SPAN_RATIO: ClassVar[list[float]] = SPAN_RATIO
     SPAN_VOL_SIG: ClassVar[list[int]] = SPAN_VOL_SIG
     SPAN_VOL_SCALE: ClassVar[list[int]] = SPAN_VOL_SCALE
 
 def eosc(fast: int, ratio: float = 1.5, vol: int = 48):
-    return strat.EOscSignalParams(
+    return strat.SignalOsc(
         fast, int(fast * ratio), vol
     )
 
@@ -74,14 +74,16 @@ def load_p002():
         ]:
             i_str = str(i).rjust(3, "0") + "-"
             params = [
-                strat.MomEOscBtParams(
-                    product,
-                    symbol,
-                    scale=strat.EOscScaleVolParams(
+                strat.UvariateBtParams(
+                    asset = strat.AssetConcrete(
+                        product,
+                        symbol,
+                    ),
+                    scale=strat.ScaleVol(
                         span=48
                     ),
                     signal=signal,
-                    rescale=strat.EOscScaleVolParams(
+                    rescale=strat.ScaleVol(
                         span=256
                     ),
                     rebal=rebal,
@@ -89,11 +91,21 @@ def load_p002():
                 for product, symbol, signal
                 in product_symbol_signals
             ]
+            domain, univ = strat.UvariateBtDomain.new(
+                PROJECT + "-" + name,
+            )
+            domain, univ, bts = domain.with_bts(
+                univ, *params
+            )
+            domain, univ, rx_agg = domain.with_agg(
+                univ, bts
+            )
             project = (
-                project.with_mom_eosc_page_from_params(
-                    params,
+                project.with_bt_page(
                     i_str + name + "-v" + suff,
-                    with_agg_rx=True
+                    domain,
+                    bts,
+                    rx_agg=rx_agg
                 )
             )
         i += 1

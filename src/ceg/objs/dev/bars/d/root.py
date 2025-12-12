@@ -76,7 +76,7 @@ class BarDailyTags:
     fx: str | None = None  # ccy to convert to
 
 @dataclass(frozen=True)
-class BarDaily(Object):
+class BarDaily(DailyChunked):
 
     @overload
     @classmethod

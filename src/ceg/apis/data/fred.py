@@ -10,6 +10,7 @@ from pathlib import Path
 
 import polars as pl
 
+from dataclasses import replace
 if TYPE_CHECKING:
     from dataclasses import dataclass
 else:
@@ -316,6 +317,8 @@ class Data:
 
     values: list[DataItem]
 
+COUNT = 0
+
 def load_data(
     id: str,
     cache: str,
@@ -323,6 +326,8 @@ def load_data(
     asof: str | None = None,
     starting: dt.date = dt.date(1995, 1, 1)
 ):
+    global COUNT
+
     id = ALIASES.get(id, id)
 
     now = dt.datetime.now()
@@ -387,14 +392,19 @@ def load_data(
             d for d in asof_dates
             if d not in asof_dates_data
         ]
-        assert len(asof_dates_req), asof_dates_req
-
-        values = [] if data is None else data.values
 
         acc: list[DataItem] = []
+        
+        values = [] if data is None else data.values
 
+        obs = None
         for d in reversed(asof_dates_req):
-            time.sleep(1/20)
+            COUNT += 1
+            if COUNT % 100 == 0:
+                print("RATE LIMIT EXCEEDED, SLEEPING")
+                time.sleep(60)
+            else:
+                time.sleep(1/20)
             try:
                 obs = get_observations(
                     id,
@@ -405,8 +415,11 @@ def load_data(
                     # vintage_dates=asof_dates_req
                 ).data
             except ValueError as e:
-                if "No vintage dates exist" in str(e):
+                e_s = str(e)
+                if "No vintage dates exist" in e_s:
                     continue
+                elif "does not exist in ALFRED" in e_s:
+                    break
                 else:
                     raise e
             acc.extend([
@@ -420,20 +433,26 @@ def load_data(
 
         values.extend(reversed(acc))
 
-        data = Data(
-            refreshed=now,
-            observation_start=obs.observation_start,
-            observation_end=obs.observation_end,
-            units=obs.units,
-            output_type=obs.output_type,
-            file_type=obs.file_type,
-            order_by=obs.order_by,
-            sort_order=obs.sort_order,
-            count=obs.count,
-            offset=obs.offset,
-            limit=obs.limit,
-            values=values,
-        )
+        if obs is None:
+            assert data is not None, data
+            data = replace(
+                data, refreshed=now, values=values
+            )
+        else:
+            data = Data(
+                refreshed=now,
+                observation_start=obs.observation_start,
+                observation_end=obs.observation_end,
+                units=obs.units,
+                output_type=obs.output_type,
+                file_type=obs.file_type,
+                order_by=obs.order_by,
+                sort_order=obs.sort_order,
+                count=obs.count,
+                offset=obs.offset,
+                limit=obs.limit,
+                values=values,
+            )
     
     fp.parent.mkdir(parents=True, exist_ok=True)
     with fp.open('wb+') as f:
@@ -457,10 +476,11 @@ def load_time_series(
     ... )
     """
 
-    data = load_data(id, cache, refresh=refresh, asof=asof)
-    values = data.values
-
     if asof is None:
+        data = load_data(
+            id, cache, refresh=refresh, asof=asof
+        )
+        values = data.values
         if lag is None:
             lag = dt.timedelta(days=0)
         d0 = values[-1].date
@@ -468,14 +488,29 @@ def load_time_series(
         df = pl.DataFrame({
             "date": [d.date + lag for d in values],
             id: [d.value for d in values],
-        }).reverse()
+        }).reverse().group_by(
+            pl.col("date"),
+            maintain_order=True,
+        ).agg(
+            pl.col(id).first()
+        ).filter(
+            pl.col("date") >= d0,
+            pl.col("date") <= d1
+        )
     else:
+        data = load_data(
+            id if not RELEASE_ALIAS
+            else RELEASE_DATES.get(id, id),
+            cache, refresh=refresh, asof=asof
+        )
+        values = data.values
         df = pl.DataFrame({
             "date": [d.date for d in values],
             # id: [d.value for d in values],
             "asof": [d.asof for d in values],
         }).group_by(
             pl.col("date"),
+            maintain_order=True,
         ).agg(
             pl.col("asof").first(),
             # pl.col(id).first(),
@@ -488,6 +523,14 @@ def load_time_series(
             lag=None,
             asof=None,
         )
+        
+        d0 = df_today.select(pl.col("date").min()).item()
+        d1 = df_today.select(pl.col("date").max()).item()
+
+        df = df.filter(
+            pl.col("date") >= d0,
+            pl.col("date") <= d1,
+        )
         df = df.join(
             df_today,
             how="left",
@@ -496,6 +539,7 @@ def load_time_series(
             coalesce=True,
         ).group_by(
             pl.col("asof"),
+            maintain_order=True,
         ).agg(
             pl.col(id).first(),
             pl.col("date").first()
@@ -517,8 +561,8 @@ def load_time_series(
             )
             df = pl.concat([df_lag, df]).sort(by="date")
 
-        d0 = df.select(pl.col("date").min()).item()
-        d1 = df.select(pl.col("date").max()).item()
+    d0 = df.select(pl.col("date").min()).item()
+    d1 = df.select(pl.col("date").max()).item()
     if dense:
         df = pl.select(
             pl.date_range(d0, d1).alias("date")
@@ -529,6 +573,16 @@ def load_time_series(
             coalesce=True,
         )
     return df
+
+RELEASE_ALIAS = False
+RELEASE_DATES = {
+    "US_IP_AUTO": "INDPRO",
+    "US_IP_MINE": "INDPRO",
+    "US_IP_CONSTR": "INDPRO",
+    "US_IP_MATRL": "INDPRO",
+    "US_IP_DEFN": "INDPRO",
+    "US_IP_DRILL": "INDPRO",
+}
 
 ALIASES = {
     "VIX": "VIXCLS",
@@ -551,7 +605,7 @@ ALIASES = {
     # chargeoff rate also available
     # delinquency rate also available
 
-    "US_CHAREOFF_TOTL": "NCOALLACB",
+    "US_CHAREOFF_TOTL": "NCOALLACB", # 2011 release
     "US_CHARGEOFF_CORP": "NCOALLCIACB",
     "US_CHARGEOFF_CONS": "NCOALLCACB",
     "US_CHARGEOFF_CONS_CC": "NCOALLCCACB",
@@ -563,6 +617,8 @@ ALIASES = {
     "uS_LOANS_RE_CONSTR": "QBPBSTASLNREALCONDEV",
     "US_LOANS_CONS": "QBPBSTASLNINDV",
 
+    "JP_MANU": "JPNPRMNTO01GPSAM", # mom growth
+
     # US ECO
 
     # available by sector
@@ -570,11 +626,16 @@ ALIASES = {
     "US_IP": "INDPRO",
     "US_IP_AUTO": "IPG3361T3S",
     "US_IP_MINE": "IPMINE",
-    "US_IP_CONSTR_SUPP": "IPB54100S",
+    "US_IP_CONSTR": "IPB54100S",
     "US_IP_MATRL": "IPMAT", # materials
     "US_IP_DEFN": "IPB52300S",
+    "US_IP_DRILL": "IPN213111S",
+    "US_IP_MAN": "IPMANSICS",
+
+    "US_HOUSE_PERMIT": "PERMIT",
 
     "US_CU_OIL_GAS": "CAPUTLG211S",
+    "US_CU_MINE": "CAPUTLG21S",
 
     "US_UNEMPL": "UNRATE",
     "US_INFL_CONS": "FPCPITOTLZGUSA",
@@ -583,7 +644,7 @@ ALIASES = {
     "EU_INFL_TOTL": "CPHPTT01EZM659N", # yoy
     "EU_INFL_CONS": "FPCPITOTLZGEUU",
 
-    "US_LOAN_LOSS_PROV": "QBPQYLNLOSS",
+    "US_LOAN_LOSS_PROV": "QBPQYLNLOSS", # 2021
 
     # EUR yield
 
@@ -676,6 +737,7 @@ ALIASES = {
 
     "EM_IG_OAS": "BAMLEMHBHYCRPIEY",
     "EM_HY_OAS": "BAMLEMHBHYCRPIOAS",
+    # TODO: adjust for long term secular decline?
 
     "ASIA_EM_IG_OAS": "BAMLEMRACRPIASIAOAS",
     "LATAM_EM_IG_OAS": "BAMLEMRLCRPILAOAS",

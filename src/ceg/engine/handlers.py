@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from typing import (
     TYPE_CHECKING,
+    Any,
     Type,
     TypeVar,
     ClassVar,
@@ -28,140 +29,72 @@ from frozendict import frozendict
 import numpy as np
 import polars as pl
 
+from .. import apis
 from ..apis import kv
 
 from .objects import *
 from .values import *
 from .snaps import *
 
+from .d import *
+
 VALUE = "VALUE"
 
-def set_value_chunk_from_df(
-    obj: Object,
-    domain: Domain,
-    df: pl.DataFrame,
-    col: str,
-    chunk: int,
-    publish: bool = True,
-):
-    key_val = obj.value_key_val(domain, t = (
-        ValueKeyChunkPlSeriesSQLite
-        | ValueKeyChunkNumPySQLite
-    ))
-
-    # TODO: assert df has length
-
-    if isinstance(key_val, ValueKeyChunkPlSeriesSQLite):
-        v = key_val.set_from_df(
-            df, col, obj.path, chunk
-        )
-    elif isinstance(key_val, ValueKeyChunkNumPySQLite):
-        v = key_val.set_from_df(
-            df, col, obj.path, chunk
-        )
-    else:
-        raise ValueError((obj, key_val))
-    
-    if publish:
-        e = cast(
-            ValueUpdate, obj.publish(ValueUpdate(obj.path), domain)
-        )
-    
-    return e, v
-
-@dataclass(frozen=True)
-class DailySnap(Snap):
-    updated: dt.datetime
-    first: dt.date # most recently added
-    last: dt.date
-
-@dataclass(frozen=True)
-class TDailyChunked(Object):
-
-    @dataclass(frozen=True) 
-    class Snap(DailySnap):
-        pass
-
-    def get_snap(
-        self, domain: Domain
-    ) -> DailySnap | None: ...
-
-    def value_key_val(
-        self, domain: Domain, t: None = None,
-    ) -> kv.KeyChunk: ...
-
-@dataclass(frozen=True)
-class TDailyChunkedWithChunkedParent(TDailyChunked):
-
-    def get_parent(
-        self, domain: Domain
-    ) -> TDailyChunked: ...
-
-@dataclass(frozen=True)
-class HandleNewDailyChunkedFromChunkedParent(Handler):
-
-    def handle_new(
+class HasSetFromDf(Protocol):
+    def set_from_df(
         self,
-        v: ValuePlSeries,
-        event: ObjectNew,
-        obj: TDailyChunkedWithChunkedParent,
-        domain: Domain,
-    ) -> ValueUpdate:
-        raise ValueError(self)
+        df: pl.DataFrame,
+        k: str,
+        obj: str,
+        chunk: int | None = None,
+    ) -> Any: ...
 
-    def handle(
+
+@dataclass(frozen=True)
+class HandleNewValueFromPl(Handler):
+
+    def set_value_from_df(
         self,
-        event: ObjectNew,
-        obj: TDailyChunkedWithChunkedParent,
+        obj: Object,
         domain: Domain,
+        df: pl.DataFrame,
+        col: str,
+        t: Type[HasSetFromDf],
+        publish: bool = True,
     ):
-        snap = obj.get_snap(domain)
+        key_val = obj.value_key_val(domain, t = t)
 
-        if snap is not None:
-            # NOTE: should already be handled?
-            return None
+        # TODO: assert df has length
 
-        parent = obj.get_parent(domain)
+        # if isinstance(key_val, ValueKeyChunkPlSeriesSQLite):
+        #     v = key_val.set_from_df(
+        #         df, col, obj.path,
+        #     )
+        # elif isinstance(key_val, ValueKeyChunkNumPySQLite):
 
-        parent_snap = parent.get_snap(domain)
-        assert parent_snap is not None, parent_snap
-
-        v = (
-            parent.value_key_val(domain)
-            .get(parent.path, kv.BODY)
+        v = key_val.set_from_df(
+            df, col, obj.path,
         )
-        assert isinstance(v, ValuePlSeries), v
+        
+        if publish:
+            e = cast(
+                ValueUpdate,
+                obj.publish(ValueUpdate(obj.path), domain)
+            )
+        
+        return e, v
 
-        e = self.handle_new(
-            v,
-            event,
-            obj,
-            domain,
-        )
-
-        # TODO: if numpy we assume dense, use snap to infer dates
-
-        snap = (
-            obj.snap_key_val(domain)
-            .set(obj.path, type(obj).Snap(
-                event,
-                obj.path,
-                dt.datetime.now(),
-                parent_snap.first,
-                parent_snap.last,
-            ))
-        )
-
-        return e
-
-@dataclass(frozen=True)
-class HandleNewChunkedGivenPlSeries(Handler):
+    def key_value_type(
+        self, obj: Object, domain: Domain
+    ) -> Type[HasSetFromDf]:
+        # TODO: given parametrisation of object
+        return ValueKeyChunkPlSeriesSQLite
 
     def calc_expr(
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: TDailyChunkedWithChunkedParent,
+        obj: Object,
         domain: Domain,
     ) -> pl.Expr:
         raise ValueError(self)
@@ -170,9 +103,10 @@ class HandleNewChunkedGivenPlSeries(Handler):
         self,
         df: pl.DataFrame,
         event: ObjectNew,
-        obj: TDailyChunkedWithChunkedParent,
+        obj: Object,
         domain: Domain,
     ) -> pl.DataFrame:
+        # df = pl.DataFrame({VALUE: v.ser.fill_nan(None)})
         e = self.calc_expr(
             df,
             event,
@@ -186,41 +120,160 @@ class HandleNewChunkedGivenPlSeries(Handler):
             .alias(VALUE)
         )
         return df
+    
+    
+@dataclass(frozen=True)
+class DailyWithDailyParent(Daily):
 
-    def handle_new(
+    def get_parent(
+        self, domain: Domain
+    ) -> Daily:
+        return domain.get(self.parent, Daily)
+
+@dataclass(frozen=True)
+class HandleFromParentPl(
+    Handler
+):
+
+    def get_parent_pl(
         self,
-        v: ValuePlSeries,
         event: ObjectNew,
-        obj: TDailyChunkedWithChunkedParent,
+        obj: Object,
         domain: Domain,
-    ) -> ValueUpdate:
-        # TODO: or return ValueNew?
+    ):
+        
+        parent = obj.get_parent(domain)
+        assert parent is not None, obj
 
-        df = self.calc_df(
-            pl.DataFrame({VALUE: v.ser.fill_nan(None)}),
-            event,
-            obj,
-            domain,
+        parent_snap = parent.get_snap(domain)
+        assert parent_snap is not None, parent_snap
+
+        v = (
+            parent.value_key_val(domain)
+            .get(parent.path)
+        )
+        assert isinstance(v, ValuePlSeries), v
+
+        return v
+    
+@dataclass(frozen=True)
+class HandleNewValueFromParentPl(
+    HandleNewValueFromPl,
+    HandleFromParentPl,
+):
+    pass
+
+@dataclass(frozen=True)
+class HandleNewDailyFromDf(
+    Handler
+):
+
+    def set_snap_from_df(
+        self,
+        df: pl.DataFrame,
+        event: ObjectNew,
+        obj: Daily,
+        domain: Domain,        
+    ):
+        
+        d_min, d_max = df.pipe(
+            apis.pl.select_items,
+            (
+                pl.col("date").min(),
+                pl.col("date").max(),
+            ),
+            t=dt.date
         )
 
-        e, _ = set_value_chunk_from_df(
+        return (
+            obj.snap_key_val(domain)
+            .set(obj.path, type(obj).Snap(
+                event,
+                obj.path,
+                dt.datetime.now(),
+                d_min,
+                d_max,
+            ))
+        )
+    
+@dataclass(frozen=True)
+class HandleNewDailyFromDailyParent(
+    Handler
+):
+
+    def set_snap_from_parent(
+        self,
+        event: ObjectNew,
+        obj: DailyWithDailyParent,
+        domain: Domain,        
+    ):
+        
+        parent = obj.get_parent(domain)
+
+        parent_snap = parent.get_snap(domain)
+        assert parent_snap is not None, parent_snap
+
+        return (
+            obj.snap_key_val(domain)
+            .set(obj.path, type(obj).Snap(
+                event,
+                obj.path,
+                dt.datetime.now(),
+                parent_snap.first,
+                parent_snap.last,
+            ))
+        )
+
+@dataclass(frozen=True)
+class HandleNewDailyFromDailyParentPl(
+    HandleNewValueFromParentPl,
+    HandleNewDailyFromDailyParent,
+):
+    
+    def handle(
+        self,
+        event: ObjectNew,
+        obj: DailyWithDailyParent,
+        domain: Domain,
+    ):
+        snap = obj.get_snap(domain)
+
+        if snap is not None:
+            return None
+            # # NOTE: should already be handled?
+            # raise ValueError((self, event))
+
+        v = self.get_parent_pl(
+            event, obj, domain
+        )
+
+        df = (
+            pl.DataFrame({VALUE: v.ser.fill_nan(None)})
+            .pipe(self.calc_df, event, obj, domain)
+        )
+
+        e, v = self.set_value_from_df(
             obj,
             domain,
             df,
             VALUE,
-            chunk=kv.BODY,
             publish=True,
+            t = self.key_value_type(obj, domain),
+        )
+
+        snap = self.set_snap_from_parent(
+            event, obj, domain
         )
 
         return e
 
-
 __all__ = [
     "VALUE",
-    "set_value_chunk_from_df",
-    "DailySnap",
-    "TDailyChunked",
-    "TDailyChunkedWithChunkedParent",
-    "HandleNewDailyChunkedFromChunkedParent",
-    "HandleNewChunkedGivenPlSeries",
+    "DailyWithDailyParent",
+    "HandleNewValueFromPl",
+    "HandleFromParentPl",
+    "HandleNewValueFromParentPl",
+    "HandleNewDailyFromDf",
+    "HandleNewDailyFromDailyParent",
+    "HandleNewDailyFromDailyParentPl",
 ]

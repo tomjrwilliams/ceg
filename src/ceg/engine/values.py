@@ -312,7 +312,7 @@ class ValueKeyChunkNumPySQLite( # TODO: f64?
         df: pl.DataFrame,
         k: str,
         obj: str,
-        chunk: int,
+        chunk: int | None = None,
     ) -> ValueNumPy:
         # : F64_1D
         v_np: np.ndarray = df.select(k).to_numpy().T[0]
@@ -458,7 +458,7 @@ class ValueKeyChunkPlSeriesSQLite( # TODO: f64?
         df: pl.DataFrame,
         k: str,
         obj: str,
-        chunk: int = kv.BODY
+        chunk: int | None = None,
     ) -> ValuePlSeries:
         v_s = df.get_column(k)
         v = ValuePlSeries.new(obj, v_s)

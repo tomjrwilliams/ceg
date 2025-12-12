@@ -35,149 +35,133 @@ from ....engine import *
 
 #  ------------------
 
-@dataclass(frozen=True)
-class PfolioScale():
-    index: tuple[int, ...]
-    method: str | None = None
-    scale: float = 1.
-    activation: str | None = None
+@overload
+def obj_path(
+    obj: Object | str,
+) -> str: ...
 
-@dataclass(frozen=True)
-class PfolioSignal():
-    index: tuple[int, ...]
-    method: str | None = None
-    scale: float = 1.
-    activation: str | None = None
+@overload
+def obj_path(
+    obj: tuple[Object | str, ...]
+) -> tuple[str,  ...]: ...
 
-# TODO: rename daily, move under d
+def obj_path(
+    obj: Object | str | tuple[Object | str, ...]
+):
+    if isinstance(obj, tuple):
+        return tuple([obj_path(o) for o in obj])
+    return obj if isinstance(obj, str) else obj.path
 
 def find_object(
     obj: Object | str, objs: tuple[Object | str, ...] | None
 ) -> int | None:
     if objs is None:
         return None
-    path = obj if isinstance(obj, str) else obj.path
+    path = obj_path(obj)
     for i, o in enumerate(objs):
-        if isinstance(o, str) and o == path:
-            return i
-        elif isinstance(o, Object) and o.path == path:
+        if obj_path(o) == path:
             return i
     return None
 
-def apply_activation(
-    ser: pl.Series,
+@dataclass(frozen=True)
+class UniverseScale():
+    index: tuple[int, ...]
+    method: str | None = None
+    scale: float = 1.
     activation: str | None = None
+
+@dataclass(frozen=True)
+class UniverseSignal():
+    index: tuple[int, ...]
+    method: str | None = None
+    scale: float = 1.
+    activation: str | None = None
+
+@dataclass(frozen=True)
+class UniversePosition(
 ):
-    if activation is None:
-        return ser.fill_nan(None)
-    activation = (
-        activation.replace("ng", "neg")
-        .replace("tnlog", "tanhlog")
-    )
-    if activation == "tanh":
-        return ser.tanh().fill_nan(None)
-    if activation == "neg":
-        return (-1 * ser).fill_nan(None)
-    elif activation == "neg_tanhlog":
-        return (
-            -1 * ser.log().tanh()
-        ).fill_nan(None)
-    elif activation == "neg_tanhlog_neg":
-        return (
-            -1 * (-1 * ser).log().tanh()
-        ).fill_nan(None)
-    elif activation == "n_tanh_p_one":
-        return (
-            pl.DataFrame({VALUE: ser.tanh()})
-            .select(
-                pl.when(pl.col(VALUE).is_null())
-                .then(None)
-                .when(pl.col(VALUE) < 0)
-                .then(pl.col(VALUE))
-                .otherwise(1)
-                .alias(VALUE)
+    scale: int | UniverseScale
+    signal: int | UniverseSignal | None=None
+    rebalance: int | str | None=None
+    calendar: int | None=None
+    weight: int | None=None
+
+    unit: float =100.
+
+    index: int = -1
+
+@dataclass(frozen=True)
+class UniverseBt():
+    pos: int
+    rx: Object | str
+    index: int = -1
+
+@dataclass(frozen=True)
+class UniverseAggregate():
+    bt: tuple[int, ...]
+    # name?
+    index: int = -1
+
+    # NOTE: if bt is empty, assume take all (for total portfolio, default)
+
+@dataclass(frozen=True)
+class BtParams:
+    pass
+
+@dataclass(frozen=True)
+class BtValues:
+    pass
+
+@dataclass(frozen=True)
+class BtResult:
+    params: BtParams
+    domain: Domain | None = None
+
+    rx: str | None = None
+    scale: str | tuple[str, ...] = ()
+    signal: str | tuple[str, ...] | None = None
+    rebalance: str | None = None
+    # TODO: calendar
+    # TODO: weight
+
+    i_scale: int | UniverseScale = -1
+    i_signal: int | UniverseSignal = -1
+    i_rebalance: int = -1
+    i_calendar: int = -1
+    i_weight: int = -1
+
+    i_pos: int = -1
+    i_bt: int = -1
+
+    res: BtValues | None = None
+    # subtype with rx and pos
+
+    def with_obj(
+        self, obj: str | Object | tuple[str | Object, ...]
+    ) -> BtResult:
+        if self.domain is None:
+            raise ValueError((obj, self))
+        if isinstance(obj, str):
+            return self
+        elif isinstance(obj, Object):
+            return replace(
+                self, domain = self.domain.with_obj(obj)
             )
-            .get_column(VALUE).fill_nan(None)
-        )
-    elif activation == "n_one_p_tanh":
-        return (
-            pl.DataFrame({VALUE: ser.tanh()})
-            .select(
-                pl.when(pl.col(VALUE).is_null())
-                .then(None)
-                .when(pl.col(VALUE) > 0)
-                .then(pl.col(VALUE))
-                .otherwise(-1)
-                .alias(VALUE)
-            )
-            .get_column(VALUE).fill_nan(None)
-        )
-    else:
-        raise ValueError((ser, activation))
+        for o in obj:
+            self = self.with_obj(o)
+        return self
 
+    def done(self) -> tuple[BtResult, Domain]:
+        domain = self.domain
+        assert domain is not None, self
+        return replace(self, domain=None), domain
 
-def get_value(
-    obj: DailyChunked | list[DailyChunked],
-    domain: Domain,
-    scale: float = 1.0,
-    method: str | None = None,
-    activation: str | None = None,
-):
-    if isinstance(obj, Object):
-        ser = (
-            obj.value_key_val(domain)
-            .get(obj.path, kv.BODY, ValuePlSeries)
-            .ser
-        )
-        ser = apply_activation(ser, activation) * scale
-        snap = obj.snap_key_val(domain).get(
-            obj.path, DailySnap
-        )
-        assert snap is not None, obj
-        return ValuePlSeries.synthetic(
-            ser, start=snap.first, end=snap.last
-        )
-    vs = [
-        o.value_key_val(domain)
-        .get(o.path, kv.BODY, ValuePlSeries)
-        for o in obj
-    ]
-    snap = obj[0].snap_key_val(domain).get(
-        obj[0].path, DailySnap
-    )
-    assert snap is not None, obj
-
-    # TODO: df join if given diff dates by snap
-
-    df = pl.DataFrame([v.ser.alias(v.obj) for v in vs])
-    if method == "sum":
-        df = df.select(
-            pl.sum_horizontal(pl.all()).alias("res")
-        )
-    elif method == "mean":
-        df = df.select(
-            pl.mean_horizontal(pl.all()).alias("res")
-        )
-    elif method == "prod":
-        df = df.select(
-            pl.fold(
-                acc=pl.lit(1), 
-                function=lambda acc, x: acc * x, 
-                exprs=pl.all(),
-                return_dtype=pl.Float64,
-            )
-            .alias("res")
-        )
-    else:
-        assert len(obj) == 1, obj
-        df = df.select(
-            pl.col(vs[0].obj).alias("res")
-        )
-    ser = df.get_column("res")
-    ser = apply_activation(ser, activation) * scale
-    return ValuePlSeries.synthetic(
-        ser, start=snap.first, end=snap.last
-    )
+TBtParams = TypeVar(
+    "TBtParams", bound=BtParams
+)
+TBtResult = TypeVar(
+    "TBtResult", bound=BtResult
+)
 
 @dataclass(frozen=True)
 class Universe(
@@ -186,19 +170,17 @@ class Universe(
     parent: EngineRoot | str
 
     name: str
-    ident: int # config specifier (used for path, and to generate on the fly the below)
 
     # TODO: daily chunked not just object?
-
     scale: tuple[Object | str, ...]
     signal: tuple[Object | str, ...] = ()
     rebalance: tuple[Object | str, ...] = ()
     calendar: tuple[Object | str, ...] = ()
     weight: tuple[Object | str, ...] = ()
     
-    # rx_label, scale_label, etc.?
-
-    # to weight, generate a new portfolio and add weight
+    pos: tuple[UniversePosition, ...] = ()
+    bt: tuple[UniverseBt, ...] = ()
+    agg: tuple[UniverseAggregate, ...] = ()
     
     version: int = 0
     type: Literal["Universe"] = "Universe"
@@ -211,105 +193,287 @@ class Universe(
         cls,
         parent: EngineRoot,
         name: str,
-        ident: int,
         scale: tuple[Object | str, ...] = (),
         signal: tuple[Object | str, ...] = (),
         rebalance: tuple[Object | str, ...] = (),
         calendar: tuple[Object | str, ...] = (),
         weight: tuple[Object | str, ...] = (),
+        pos: tuple[UniversePosition, ...] = (),
+        bt: tuple[UniverseBt, ...] = (),
+        agg: tuple[UniverseAggregate, ...] = (),
     ):
         return cls(
             parent=parent,
-            path=f"pf.{name}.{ident}",
+            path=f"p-{name}",
             name=name,
-            ident=ident,
             scale=scale,
             signal=signal,
             rebalance=rebalance,
             calendar=calendar,
             weight=weight,
+            pos=pos,
+            bt=bt,
+            agg=agg,
         )
     
-    # TODO; overload to return multiple indices if more than oen passed?
+    def with_object(
+        self, obj: Object | str, field: str,
+    ) -> tuple[Universe, int]:
+        objs = getattr(self, field)
+        i = find_object(obj, objs)
+        if i is not None:
+            return self, i
+        objs = objs + (obj,)
+        return (
+            replace(self, **{field: objs}),
+            len(objs) - 1
+        )
 
-    def with_scale(self, scale: Object | str) -> tuple[Universe, int]:
-        i = find_object(scale, self.scale)
-        if i is not None:
+    @overload
+    def with_scale(
+        self, 
+        obj: Object | str | tuple[Object, ...],
+        into: BtResult,
+        agg: str | None = None,
+        scale: float | None = None,
+        activation: str | None = None,
+    ) -> tuple[
+        Universe, 
+        BtResult
+    ]: ...
+    @overload
+    def with_scale(
+        self, 
+        obj: Object | str | tuple[Object, ...],
+        into: None = None,
+        agg: str | None = None,
+        scale: float | None = None,
+        activation: str | None = None,
+    ) -> tuple[
+        Universe, 
+        int | UniverseScale
+    ]: ...
+    def with_scale(
+        self, 
+        obj: Object | str | tuple[Object | str, ...],
+        into: BtResult | None = None,
+        agg: str | None = None,
+        scale: float | None = None,
+        activation: str | None = None,
+    ) -> tuple[
+        Universe, 
+        int | UniverseScale | BtResult
+    ]:
+        if isinstance(obj, (Object, str)):
+            self, i = self.with_object(obj, "scale")
+        else:
+            assert agg is not None, (self, agg)
+            assert scale is not None, (self, scale)
+            indices = []
+            for sc in obj:
+                self, i = self.with_scale(sc)
+                indices.append(i)
+            self, i = self, UniverseScale(
+                tuple(indices),
+                method=agg,
+                scale=scale,
+                activation=activation,
+            )
+        if into is None:
             return self, i
-        scales = self.scale + (scale,)
-        return replace(
-            self, scale=scales
-        ), len(scales) - 1
+        return self, replace(
+            into.with_obj(obj),
+            scale=obj_path(obj),
+            i_scale=i,
+        )
     
-    def with_signal(self, signal: Object | str) -> tuple[Universe, int]:
-        i = find_object(signal, self.signal)
-        if i is not None:
+    @overload
+    def with_signal(
+        self, 
+        obj: Object | str | tuple[Object, ...],
+        into: BtResult,
+        agg: str | None = None,
+        scale: float | None = None,
+        activation: str | None = None,
+    ) -> tuple[Universe, BtResult]: ...
+    @overload
+    def with_signal(
+        self, 
+        obj: Object | str | tuple[Object, ...],
+        into: BtResult | None = None,
+        agg: str | None = None,
+        scale: float | None = None,
+        activation: str | None = None,
+    ) -> tuple[Universe, int | UniverseSignal]: ...
+    def with_signal(
+        self, 
+        obj: Object | str | tuple[Object, ...],
+        into: BtResult | None = None,
+        agg: str | None = None,
+        scale: float | None = None,
+        activation: str | None = None,
+    ) -> tuple[
+        Universe, int | UniverseSignal | BtResult
+    ]:
+        if isinstance(obj, (Object, str)):
+            self, i = self.with_object(obj, "signal")
+        else:
+            assert agg is not None, (self, agg)
+            assert scale is not None, (self, scale)
+            indices = []
+            for sc in obj:
+                self, i = self.with_signal(sc)
+                indices.append(i)
+            self, i = self, UniverseSignal(
+                tuple(indices),
+                method=agg,
+                scale=scale,
+                activation=activation,
+            )
+        if into is None:
             return self, i
-        signals = (
-            () if self.signal is None else self.signal
-        ) + (signal,)
-        return replace(
-            self, signal=signals
-        ), len(signals) - 1
+        return self, replace(
+            into.with_obj(obj),
+            signal=obj_path(obj),
+            i_signal=i,
+        )
     
     def with_rebalance(self, rebalance: Object | str) -> tuple[Universe, int]:
-        i = find_object(rebalance, self.rebalance)
-        if i is not None:
-            return self, i
-        rebalances = (
-            () if self.rebalance is None else self.rebalance
-        ) + (rebalance,)
-        return replace(
-            self, rebalance=rebalances
-        ), len(rebalances) - 1
+        return self.with_object(rebalance, "rebalance")
     
     def with_calendar(self, calendar: Object | str) -> tuple[Universe, int]:
-        i = find_object(calendar, self.calendar)
-        if i is not None:
-            return self, i
-        calendars = (
-            () if self.calendar is None else self.calendar
-        ) + (calendar,)
-        return replace(
-            self, calendar=calendars
-        ), len(calendars) - 1
+        return self.with_object(calendar, "calendar")
     
     def with_weight(self, weight: Object | str) -> tuple[Universe, int]:
-        i = find_object(weight, self.weight)
-        if i is not None:
-            return self, i
-        weights = (
-            () if self.weight is None else self.weight
-        ) + (weight,)
-        return replace(
-            self, weight=weights
-        ), len(weights) - 1
+        return self.with_object(weight, "weight")
+    
+    @overload
+    def with_pos(
+        self, 
+        pos: BtResult,
+        signal: int | UniverseSignal | None=None,
+        rebalance: int | str | None=None,
+        calendar: int | None=None,
+        weight: int | None=None,
+        unit: float =100.,
+    ) -> tuple[Universe, BtResult]: ...
+
+    @overload
+    def with_pos(
+        self, 
+        pos: (
+            int 
+            | UniverseScale 
+            | UniversePosition
+        ),
+        signal: int | UniverseSignal | None=None,
+        rebalance: int | str | None=None,
+        calendar: int | None=None,
+        weight: int | None=None,
+        unit: float =100.,
+    ) -> tuple[Universe, int]: ...
+
+    def with_pos(
+        self, 
+        pos: (
+            BtResult 
+            | int 
+            | UniverseScale 
+            | UniversePosition
+        ),
+        signal: int | UniverseSignal | None=None,
+        rebalance: int | str | None=None,
+        calendar: int | None=None,
+        weight: int | None=None,
+        unit: float =100.,
+    ) -> tuple[Universe, BtResult | int]:
+        i = len(self.pos)
+        res: BtResult | int = i
+        if isinstance(pos, BtResult):
+            scale = pos.i_scale
+            assert signal is None, signal
+            signal = pos.i_signal
+            rebalance = rebalance or pos.rebalance
+            res = replace(pos, i_pos=i)
+            pos = UniversePosition(
+                scale=scale,
+                signal=signal,
+                rebalance=rebalance,
+                calendar=calendar,
+                weight=weight,
+                unit=unit,
+                index=i,
+            )
+        elif isinstance(pos, UniversePosition):
+            # assert scale is None, scale
+            pos = replace(pos, index=i)
+        else:
+            if not isinstance(pos, int):
+                scale = UniverseScale(
+                    pos.index, pos.method
+                )
+            pos = UniversePosition(
+                scale=scale,
+                signal=signal,
+                rebalance=rebalance,
+                calendar=calendar,
+                weight=weight,
+                unit=unit,
+                index=i,
+            )
+        return replace(self, pos=self.pos + (pos,)), res
+    
+    @overload
+    def with_bt(
+        self, 
+        pos: BtResult,
+        rx: Object | str,
+    ) -> tuple[Universe, BtResult]: ...
+
+    @overload
+    def with_bt(
+        self, 
+        pos: int | UniverseBt,
+        rx: Object | str,
+    ) -> tuple[Universe, int]: ...
+
+    def with_bt(
+        self, 
+        pos: int | UniverseBt | BtResult,
+        rx: Object | str,
+    ) -> tuple[Universe, BtResult | int]:
+        i = len(self.bt)
+        res: BtResult | int = i
+        if isinstance(pos, BtResult):
+            assert pos.i_pos is not None, pos
+            bt = UniverseBt(pos.i_pos, rx, i)
+            pos = pos.with_obj(rx)
+            res = self.finish_bt(replace(pos, i_bt = i))
+        elif isinstance(pos, UniverseBt):
+            bt = replace(pos, index=i)
+        else:
+            bt = UniverseBt(pos, rx, i)
+        return replace(self, bt=self.bt + (bt,)), res
+    
+    def finish_bt(self, res: BtResult) -> BtResult:
+        return res
+
+    def with_agg(
+        self, 
+        agg: tuple[int, ...] | UniverseAggregate,
+    ):
+        i = len(self.agg)
+        if isinstance(agg, UniverseAggregate):
+            assert agg is None, agg
+            agg = replace(agg, index=i)
+        else:
+            agg = UniverseAggregate(agg, i)
+        return replace(self, agg=self.agg + (agg,)), i
     
     def get_scale(
         self, i: int, domain: Domain, t: Type[O]
     ) -> O:
         return domain.get(self.scale[i], t=t)
-    
-    def scale_value(
-        self, i: int | PfolioScale, domain: Domain, 
-    ) -> ValuePlSeries:
-        if isinstance(i, int):
-            obj = self.get_scale(i, domain, DailyChunked)
-            return get_value(
-                obj,
-                domain,
-            )
-        objs = [
-            self.get_scale(ii, domain, DailyChunked)
-            for ii in i.index
-        ]
-        return get_value(
-            objs,
-            domain,
-            method=i.method,
-            scale=i.scale,
-            activation=i.activation,
-        )
 
     def get_signal(
         self, i: int | None, domain: Domain, t: Type[O]
@@ -318,29 +482,6 @@ class Universe(
             return None
         return domain.get(self.signal[i], t=t)
     
-    def signal_value(
-        self, i: int | PfolioSignal, domain: Domain, 
-    ) -> ValuePlSeries:
-        if isinstance(i, int):
-            obj = self.get_signal(i, domain, DailyChunked)
-            assert obj is not None, obj
-            return get_value(
-                obj,
-                domain,
-            )
-        objs = [
-            self.get_signal(ii, domain, DailyChunked)
-            for ii in i.index
-        ]
-        assert all([obj is not None for obj in objs]), objs
-        return get_value(
-            objs, # type: ignore
-            domain,
-            method=i.method,
-            scale=i.scale,
-            activation=i.activation,
-        )
-    
     def get_rebalance(
         self, i: int | None, domain: Domain, t: Type[O]
     ) -> O | None:
@@ -348,37 +489,6 @@ class Universe(
             return None
         return domain.get(self.rebalance[i], t=t)
     
-    def rebalance_value(
-        self, 
-        i: int | str | None, 
-        domain: Domain, 
-        value: DailyChunked | None = None,
-    ):
-        if i is None:
-            return None
-        elif isinstance(i, int):
-            obj = self.get_rebalance(i, domain, DailyChunked)
-            assert obj is not None, i
-            v = (
-                obj.value_key_val(domain)
-                .get(obj.path, kv.BODY, ValuePlSeries)
-            )
-            return v
-        else:
-            assert value is not None, value
-            snap = value.get_snap(domain)
-            assert isinstance(snap, DailySnap), snap
-            df = pl.select(
-                pl.date_range(snap.first, snap.last)
-                .alias("date")
-            ).select(
-                apis.cal.rebalance_mask(i)
-                .alias("mask")
-            )
-            return ValuePlSeries.synthetic(
-                df.get_column("mask")
-            )
-
     def get_calendar(
         self, i: int | None, domain: Domain, t: Type[O]
     ) -> O | None:
@@ -395,4 +505,16 @@ class Universe(
 
 #  ------------------
 
-__all__ = ["Universe", "PfolioScale", "PfolioSignal"]
+__all__ = [
+    "Universe",
+    "UniverseScale",
+    "UniverseSignal",
+    "UniversePosition",
+    "UniverseBt",
+    "UniverseAggregate",
+    "BtValues",
+    "TBtParams",
+    "BtParams",
+    "TBtResult",
+    "BtResult",
+]

@@ -348,12 +348,18 @@ def prepare_app(
             domain, obj, v
         )
         d0, d1 = snap.first, snap.last # type: ignore
-        df = pl.DataFrame([
-            v.ser.alias("value").fill_nan(None),
-        ]).with_columns(
-            pl.lit(o.path).alias("key"),
-            pl.date_range(d0, d1).alias("date")
-        )
+        try:
+            df = pl.DataFrame([
+                v.ser.alias("value").fill_nan(None),
+            ])
+            df = df.with_columns(
+                pl.lit(o.path).alias("key"),
+                pl.date_range(d0, d1).alias("date")
+            )
+        except:
+            raise ValueError((
+                snap, df
+            ))
         
         params = kwargs.pop("params")
         # TODO: if params is not None (eg. transform, etc.)

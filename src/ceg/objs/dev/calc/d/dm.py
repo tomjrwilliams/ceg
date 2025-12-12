@@ -46,8 +46,8 @@ class DailyDM(DailyM):
 
 @dataclass(frozen=True)
 class HandleNewDailyDM(
-    HandleNewChunkedGivenPlSeries,
-    HandleNewDailyChunkedFromChunkedParent,
+    HandleNewValueFromPl,
+    HandleNewDailyFromDailyParent,
 
 ):
     pass

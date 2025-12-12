@@ -31,6 +31,8 @@ class EcoDailyTags:
     asof: str | None = None
     lag: dt.timedelta | None = None
 
+    transform: str | None = None
+
     # etc.
 
     

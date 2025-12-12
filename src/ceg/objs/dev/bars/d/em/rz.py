@@ -40,7 +40,7 @@ from ....calc.d import *
 
 
 @dataclass(frozen=True)
-class BarDailyERZDomain(DailyChunkedDomain):
+class BarDailyERZDomain(DailyDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
@@ -57,7 +57,7 @@ class BarDailyERZDomain(DailyChunkedDomain):
     ...     .with_obj(obj)
     ...     .sync()
     ... )
-    >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+    >>> obj.value_key_val(domain).get(obj.path).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-erz-4-0.5' [f64]
     [
@@ -74,7 +74,7 @@ class BarDailyERZDomain(DailyChunkedDomain):
 
     @dataclass(frozen=True)
     class Root(
-        DailyChunkedDomain.Root,
+        DailyDomain.Root,
     ):
 
         version: int = 0

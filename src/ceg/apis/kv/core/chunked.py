@@ -151,43 +151,59 @@ class KeyChunk(
     def get(
         self,
         key: KeyO,
-        chunk: int,
         t: None = None,
+        chunk: int | None=None,
         # TODO: default value if not found
     ) -> ValO | None: ...
     @overload
     def get(
         self,
         key: KeyO,
-        chunk: int,
         t: Type[T],
+        chunk: int | None=None,
         # TODO: default value if not found
     ) -> T: ...
     def get(
         self,
         key: KeyO,
-        chunk: int,
         t: Type[T] | None = None,
+        chunk: int | None=None,
         # TODO: default value if not found
     ) -> ValO | T | None:
         key_i = self.encode_key(key)
-        val_i = self.select(key_i, chunk)
-        if val_i is None:
-            assert t is None, (val_i, key, t)
-            return val_i
-        val_o = self.decode_val(key, val_i)
+        if chunk is None:
+            val_o = None
+            for chunk in [HEAD, BODY, TAIL]:
+                val_i = self.select(key_i, chunk)
+                if val_i is not None:
+                    v_o = self.decode_val(key, val_i)
+                    if val_o is None:
+                        val_o = v_o
+                    else:
+                        val_o = self.concat_val(
+                            val_o, v_o
+                        )
+            if val_o is None:
+                assert t is None, (key, t)
+                return val_o
+        else:
+            val_i = self.select(key_i, chunk)
+            if val_i is None:
+                assert t is None, (val_i, key, t)
+                return val_i
+            val_o = self.decode_val(key, val_i)
         if t is not None:
             assert isinstance(val_o, t), (val_o, key, t)
         return val_o
 
     def get_head(self, key: KeyO) -> ValO | None:
-        return self.get(key, HEAD)
+        return self.get(key, chunk=HEAD)
 
     def get_body(self, key: KeyO) -> ValO | None:
-        return self.get(key, BODY)
+        return self.get(key, chunk=BODY)
 
     def get_tail(self, key: KeyO) -> ValO | None:
-        return self.get(key, TAIL)
+        return self.get(key, chunk=TAIL)
 
     def iget(
         self,
@@ -222,8 +238,14 @@ class KeyChunk(
         self,
         key: KeyO,
         val: ValO,
-        chunk: int,
+        chunk: int | None = None,
     ) -> ValO:
+        if chunk is None:
+            i, v = self.iget_head(key)
+            assert i is None, (key, i, v)
+            i, v = self.iget_tail(key)
+            assert i is None, (key, i, v)
+            chunk = BODY
         _, v = self.iset(key, val, chunk)
         return v
 
@@ -328,7 +350,7 @@ class KeyChunk(
                 chunk=TAIL if tail else HEAD,
             )
         else:
-            acc_curr = self.get(key, BODY)
+            acc_curr = self.get(key, chunk=BODY)
             if acc_curr is not None:
                 acc_o = self.concat_val(
                     acc_o,
@@ -412,7 +434,7 @@ class KeyChunk(
                 chunk=TAIL if tail else HEAD,
             )
         else:
-            acc_curr = self.get(key, BODY)
+            acc_curr = self.get(key, chunk=BODY)
             if acc_curr is not None:
                 acc_o = self.concat_val(
                     acc_o,
@@ -648,8 +670,8 @@ class ExampleMemoryKeyChunk(
     config: KeyChunkConfig = KeyChunkConfig(size=1)
 
 # NOTE: typing examples
-i, v = ExampleMemoryKeyChunk().iselect("", HEAD)
-a = ExampleMemoryKeyChunk().get("", HEAD)
+i, v = ExampleMemoryKeyChunk().iselect("", chunk=HEAD)
+a = ExampleMemoryKeyChunk().get("", chunk=HEAD)
 
 __all__ = [
     "START",

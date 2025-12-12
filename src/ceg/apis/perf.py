@@ -887,3 +887,44 @@ def perf_row(
             print(k, v)
         return
     return r
+
+# TODO: robustness
+
+# perf (optionally differential) by year
+
+# relative to a base case / signal
+# eg. no signal, same scale (even the same post sig pnl scaling?)
+# or null signal (eg. sector specific ip vs overall, vs main market beta)
+
+# perf breakdown by long / short (more generally, signal quantile ranges)
+
+# perf by underlier drawdown vs bull period (ie. something like differential to underlier, by underlier period return quantile)
+# but where we can dynamically pick periods by eg. drawdown periods
+
+# eg. by year, pick a drawdown start (but continue into next year as necessary, ave the next start after that)
+
+# rebalance schedule, run across diff rebalance days in week, randomise day to rebal (check consistent returns)
+# and check w vs d vs m etc.
+
+# signal extra lag
+
+# dependency on the top x percentile days for returns
+
+# TODO: signals
+
+# conditional momentum
+
+# eg. use a risk on/off signal from stress for trend on bonds, gold, etc.
+
+# stress
+
+
+# eg. calc the signal as just average of input series
+
+# defined by given cartesian enum
+
+
+# can then have a variety of monetisation methods, dependign on whether eg. we use to modulate a long only
+
+# or try to explicitly pick up risk off assets
+

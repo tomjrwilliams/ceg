@@ -41,34 +41,34 @@ from .bt import *
 #  ------------------
 
 @dataclass(frozen=True)
-class PfolioPositionMetric():
+class DailyBtValue():
     bt: int
-    metric: Object | str
+    metric: Object | str # TODO: rename value?
     index: int = -1
 
 @dataclass(frozen=True)
-class PfolioDailyMetric(
+class DailyBtMetric(
     UseRootConfigs,
 ):
-    parent: PfolioDaily | str
+    parent: UniverseDaily | str
     
     name: str
-    values: tuple[PfolioPositionMetric, ...]
+    values: tuple[DailyBtValue, ...]
     # calc however you see fit, eg. dv01
     # NOTE: optional: eg. if name=dd, will use returns instead
 
     version: int = 0
-    type: Literal["PfolioDailyMetric"] = "PfolioDailyMetric"
+    type: Literal["DailyBtMetric"] = "DailyBtMetric"
 
-    def get_parent(self, domain: Domain) -> PfolioDaily:
-        return domain.get(self.parent, t=PfolioDaily)
+    def get_parent(self, domain: Domain) -> UniverseDaily:
+        return domain.get(self.parent, t=UniverseDaily)
     
     @classmethod
     def new(
         cls,
-        parent: PfolioDaily,
+        parent: UniverseDaily,
         name: str,
-        values: tuple[PfolioPositionMetric, ...] = (),
+        values: tuple[DailyBtValue, ...] = (),
     ):
         return cls(
             parent=parent,
@@ -78,29 +78,29 @@ class PfolioDailyMetric(
         )
 
 @dataclass(frozen=True)
-class PfolioDailyAggregate(
-    UseChunkedValues,
+class DailyBtAggregate(
+    DailyChunked,
     DependsSelfNew,
     DependsDomainSync,
 ):
-    parent: PfolioDailyMetric | str
+    parent: DailyBtMetric | str
     
     index: int # index of agg in pfolio
 
     version: int = 0
-    type: Literal["PfolioDailyAggregate"] = "PfolioDailyAggregate"
+    type: Literal["DailyBtAggregate"] = "DailyBtAggregate"
 
     @dataclass(frozen=True)
     class Snap(DailySnap):
-        type: Literal["PfolioDailyAggregateSnap"] = "PfolioDailyAggregateSnap"
+        type: Literal["DailyBtAggregateSnap"] = "DailyBtAggregateSnap"
 
-    def get_parent(self, domain: Domain) -> PfolioDailyMetric:
-        return domain.get(self.parent, t=PfolioDailyMetric)
+    def get_parent(self, domain: Domain) -> DailyBtMetric:
+        return domain.get(self.parent, t=DailyBtMetric)
 
     @classmethod
     def new(
         cls,
-        parent: PfolioDailyMetric,
+        parent: DailyBtMetric,
         index: int,
     ):
         index_pad = str(index).zfill(3)
@@ -125,7 +125,7 @@ class PfolioDailyAggregate(
 
         if object_new and parent.name == "rx":
             assert self.path == event.obj, (self, event)
-            res.append(HandleNewPfolioDailySumRx())
+            res.append(HandleNewDailyBtSumRx())
 
         # TODO: if upstream target change
 
@@ -137,7 +137,10 @@ class PfolioDailyAggregate(
         return res
     
 @dataclass(frozen=True)
-class HandleNewPfolioDailyAggRx(Handler):
+class HandleNewDailyBtAggRx(
+    HandleNewValueFromPl,
+    HandleNewDailyFromDf,
+):
 
     def agg_rx(
         self,
@@ -150,7 +153,7 @@ class HandleNewPfolioDailyAggRx(Handler):
     def handle(
         self,
         event: ObjectNew,
-        obj: PfolioDailyAggregate,
+        obj: DailyBtAggregate,
         domain: Domain,
     ):
         snap = obj.get_snap(domain)
@@ -164,30 +167,26 @@ class HandleNewPfolioDailyAggRx(Handler):
         assert parent.name == "rx", parent
         assert len(parent.values)== 0, parent
 
-        pfolio = parent.get_parent(domain)
+        univ = parent.get_parent(domain)
 
-        agg = pfolio.agg[obj.index]
+        agg = univ.agg[obj.index]
 
         if len(agg.bt) == 0:
             bts = [
-                PfolioDailyBt.new(pfolio, bt)
-                for bt in range(len(pfolio.bt))
+                DailyBt.new(univ, bt)
+                for bt in range(len(univ.bt))
             ]
         
         bts = [
-            PfolioDailyBt.new(pfolio, bt)
+            DailyBt.new(univ, bt)
             for bt in agg.bt
         ]
         rxs = [
-            PfolioDailyRx.new(bt) for bt in bts
+            DailyBtRx.new(bt) for bt in bts
         ]
 
-        rx_snap = rxs[0].get_snap(domain)
-        assert rx_snap is not None, rx_snap
-        assert isinstance(rx_snap, PfolioDailyRx.Snap), rx_snap
-
         rx_dfs = [
-            chunked_daily_to_df(rx, domain)
+            daily_to_df(rx, domain)
             for rx in rxs
         ]
         rx_df = apis.pl.join_dfs(
@@ -196,36 +195,36 @@ class HandleNewPfolioDailyAggRx(Handler):
             how="full",
             coalesce=True,
             maintain_order="left_right",
-        )
+        ).sort(by="date")
 
-        df = self.agg_rx(rx_df, rx_snap.first, rx_snap.last)
+        d0 = rx_df.select(pl.col("date").min()).item()
+        d1 = rx_df.select(pl.col("date").max()).item()
 
-        e, _ = set_value_chunk_from_df(
+        df = self.agg_rx(rx_df, d0, d1)
+
+        assert len(df) == (
+            (d1 - d0).days + 1
+        ), (df, d1, d0)
+
+        e, v = self.set_value_from_df(
             obj,
             domain,
             df,
             VALUE,
-            chunk=kv.BODY,
             publish=True,
+            t = self.key_value_type(obj, domain),
         )
 
-        snap = (
-            obj.snap_key_val(domain)
-            .set(obj.path, type(obj).Snap(
-                event,
-                obj.path,
-                dt.datetime.now(),
-                rx_snap.first,
-                rx_snap.last,
-            ), PfolioDailyAggregate.Snap)
+        snap = self.set_snap_from_df(
+            df, event, obj, domain
         )
 
         return e
 
 
 @dataclass(frozen=True)
-class HandleNewPfolioDailySumRx(
-    HandleNewPfolioDailyAggRx
+class HandleNewDailyBtSumRx(
+    HandleNewDailyBtAggRx
 ):
 
     def agg_rx(
@@ -234,12 +233,14 @@ class HandleNewPfolioDailySumRx(
         first: dt.date,
         last: dt.date,
     ) -> pl.DataFrame:
-        return rxs.drop("date").select(
-            pl.sum_horizontal(pl.all()).alias(VALUE)
+        return rxs.select(
+            pl.col("date"),
+            pl.sum_horizontal(pl.exclude("date"))
+            .alias(VALUE)
         )
 
 __all__ = [
-    "PfolioPositionMetric",
-    "PfolioDailyMetric",
-    "PfolioDailyAggregate",
+    "DailyBtValue",
+    "DailyBtMetric",
+    "DailyBtAggregate",
 ]

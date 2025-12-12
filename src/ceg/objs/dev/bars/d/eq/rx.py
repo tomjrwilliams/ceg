@@ -45,7 +45,6 @@ from .stock import EqDailyStock, HasEqDailyStockParent
 @dataclass(frozen=True)
 class EqDailyRx(
     HasEqDailyEtfParent,
-    DailyChunked,
     BarDaily,
 ):
     parent: EqDailyEtf | EqDailyStock | str
@@ -131,8 +130,7 @@ class HandleUpdateEqDailyRx(Handler):
 
 @dataclass(frozen=True)
 class HandleNewEqDailyRx(
-    HandleNewChunkedGivenPlSeries,
-    HandleNewDailyChunkedFromChunkedParent,
+    HandleNewDailyFromDailyParentPl
 ):
     
     def calc_df(
@@ -219,7 +217,7 @@ class EqDailyRxDomain(EqDailyDomain):
     ...     .with_obj(obj)
     ...     .sync()
     ... )
-    >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+    >>> obj.value_key_val(domain).get(obj.path).tail(8)
     shape: (8,)
     Series: 'test-eq-d-SPY-close-full-frd-rx' [f64]
     [

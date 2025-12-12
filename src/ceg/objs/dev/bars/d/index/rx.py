@@ -44,7 +44,6 @@ from .px import IndexDailyPx, HasIndexDailyPxParent
 @dataclass(frozen=True)
 class IndexDailyRx(
     HasIndexDailyPxParent,
-    DailyChunked,
     BarDaily,
 ):
     parent: IndexDailyPx | str
@@ -133,8 +132,7 @@ class HandleUpdateIndexDailyRx(Handler):
 
 @dataclass(frozen=True)
 class HandleNewIndexDailyRx(
-    HandleNewChunkedGivenPlSeries,
-    HandleNewDailyChunkedFromChunkedParent,
+    HandleNewDailyFromDailyParentPl
 ):
     
     def calc_df(
@@ -213,7 +211,7 @@ class IndexDailyRxDomain(IndexDailyDomain):
     ...     .with_obj(obj)
     ...     .sync()
     ... )
-    >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+    >>> obj.value_key_val(domain).get(obj.path).tail(8)
     shape: (8,)
     Series: 'test-idx-d-VIX-close-raw-frd-rx' [f64]
     [

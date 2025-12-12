@@ -43,7 +43,6 @@ from .ord import FutDailyOrdinal, HasFutDailyOrdinalParent, BarDaily
 @dataclass(frozen=True)
 class FutDailyRx(
     HasFutDailyOrdinalParent,
-    DailyChunked,
     BarDaily,
 ):
     parent: FutDailyOrdinal | str
@@ -129,8 +128,7 @@ class HandleUpdateFutDailyRx(Handler):
 
 @dataclass(frozen=True)
 class HandleNewFutDailyRx(
-    HandleNewChunkedGivenPlSeries,
-    HandleNewDailyChunkedFromChunkedParent,
+    HandleNewDailyFromDailyParentPl
 ):
     
     def calc_df(
@@ -210,7 +208,7 @@ class FutDailyRxDomain(FutDailyDomain):
     ...     .with_obj(obj)
     ...     .sync()
     ... )
-    >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+    >>> obj.value_key_val(domain).get(obj.path).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rx' [f64]
     [

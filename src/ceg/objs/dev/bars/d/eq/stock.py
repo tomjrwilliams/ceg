@@ -42,7 +42,6 @@ from .root import *
 @dataclass(frozen=True)
 class EqDailyStock(
     HasEqDailyParent,
-    DailyChunked,
     BarDaily,
 ):
     parent: EqDaily | str
@@ -140,7 +139,10 @@ class HandleUpdateEqDailyStock(Handler):
         return
 
 @dataclass(frozen=True)
-class HandleNewEqDailyStock(Handler):
+class HandleNewEqDailyStock(
+    HandleNewValueFromPl,
+    HandleNewDailyFromDf,
+):
     def handle(
         self,
         event: ObjectNew,
@@ -170,33 +172,17 @@ class HandleNewEqDailyStock(Handler):
         else:
             raise ValueError(obj)
 
-        d_min, d_max = df.pipe(
-            apis.pl.select_items,
-            (
-                pl.col("date").min(),
-                pl.col("date").max(),
-            ),
-            t=dt.date
-        )
-
-        e, v = handlers.set_value_chunk_from_df(
+        e, v = self.set_value_from_df(
             obj,
             domain,
             df,
             tags.field,
-            chunk=kv.BODY,
             publish=True,
+            t = self.key_value_type(obj, domain),
         )
 
-        snap = (
-            obj.snap_key_val(domain)
-            .set(obj.path, EqDailyStock.Snap(
-                event,
-                obj.path,
-                dt.datetime.now(),
-                d_min,
-                d_max,
-            ))
+        snap = self.set_snap_from_df(
+            df, event, obj, domain
         )
 
         return e
@@ -241,7 +227,7 @@ class EqDailyStockDomain(EqDailyDomainOnlyStock):
     # ...     .with_obj(obj)
     # ...     .sync()
     # ... )
-    # >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+    # >>> obj.value_key_val(domain).get(obj.path).tail(8)
     # shape: (8,)
     # Series: 'test-fut-d-AAPL-1-close-full-frd' [f64]
     # [

@@ -175,9 +175,7 @@ class BarDailyEOsc(DailyEM):
 
 @dataclass(frozen=True)
 class HandleNewBarDailyEOsc(
-    HandleNewChunkedGivenPlSeries,
-    HandleNewDailyChunkedFromChunkedParent,
-
+    HandleNewDailyFromDailyParentPl
 ):
 
     def calc_df(
@@ -296,7 +294,7 @@ class HandleNewBarDailyEOsc(
         return df
 
 @dataclass(frozen=True)
-class BarDailyEOscDomain(DailyChunkedDomain):
+class BarDailyEOscDomain(DailyDomain):
     """
     >>> eng = EngineRoot.new(ROOT)
     >>> ord = FutDailyOrdinal.new(
@@ -315,7 +313,7 @@ class BarDailyEOscDomain(DailyChunkedDomain):
     ...     .with_obj(unit)
     ...     .sync()
     ... )
-    >>> obj.value_key_val(domain).get(obj.path, 1).tail(8)
+    >>> obj.value_key_val(domain).get(obj.path).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-eosc-4-12-8' [f64]
     [
@@ -328,7 +326,7 @@ class BarDailyEOscDomain(DailyChunkedDomain):
         -0.02915
         -0.430837
     ]
-    >>> unit.value_key_val(domain).get(unit.path, 1).tail(8)
+    >>> unit.value_key_val(domain).get(unit.path).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-eosc-4-12-8-tanh' [f64]
     [
@@ -345,7 +343,7 @@ class BarDailyEOscDomain(DailyChunkedDomain):
 
     @dataclass(frozen=True)
     class Root(
-        DailyChunkedDomain.Root,
+        DailyDomain.Root,
     ):
 
         version: int = 0
