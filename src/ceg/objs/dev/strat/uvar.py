@@ -137,13 +137,15 @@ class ScaleVol:
         )
         bt_pos = DailyBtPos.new(bt)
         bt_rx = DailyBtRx.new(bt)
+        bt_bench = DailyBtBench.new(bt_rx)
         res = replace(
             res,
             res = DailyBtUvarValues(
                 bt_pos.path,
                 bt_rx.path,
+                bt_bench.path,
             )
-        ).with_obj((bt, bt_pos, bt_rx))
+        ).with_obj((bt, bt_pos, bt_rx, bt_bench))
         return universe, res
 
 @dataclass(frozen=True)
@@ -448,7 +450,7 @@ class UvarBtResult(DailyBtUvarResult):
             unit=1.,
         ))
 
-        univ, self = cast_self(univ.into_uvar(self))
+        univ, self = cast_self(self.into_uvar(univ))
 
         if params.rescale is None:
             return univ, self.done()
@@ -482,8 +484,10 @@ class UvarBtDomain(Domain):
     >>> dom = dom.sync()
     >>> pos = dom.get(bts[0].res.pos, Daily)
     >>> rx = dom.get(bts[0].res.rx, Daily)
+    >>> perf = dom.get(bts[0].res.perf, Daily)
     >>> v_pos = pos.value_key_val(dom).get(pos.path).ser
     >>> v_rx = rx.value_key_val(dom).get(rx.path).ser
+    >>> v_perf = perf.value_key_val(dom).get(perf.path)
     >>> v_agg = agg.value_key_val(dom).get(agg.path).ser
     >>> v_pos.tail(8)
     shape: (8,)
@@ -524,9 +528,8 @@ class UvarBtDomain(Domain):
         0.139791
         0.824148
     ]
-    >>> pl.DataFrame(dict(pos=v_pos, rx=v_rx)).pipe(
-    ...     apis.perf.perf_row, round=4, repr=True
-    ... )
+    >>> v_perf.row(0, round=4, repr=True)
+    key example-bt-000-rx-bench
     mu 4.2188
     sd 11.2066
     rms 11.2085
@@ -535,9 +538,6 @@ class UvarBtDomain(Domain):
     sort 0.4375
     dd 26.6185
     calm 0.1585
-    p_mu 0.0293
-    p_sd 0.0341
-    p_skew 0.1727
     """
     
     @classmethod
@@ -670,9 +670,10 @@ class UvarBtDomain(Domain):
                 params=params,
                 domain=self,
             ).load(univ, eng)
-            res.append(
-                cast(UvarBtResult, result)
-            )
+
+            result = cast(UvarBtResult, result)
+
+            res.append(result)
         
         self = self.with_objs(
             univ,

@@ -331,7 +331,137 @@ class ValueKeyChunkNumPySQLite( # TODO: f64?
         ))
         return cast(ValueKeyChunkNumPySQLite, self.prepare())
 
+f_round = round
 
+@dataclass(frozen=True)
+class ValuePlDataFrame(Value):
+    df: pl_types.DataFrame
+
+    start: Any | None = None
+    end: Any | None = None
+
+    def row(
+        self,
+        i: int,
+        *keys: str,
+        repr: bool = False,
+        round: int | None = None
+    ):
+        r: dict = self.df.row(i, named=True)
+        if not len(keys):
+            keys = tuple(r.keys())
+        if round:
+            r = {
+                k: (
+                    v if not isinstance(v, float)
+                    else f_round(v, round)
+                )
+                for k, v in r.items()
+            }
+        if repr:
+            for k, v in r.items():
+                print(k, v)
+            return
+        return r
+    
+    def head(self, n: int) -> pl.DataFrame:
+        return self.df.head(n)
+
+    def tail(self, n: int) -> pl.DataFrame:
+        return self.df.tail(n)
+
+    @classmethod
+    def new(cls, k: str, df: pl.DataFrame, **kwargs) -> ValuePlDataFrame:
+        return cls(k, t.pl.DataFrame.cast(df), **kwargs)
+    
+    @classmethod
+    def synthetic(cls, df: pl.DataFrame, **kwargs) -> ValuePlDataFrame:
+        return cls.new("SYNTHETIC", df, **kwargs)
+
+    @property
+    def size(self):
+        return len(self.df)
+
+    def __getitem__(self, sl: slice) -> ValuePlDataFrame:
+        return self.new(self.obj, self.df[sl])
+    
+@dataclass(frozen=True)
+class ValueKeyValDfSQLite(
+    kv.SQLiteKeyVal[int, str, bytes, str, ValuePlDataFrame]
+):
+    """
+    >>> j, k, l, updated = ("j", "k", "l", [])
+    >>> @dataclass(frozen=True)
+    ... class ValueEx(Value):
+    ...     a: int
+    ...     type: Literal['Ex'] = Value.type_field("Ex")
+    >>> kv = ValueKeyValDfSQLite.new(
+    ...     TEST_DB, 
+    ...     parser = ValueEx.parser(),
+    ...     on_update = lambda k, v: updated.append((k, v))
+    ... )
+    >>> kv.get(k)
+    >>> v = kv.set(k, ValueEx(k, 0.0))
+    >>> assert v == ValueEx(k, 0.0) == kv.get(k), kv.get(k)
+    >>> assert (1, ValueEx(k, 0.0)) == kv.iget(k), kv.iget(k)
+    >>> v = kv.set(j, ValueEx(j, 1.0))
+    >>> v = kv.set(k, ValueEx(k, 2.0))
+    >>> assert (2, ValueEx(j, 1.0)) == kv.iget(j)
+    >>> assert (1, ValueEx(k, 2.0)) == kv.iget(k)
+    >>> assert updated == [(k, ValueEx(k, 2.0))]
+    """
+
+    type_id: Type[int] = int
+    type_key_i: Type[str] = str
+    type_val_i: Type[bytes]= bytes
+    type_key_o: Type[str] = str
+    type_val_o: Type[ValuePlDataFrame] = ValuePlDataFrame
+    type_val_t: Type[float] = float
+
+    def encode_key_type(self, t: Type[str]) -> Type[str]:
+        return t
+
+    def encode_val_type(self, t: Type[ValuePlDataFrame]) -> Type[bytes]:
+        return bytes
+
+    def encode_key(self, k: str) -> str:
+        return k
+
+    def decode_key(self, k: str) -> str:
+        return k
+
+    def encode_val(self, k: str, v: ValuePlDataFrame) -> bytes:
+        return v.df.serialize()
+
+    def decode_val(
+        self, k: str, v: bytes
+    ) -> ValuePlDataFrame:
+        df = pl.DataFrame.deserialize(io.BytesIO(v))
+        return ValuePlDataFrame.new(k, df)
+    
+    @classmethod
+    def new(
+        cls,
+        db: str, 
+        # parser: Type[ValueParser],
+        table: str = "ValuesDf",
+        on_update: Callable[[str, Value], None] | None = None
+    ) -> ValueKeyValDfSQLite:
+        self = cls(config=kv.SQLiteKeyValConfig(
+            db=db, name=table
+        ), on_update=on_update)
+        # , parser=parser)
+        return cast(ValueKeyValDfSQLite, self.prepare())
+
+    def set_from_df(
+        self,
+        df: pl.DataFrame,
+        k: str,
+        obj: str,
+    ) -> ValuePlDataFrame:
+        v = ValuePlDataFrame.new(obj, df)
+        return self.set(obj, v)
+    
 @dataclass(frozen=True)
 class ValuePlSeries(Value):
     ser: pl_types.Series
@@ -488,4 +618,6 @@ __all__ = [
     "ValueNumPy",
     "ValueKeyChunkPlSeriesSQLite",
     "ValuePlSeries",
+    "ValuePlDataFrame",
+    "ValueKeyValDfSQLite",
 ]

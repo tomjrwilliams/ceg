@@ -190,6 +190,7 @@ class DailyBtMutation:
     
 @dataclass(frozen=True)
 class DailyBtBench(
+    UseDataFrameValues,
     DependsParentValue,
     Daily, # NOTE: not chunked, store as df not series
 ):
@@ -298,7 +299,9 @@ class HandleNewDailyBench(
         obj: DailyBtBench,
         domain: Domain,
     ) -> pl.DataFrame:
-        df = df.rename({obj.path: "rx"})
+        
+        rx = obj.get_parent(domain)
+        df = df.rename({VALUE: "rx"})
         
         if obj.mutation is None:
 

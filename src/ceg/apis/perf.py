@@ -913,8 +913,3 @@ def perf_row(
         return
     return r
 
-
-def perf_partition(
-    
-):
-    return

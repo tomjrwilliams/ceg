@@ -195,6 +195,32 @@ class EngineRoot(UseRootConfigs):
         return []
 
 @dataclass(frozen=True)
+class UseDataFrameValues(UseRootConfigs):
+
+    def value_key_val(
+        self,
+        domain: Domain,
+        t: None = None,
+        # TODO: return union with parquet etc.
+        # can then create a parser discriminator class
+    ) -> (
+        ValueKeyValDfSQLite
+    ):
+        storage = self.root(domain).storage
+        db = storage.get_config("values")
+        # TODO: get table name default from the key_val class itself?
+
+        if db.type == SQLite:
+            return ValueKeyValDfSQLite.new(
+                # size=self.chunk,
+                db=db.conn,
+            )
+        # TODO: if format == numpy: ...
+        # TODO: elif ...?
+
+        raise ValueError(self, db)
+    
+@dataclass(frozen=True)
 class UseChunkedValues(UseRootConfigs):
 
     @property
@@ -253,6 +279,7 @@ __all__ = [
     "EngineRoot",
     "UseRootConfigs",
     "UseChunkedValues",
+    "UseDataFrameValues",
     "ROOT",
     "ROOT_DB",
     "DomainWithEngineRoot",

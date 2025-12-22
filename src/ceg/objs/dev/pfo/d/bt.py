@@ -43,51 +43,9 @@ from .core import *
 
 
 @dataclass(frozen=True)
-class DailyBtUvarValues(BtValues):
-    # i: int
-    pos: str
-    rx: str
-
-@dataclass(frozen=True)
-class DailyBtUvarResult(BtResult):
-    res: DailyBtUvarValues | None = None
-    
-@dataclass(frozen=True)
-class DailyBtMvarValues(BtValues):
-    agg: str
-    pos: tuple[str, ...]
-    rx: tuple[str, ...]
-
-@dataclass(frozen=True)
-class DailyBtMvarResult(BtResult):
-    res: DailyBtMvarValues | None = None
-
-#  ------------------
-
-@dataclass(frozen=True)
 class UniverseDaily(Universe):
 
     type: Literal["UniverseDaily"] = "UniverseDaily"
-
-    def into_uvar(
-        self,
-        res: BtResult
-    ):
-        assert isinstance(res, DailyBtUvarResult), res
-        assert isinstance(self, UniverseDaily), self
-        assert res.i is not None, res
-        bt = DailyBtUvar.new(self, res.i)
-        bt_pos = DailyBtPos.new(bt)
-        bt_rx = DailyBtRx.new(bt)
-        res = replace(
-            res,
-            res = DailyBtUvarValues(
-                # res.i,
-                bt_pos.path,
-                bt_rx.path,
-            )
-        ).with_obj((bt_pos, bt_rx))
-        return self.with_uvar(BtUvar(bt.index)), res
 
 @dataclass(frozen=True)
 class DailyBtXvar(
@@ -658,10 +616,6 @@ __all__ = [
     "DailyBtMvar",
     "DailyBtPos",
     "DailyBtRx",
-    "DailyBtUvarValues",
-    "DailyBtUvarResult",
-    "DailyBtMvarValues",
-    "DailyBtMvarResult",
     "HandleNewDailyBtUvar",
     "HandleNewDailyBtMvar",
 ]
