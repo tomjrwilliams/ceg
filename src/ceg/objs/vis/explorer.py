@@ -333,21 +333,22 @@ def prepare_app(
 
         o = d.get(obj, t = None)
         
+        if hasattr(o, "explorer_df"):
+            return o.explorer_df(d) # type: ignore
+        
         val_kv = o.value_key_val(d)
         snap_kv = o.snap_key_val(d)
-        v = val_kv.get(
-            o.path,
-            apis.kv.BODY # type: ignore
-            # TODO: get_concat for chunked
-        )
 
-        snap = snap_kv.get(o.path)
-        assert snap is not None, (domain, obj)
-        assert v is not None, (domain, obj)
-        assert isinstance(v, ValuePlSeries), (
-            domain, obj, v
+        snap = snap_kv.get(o.path, Daily.Snap)
+        assert snap is not None, (domain, type(o), o)
+
+        v = val_kv.get(
+            o.path, ValuePlSeries
         )
-        d0, d1 = snap.first, snap.last # type: ignore
+        assert v is not None, (domain, type(o), o)
+
+        d0, d1 = snap.first, snap.last
+
         try:
             df = pl.DataFrame([
                 v.ser.alias("value").fill_nan(None),

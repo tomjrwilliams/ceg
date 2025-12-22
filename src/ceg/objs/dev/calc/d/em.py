@@ -49,6 +49,8 @@ class DailyEMParams(DailyParams):
     span: float | None = None
     alpha: float | None = None
 
+    ann: bool = False
+
     # NOTE: chunk not in path, as doesnt change value
     # only back-end layout
     # NOTE: likewise for back-end type: np vs pq etc.
@@ -84,6 +86,7 @@ class DailyEM(DailyWithDailyParent, DailyChunked):
         cls,
         span: float | None = None,
         alpha: float | None = None,
+        ann: bool = False,
     ):
         i = apis.t.only_index_not_none(
             span, alpha, strict=True
@@ -98,7 +101,9 @@ class DailyEM(DailyWithDailyParent, DailyChunked):
             params = f"{alpha}"
         else:
             raise ValueError((span, alpha))
-        return f"{cls.SUFFIX}-" + params
+        return f"{cls.SUFFIX}-" + params + (
+            "-ann" if ann else ""
+        )
     
     @overload
     @classmethod
@@ -108,6 +113,7 @@ class DailyEM(DailyWithDailyParent, DailyChunked):
         t: None = None,
         span: float | None=None,
         alpha: float | None=None,
+        ann: bool = False,
     ) -> DailyEM: ...
 
     @overload
@@ -120,6 +126,7 @@ class DailyEM(DailyWithDailyParent, DailyChunked):
         ],
         span: float | None=None,
         alpha: float | None=None,
+        ann: bool = False,
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> DailyEM: ...
@@ -133,6 +140,7 @@ class DailyEM(DailyWithDailyParent, DailyChunked):
         ] | None = None,
         span: float | None=None,
         alpha: float | None=None,
+        ann: bool = False,
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> DailyEM:
@@ -143,11 +151,13 @@ class DailyEM(DailyWithDailyParent, DailyChunked):
             path=parent.extend_path(cls.params_suffix(
                 span=span,
                 alpha=alpha,
+                ann=ann,
             )),
             parent=parent,
             params=DailyEMParams(
                 span=span,
                 alpha=alpha,
+                ann=ann,
             ),
         )
     
@@ -156,7 +166,6 @@ class DailyEM(DailyWithDailyParent, DailyChunked):
 @dataclass(frozen=True)
 class HandleNewDailyEM(
     HandleNewDailyFromDailyParentPl,
-
 ):
     pass
 
@@ -171,7 +180,7 @@ class DailyEMA(DailyEM):
     SUFFIX: ClassVar[str] = "ema"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyEMASnap"] = "DailyEMASnap"
  
     def handler_object_new(
@@ -222,7 +231,7 @@ class DailyEMax(DailyEM):
     SUFFIX: ClassVar[str] = "emax"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyEMaxSnap"] = "DailyEMaxSnap"
  
     def handler_object_new(
@@ -308,7 +317,7 @@ class DailyEMid(DailyEM):
     SUFFIX: ClassVar[str] = "emid"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyEMidSnap"] = "DailyEMidSnap"
  
     def handler_object_new(
@@ -368,7 +377,7 @@ class DailyEMin(DailyEM):
     SUFFIX: ClassVar[str] = "emin"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyEMinSnap"] = "DailyEMinSnap"
  
     def handler_object_new(
@@ -450,7 +459,7 @@ class DailyEPLast(DailyEM):
     SUFFIX: ClassVar[str] = "eplast"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyEPLastSnap"] = "DailyEPLastSnap"
  
     def handler_object_new(
@@ -590,7 +599,7 @@ class DailyERms(DailyEM):
     SUFFIX: ClassVar[str] = "erms"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyERmsSnap"] = "DailyERmsSnap"
  
     def handler_object_new(
@@ -623,13 +632,14 @@ class HandleNewDailyERms(HandleNewDailyEM):
         domain: Domain,
     ) -> pl.Expr:
         params = obj.params
+        ann = 1 if not params.ann else 16
         return (
             pl.col(VALUE).pow(2).ewm_mean(
                 span=params.span,
                 alpha=params.alpha,
                 min_samples=1, # TODO: or more?
                 ignore_nulls=True,
-            ).sqrt()
+            ).sqrt() * ann
         )
 
 @dataclass(frozen=True)
@@ -641,7 +651,7 @@ class DailyERng(DailyEM):
     SUFFIX: ClassVar[str] = "erng"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyERngSnap"] = "DailyERngSnap"
  
     def handler_object_new(
@@ -699,7 +709,7 @@ class DailyESDev(DailyEM):
     SUFFIX: ClassVar[str] = "esdev"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyESDevSnap"] = "DailyESDevSnap"
  
     def handler_object_new(
@@ -750,7 +760,7 @@ class DailyEVar(DailyEM):
     SUFFIX: ClassVar[str] = "evar"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyEVarSnap"] = "DailyEVarSnap"
  
     def handler_object_new(
@@ -801,7 +811,7 @@ class DailyEZ(DailyEM):
     SUFFIX: ClassVar[str] = "ez"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyEZSnap"] = "DailyEZSnap"
  
     def handler_object_new(
@@ -864,7 +874,7 @@ class DailyEZW(DailyEM):
     SUFFIX: ClassVar[str] = "ezw"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyEZWSnap"] = "DailyEZWSnap"
  
     def handler_object_new(
@@ -943,7 +953,7 @@ class DailyERZ(DailyEM):
     SUFFIX: ClassVar[str] = "erz"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyERZSnap"] = "DailyERZSnap"
  
     def handler_object_new(
@@ -1140,7 +1150,7 @@ class DailyERZW(DailyERZ):
     SUFFIX: ClassVar[str] = "erzw"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyERZWSnap"] = "DailyERZWSnap"
  
     def handler_object_new(

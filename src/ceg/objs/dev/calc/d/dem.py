@@ -62,7 +62,7 @@ class DailyDEMA(DailyDEM):
     SUFFIX: ClassVar[str] = "dema"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyDEMASnap"] = "DailyDEMASnap"
  
     def handler_object_new(
@@ -98,7 +98,7 @@ class DailyDEMax(DailyDEM):
     SUFFIX: ClassVar[str] = "demax"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyDEMaxSnap"] = "DailyDEMaxSnap"
  
     def handler_object_new(
@@ -144,7 +144,7 @@ class DailyDEMid(DailyDEM):
     SUFFIX: ClassVar[str] = "demid"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyDEMidSnap"] = "DailyDEMidSnap"
  
     def handler_object_new(
@@ -190,7 +190,7 @@ class DailyDEMin(DailyDEM):
     SUFFIX: ClassVar[str] = "demin"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyDEMinSnap"] = "DailyDEMinSnap"
  
     def handler_object_new(

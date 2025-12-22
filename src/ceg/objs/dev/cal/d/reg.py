@@ -63,7 +63,9 @@ class CalDailyRegular(
         type: Literal["CalDailyRegularSnap"] = "CalDailyRegularSnap"
  
     def get_snap(
-        self, domain: Domain
+        self,
+        domain: Domain,
+        t: Type[DailySnap] | None = None,
     ) -> CalDailyRegular.Snap | None:
         return self.snap_key_val(domain).get(self.path, CalDailyRegular.Snap)
     

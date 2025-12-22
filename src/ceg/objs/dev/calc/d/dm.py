@@ -62,7 +62,7 @@ class DailyDMA(DailyDM):
     SUFFIX: ClassVar[str] = "dma"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyDMASnap"] = "DailyDMASnap"
  
     def handler_object_new(
@@ -117,7 +117,7 @@ class DailyDMax(DailyDM):
     SUFFIX: ClassVar[str] = "dmax"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyDMaxSnap"] = "DailyDMaxSnap"
  
     def handler_object_new(
@@ -154,7 +154,7 @@ class DailyDMed(DailyDM):
     SUFFIX: ClassVar[str] = "dmed"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyDMedSnap"] = "DailyDMedSnap"
  
     def handler_object_new(
@@ -192,7 +192,7 @@ class DailyDMid(DailyDM):
     SUFFIX: ClassVar[str] = "dmid"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyDMidSnap"] = "DailyDMidSnap"
  
     def handler_object_new(
@@ -304,7 +304,7 @@ class DailyDMin(DailyDM):
     SUFFIX: ClassVar[str] = "dmin"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyDMinSnap"] = "DailyDMinSnap"
  
     def handler_object_new(
@@ -374,7 +374,7 @@ class DailyDQile(DailyDM):
     SUFFIX: ClassVar[str] = "dqile"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyDQileSnap"] = "DailyDQileSnap"
  
     def handler_object_new(

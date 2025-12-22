@@ -142,8 +142,6 @@ def backtest_rx(
             pos = (unit * sig) / sca
             reb = False
         res_pos[t] = pos
-        # if np.isnan(pos):
-        #     print(sig, sca, rx[t])
     return res_pos, res_rx
 
 def backtest_px(
@@ -214,6 +212,7 @@ def backtest(
     cum: bool = False,
 ):
     calendar = calendar_expr(calendar, px, rx)
+
     signal = expr(signal, 1.)
     scale = expr(scale, 1.)
     rebal = expr(rebal, True)
@@ -299,6 +298,8 @@ def with_backtest(
     scale: float | str | pl.Expr | None = None,
     rebal: float | str | pl.Expr | None = None,
     flows: float | str | pl.Expr | None = None,
+    cap: float | str | pl.Expr | None = None,
+    fx: float | str | pl.Expr | None = None,
     #
     unit: float | None = None,
 ) -> pl.DataFrame: ...
@@ -317,6 +318,8 @@ def with_backtest(
     scale: float | str | pl.Expr | None = None,
     rebal: float | str | pl.Expr | None = None,
     flows: float | str | pl.Expr | None = None,
+    cap: float | str | pl.Expr | None = None,
+    fx: float | str | pl.Expr | None = None,
     #
     unit: float | None = None,
 ) -> pl.DataFrame: ...
@@ -334,9 +337,13 @@ def with_backtest(
     scale: float | str | pl.Expr | None = None,
     rebal: float | str | pl.Expr | None = None,
     flows: float | str | pl.Expr | None = None,
+    cap: float | str | pl.Expr | None = None,
+    fx: float | str | pl.Expr | None = None,
     #
     unit: float | None = None,
 ):
+    assert fx is None, (df, alias, fx)
+    assert cap is None, (df, alias, cap)
     v_res = backtest(
         df=df,
         px=px,
@@ -755,6 +762,8 @@ def perf_row(
     rx: str | None = None,
     round: int | None = None,
     repr: int | bool = False,
+    with_pos: bool = True,
+    with_keys: list[str] | None = None,
     **kwargs
 ):
     # if isinstance(repr, int) and round is None:
@@ -762,11 +771,12 @@ def perf_row(
     #     repr = True
 
     if k is None and pos is None and rx is None:
-            pos = "pos"
-            rx = "rx"
+        pos = "pos"
+        rx = "rx"
     elif k is None:
         assert (
-            pos is not None and rx is not None
+            (pos is not None or not with_pos)
+            and rx is not None
         ), dict(
             k=k,
             pos=pos,
@@ -782,10 +792,12 @@ def perf_row(
     df = df.with_columns(
         pl.col(rx).fill_nan(None)
     )
-    if pos in df.schema:
+    if pos is not None and pos in df.schema:
         df = df.with_columns(
             pl.col(pos).fill_nan(None),
         )
+    else:
+        assert not with_pos, df
 
     (
         r_mu,
@@ -828,7 +840,8 @@ def perf_row(
         # *([
     ).row(0, named=False)
 
-    if pos in df.schema:
+    if with_pos:
+        assert pos is not None, (df, pos)
         (
             r_pos_mu,
             r_pos_sd,
@@ -862,6 +875,18 @@ def perf_row(
         pos_r = {}
 
     r = {} if k is None else dict(key=k)
+
+    if with_keys:
+        r = {
+            **r,
+            **df.select((
+                pl.col(_k)
+                .first()
+                .item()
+                for _k in with_keys
+            )).row(0, named=True)
+        }
+
     perf = dict(
         mu = r_mu,
         sd = r_sd,
@@ -888,43 +913,8 @@ def perf_row(
         return
     return r
 
-# TODO: robustness
 
-# perf (optionally differential) by year
-
-# relative to a base case / signal
-# eg. no signal, same scale (even the same post sig pnl scaling?)
-# or null signal (eg. sector specific ip vs overall, vs main market beta)
-
-# perf breakdown by long / short (more generally, signal quantile ranges)
-
-# perf by underlier drawdown vs bull period (ie. something like differential to underlier, by underlier period return quantile)
-# but where we can dynamically pick periods by eg. drawdown periods
-
-# eg. by year, pick a drawdown start (but continue into next year as necessary, ave the next start after that)
-
-# rebalance schedule, run across diff rebalance days in week, randomise day to rebal (check consistent returns)
-# and check w vs d vs m etc.
-
-# signal extra lag
-
-# dependency on the top x percentile days for returns
-
-# TODO: signals
-
-# conditional momentum
-
-# eg. use a risk on/off signal from stress for trend on bonds, gold, etc.
-
-# stress
-
-
-# eg. calc the signal as just average of input series
-
-# defined by given cartesian enum
-
-
-# can then have a variety of monetisation methods, dependign on whether eg. we use to modulate a long only
-
-# or try to explicitly pick up risk off assets
-
+def perf_partition(
+    
+):
+    return

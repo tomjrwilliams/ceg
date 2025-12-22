@@ -137,7 +137,8 @@ class UseRootConfigs(Object):
             return SnapKeyValSQLite.new(
                 db=db.conn,
                 table=table,
-                parser=domain.snap_parser
+                parser=domain.snap_parser,
+                on_update=lambda k, snap: None
             )
         raise ValueError(self, db)
 

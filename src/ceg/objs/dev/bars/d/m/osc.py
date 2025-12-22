@@ -159,7 +159,7 @@ class BarDailyOsc(DailyM):
         )
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["BarDailyOscSnap"] = "BarDailyOscSnap"
  
     def handler_object_new(

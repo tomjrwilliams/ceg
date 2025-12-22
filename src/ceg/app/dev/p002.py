@@ -33,7 +33,7 @@ SPAN_RATIO = [
 ]
 
 @dataclass(frozen=True)
-class Project_002(strat.UvariateBtProject):
+class Project_002(strat.UvarBtProject):
     SPAN_FAST: ClassVar[list[int]] = SPAN_POW_2
     SPAN_RATIO: ClassVar[list[float]] = SPAN_RATIO
     SPAN_VOL_SIG: ClassVar[list[int]] = SPAN_VOL_SIG
@@ -74,7 +74,7 @@ def load_p002():
         ]:
             i_str = str(i).rjust(3, "0") + "-"
             params = [
-                strat.UvariateBtParams(
+                strat.UvarBtParams(
                     asset = strat.AssetConcrete(
                         product,
                         symbol,
@@ -91,14 +91,18 @@ def load_p002():
                 for product, symbol, signal
                 in product_symbol_signals
             ]
-            domain, univ = strat.UvariateBtDomain.new(
+            domain, univ = strat.UvarBtDomain.new(
                 PROJECT + "-" + name,
             )
             domain, univ, bts = domain.with_bts(
                 univ, *params
             )
-            domain, univ, rx_agg = domain.with_agg(
-                univ, bts
+            rx = pfo.Collection.new(
+                univ.get_parent(domain),
+                univ.path + "-rx"
+            )
+            domain, rx, rx_agg = domain.with_agg(
+                rx, bts
             )
             project = (
                 project.with_bt_page(

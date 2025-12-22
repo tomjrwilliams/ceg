@@ -96,6 +96,45 @@ def join_dfs(
         )
     return df
 
+def partition_by_exprs(
+    df: pl.DataFrame,
+    with_alias: bool = False,
+    with_keys: bool = True,
+    as_list: bool = True,
+    **exprs: pl.Expr,
+):
+    aliases = (
+        list(exprs.keys()) if with_alias
+        else [f"{k}_" for k in exprs.keys()]
+    )
+    df.with_columns(
+        e.alias(k) for e, k in zip(
+            exprs.values(), aliases
+        )
+    )
+    if with_keys and as_list:
+        return [
+            (
+                {
+                    k: v for k, v in zip(
+                        exprs.keys(),
+                        keys
+                    )
+                }, (
+                    df_partn
+                    if with_alias
+                    else df_partn.drop(*aliases)
+                )
+            )
+            for keys, df_partn
+            in df.partition_by(
+                *aliases,
+                maintain_order=True,
+                as_dict=True,
+            ).items()
+        ]
+    raise ValueError((df, with_alias, with_keys, as_list, list(exprs.keys())))
+
 __all__ = [
     "assert_is",
     "null_mask",

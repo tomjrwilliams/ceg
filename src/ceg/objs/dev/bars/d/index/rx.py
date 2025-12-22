@@ -36,14 +36,14 @@ from ......engine import *
 from ..root import *
 from .root import *
 
-from .px import IndexDailyPx, HasIndexDailyPxParent
+from .px import IndexDailyPx, DependsIndexDailyPxParent
 
 #  ------------------
 
 
 @dataclass(frozen=True)
 class IndexDailyRx(
-    HasIndexDailyPxParent,
+    DependsIndexDailyPxParent,
     BarDaily,
 ):
     parent: IndexDailyPx | str
@@ -59,7 +59,9 @@ class IndexDailyRx(
         type: Literal["IndexDailyRxSnap"] = "IndexDailyRxSnap"
  
     def get_snap(
-        self, domain: Domain
+        self,
+        domain: Domain,
+        t: Type[DailySnap] | None = None,
     ) -> IndexDailyRx.Snap | None:
         return self.snap_key_val(domain).get(
             self.path, IndexDailyRx.Snap
@@ -99,15 +101,15 @@ class IndexDailyRx(
     def depends(self, domain: Domain) -> list[Dependency]:
         return (
             self.depends_self(domain)
-            + self.depends_domain(domain)
+            + self.depends_parent(domain)
         )
 
     def handlers(self, event: Event, domain: Domain) -> list[Handler]:
         res: list[Handler] = []
-        if isinstance(event, DomainSync):
+        if isinstance(event, ValueAppend):
             res.append(HandleUpdateIndexDailyRx())
-        elif isinstance(event, ObjectNew):
-            assert self.path == event.obj, (self, event)
+        elif isinstance(event, ValueUpdate):
+            assert self.get_parent(domain).path == event.obj, (self, event)
             res.append(HandleNewIndexDailyRx())
         elif isinstance(event, ObjectChange):
             # TODO: throw? unless only chunk change

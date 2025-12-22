@@ -111,6 +111,10 @@ class Object:
 
     # NOTE: string to avoid duplication on insert
     
+    @dataclass(frozen=True)
+    class Snap(Snap):
+        type: Literal["NullSnap"] = "NullSnap"
+
     def get_parent(self, domain: Domain):
         return domain.get(self.parent, Object)
 
@@ -541,16 +545,17 @@ class Domain:
         log(start=True)
         
         # TODO: or object.value not snap?
+
         snap = self.root.get_snap(self)
         if snap is None:
             curr = None
             curr_i = -1
         else:
             curr = snap.event
-            assert curr.i is not None, curr
+            assert curr.i is not None, snap
             curr_i = curr.i
         
-        log(snap=snap, curr=curr)
+        log(mess="domain snap", snap=snap, curr=curr)
 
         q = self.root.event_queue(self)
 
@@ -593,6 +598,7 @@ class Domain:
 
         while len(events):
             for e in events:
+                assert e.i is not None, e
                 curr, curr_i = handle_new_event(
                     self,
                     e,
@@ -606,12 +612,19 @@ class Domain:
                 # TODO: tail = from first, asecnding?
             ) # type: ignore
 
+        if curr is None:
+            curr = e_sync
+        
         if snap is None:
-            # TODO: init
-            pass
+            snap = type(self.root).Snap(
+                event=curr, obj=self.root.path
+            )
+            assert snap.type != "NullSnap", snap
         else:
             snap = replace(snap, event=curr)
-            snap.set(self.root.snap_key_val(self))
+
+        assert curr.i is not None, curr
+        snap.set(self.root.snap_key_val(self))
         
         return self
 
@@ -627,12 +640,12 @@ def sync_object_def(
     obj_old = obj_new.get_obj(self)
 
     if obj_old is None:
-        log(obj_new=obj_new)
+        log(mess="sync_object_def", obj_old=None,obj_new=obj_path(obj_new))
         e_new = self.root.publish(ObjectNew(k), self)
         assert e_new.i is not None, e_new
     else:
         diff = obj_old.diff(obj_new)
-        log(obj_diff=diff)
+        log(mess="sync_object_def", obj_diff=diff)
         if diff is None:
             return obj_new
         e_chg = self.root.publish(
@@ -652,7 +665,7 @@ def handle_past_events(
     history: list[Event] | None = None,
 ) -> tuple[Object, Dependency]:
 
-    log(obj=obj, dep=dep)
+    log(mess="handle_past_events", obj=obj_path(obj), dep=dep, curr_i=curr_i)
 
     if not dep.active:
         dep = dep.set(
@@ -664,7 +677,6 @@ def handle_past_events(
         dep.key(),
         obj.dependency_key_val(self)
     )
-    log(obj=obj, dep_prev=dep_prev)
 
     events = []
     if dep_prev is None:
@@ -676,6 +688,10 @@ def handle_past_events(
         events = [
             e for e in history
             if e.obj == i_path
+            and (
+                dep.events is None
+                or e.type in dep.events
+            )
         ]
     elif dep.events is not None:
         blob_events = dep_prev.events or []
@@ -695,17 +711,17 @@ def handle_past_events(
                 and e.type in e_types    
             ]
 
-    log(obj=obj, n_events=len(events))
+    log(mess="handle_past_events, n events for dep", n_events=len(events))
 
     for e in events:
 
         handlers = obj.handlers(e, self)
-        log(obj=obj, e=e, n_handlers=len(handlers))
+        log(mess="handle_past_events", e=e, n_handlers=len(handlers))
 
         for handler in handlers:
-            log(obj=obj, e=e, handler=handler, start=True)
+            log(mess="handle_past_events", handler=handler, start=True)
             handler.handle(e, obj, self)
-            log(obj=obj, e=e, handler=handler, end=True)
+            log(mess="handle_past_events", handler=handler, end=True)
 
     dep = dep.set(
         obj.dependency_key_val(self)
@@ -722,7 +738,7 @@ def handle_new_event(
     triggers = self.depends.get(i_path)
 
     if triggers is None:
-        log(e=e, triggers=triggers)
+        # log(mess="handle_new_event", e=e, triggers=triggers)
 
         assert e.i is not None, e
         return e, e.i
@@ -738,15 +754,14 @@ def handle_new_event(
         obj = self.objects.get(o_path)
         assert obj is not None, o_path
 
-        log(obj=obj, dep=dep, e=e)
-
         handlers = obj.handlers(e, self)
-        log(obj=obj, e=e, handlers=handlers)
+        log(mess="handle_new_event", obj=obj_path(obj), e=e, handlers=handlers)
 
         for handler in handlers:
-            log(obj=obj, e=e, handler=handler, start=True)
+            log(mess="handle_new_event", handler=handler, start=True)
+            assert e.i is not None, e
             handler.handle(e, obj, self)
-            log(obj=obj, e=e, handler=handler, end=True)
+            log(mess="handle_new_event", handler=handler, end=True)
 
     curr = e
     assert curr.i is not None, curr
@@ -805,13 +820,46 @@ class DependsSelf(Object):
 
 @dataclass(frozen=True)
 class DependsDomain(Object):
-    def depends_self(self, domain: Domain) -> list[Dependency]: ...
+    def depends_domain(self, domain: Domain) -> list[Dependency]: ...
     
 @dataclass(frozen=True)
-class DependsSelfNew(Object):
+class DependsParent(Object):
+    parent: str | Object
+
+    def depends_parent(self, domain: Domain) -> list[Dependency]: ...
+
+@dataclass(frozen=True)
+class DependsParentNew(DependsParent):
+    def depends_parent(self, domain: Domain) -> list[Dependency]:
+        parent = domain.get(self.parent, Object)
+        return [
+            Dependency(
+                self.path,
+                parent.path,
+                events=("ObjectNew",)
+            )
+        ]
+    
+    # TODO: change, value, etc.
+
+@dataclass(frozen=True)
+class DependsParentValue(DependsParent):
+    def depends_parent(self, domain: Domain) -> list[Dependency]:
+        parent = domain.get(self.parent, Object)
+        return [
+            Dependency(
+                self.path,
+                parent.path,
+                events=("ValueUpdate",)
+                # TODO: append, prepend?
+            )
+        ]
+    
+
+@dataclass(frozen=True)
+class DependsSelfNew(DependsSelf):
         
     def depends_self(self, domain: Domain) -> list[Dependency]:
-        # TODO: listen to ancestors?
         
         # TODO: self.ObjectChange
         # for chunk and backend type / loc
@@ -825,7 +873,7 @@ class DependsSelfNew(Object):
         ]
     
 @dataclass(frozen=True)
-class DependsDomainSync(Object):
+class DependsDomainSync(DependsDomain):
     def depends_domain(self, domain: Domain) -> list[Dependency]:
         return [
             Dependency(
@@ -884,6 +932,34 @@ def alias_parents(obj: Object):
     }
     return replace(obj, **aliases)
 
+@overload
+def obj_path(
+    obj: Object | str,
+) -> str: ...
+
+@overload
+def obj_path(
+    obj: tuple[Object | str, ...]
+) -> tuple[str,  ...]: ...
+
+def obj_path(
+    obj: Object | str | tuple[Object | str, ...]
+):
+    if isinstance(obj, tuple):
+        return tuple([obj_path(o) for o in obj])
+    return obj if isinstance(obj, str) else obj.path
+
+def find_object(
+    obj: Object | str, objs: tuple[Object | str, ...] | None
+) -> int | None:
+    if objs is None:
+        return None
+    path = obj_path(obj)
+    for i, o in enumerate(objs):
+        if obj_path(o) == path:
+            return i
+    return None
+
 __all__ = [
     "O",
     "Handler",
@@ -908,4 +984,10 @@ __all__ = [
     "DependsDomain",
     "DependsSelfNew",
     "DependsDomainSync",
+    "DependsParent",
+    "DependsParentNew",
+    "DependsParentValue",
+    #
+    "obj_path",
+    "find_object",
 ]

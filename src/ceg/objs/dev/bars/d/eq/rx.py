@@ -36,15 +36,15 @@ from ......engine import *
 from ..root import *
 from .root import *
 
-from .etf import EqDailyEtf, HasEqDailyEtfParent
-from .stock import EqDailyStock, HasEqDailyStockParent
+from .etf import EqDailyEtf, DependsEqDailyEtfParent
+from .stock import EqDailyStock, DependsEqDailyStockParent
 
 #  ------------------
 
 
 @dataclass(frozen=True)
 class EqDailyRx(
-    HasEqDailyEtfParent,
+    DependsEqDailyEtfParent,
     BarDaily,
 ):
     parent: EqDailyEtf | EqDailyStock | str
@@ -58,7 +58,9 @@ class EqDailyRx(
         type: Literal["EqDailyRxSnap"] = "EqDailyRxSnap"
  
     def get_snap(
-        self, domain: Domain
+        self,
+        domain: Domain,
+        t: Type[DailySnap] | None = None,
     ) -> EqDailyRx.Snap | None:
         return self.snap_key_val(domain).get(
             self.path, EqDailyRx.Snap
@@ -97,15 +99,15 @@ class EqDailyRx(
     def depends(self, domain: Domain) -> list[Dependency]:
         return (
             self.depends_self(domain)
-            + self.depends_domain(domain)
+            + self.depends_parent(domain)
         )
 
     def handlers(self, event: Event, domain: Domain) -> list[Handler]:
         res: list[Handler] = []
-        if isinstance(event, DomainSync):
+        if isinstance(event, ValueAppend):
             res.append(HandleUpdateEqDailyRx())
-        elif isinstance(event, ObjectNew):
-            assert self.path == event.obj, (self, event)
+        elif isinstance(event, ValueUpdate):
+            assert self.get_parent(domain).path == event.obj, (self, event)
             res.append(HandleNewEqDailyRx())
         elif isinstance(event, ObjectChange):
             # TODO: throw? unless only chunk change

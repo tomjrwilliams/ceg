@@ -56,7 +56,9 @@ class EqDailyStock(
         type: Literal["EqDailyStockSnap"] = "EqDailyStockSnap"
  
     def get_snap(
-        self, domain: Domain
+        self,
+        domain: Domain,
+        t: Type[DailySnap] | None = None,
     ) -> EqDailyStock.Snap | None:
         return self.snap_key_val(domain).get(self.path, EqDailyStock.Snap)
     
@@ -273,7 +275,7 @@ class EqDailyStockDomain(EqDailyDomainOnlyStock):
         return cast(EqDailyStockDomain, self)
     
 @dataclass(frozen=True)
-class HasEqDailyStockParent(Object):
+class DependsEqDailyStockParent(DependsParentValue):
     parent: EqDailyStock | str
 
     def get_parent(self, domain: Domain) -> EqDailyStock:
@@ -287,7 +289,7 @@ __all__ = [
     "HandleNewEqDailyStock",
     "EqDailyDomainOnlyStock",
     "EqDailyStockDomain",
-    "HasEqDailyStockParent",
+    "DependsEqDailyStockParent",
 ]
 # TODO: if __name__ == __main__:
 # run domain by name

@@ -18,7 +18,7 @@ from .p001 import *
 PROJECT = "p003"
 
 @dataclass(frozen=True)
-class Project_003(strat.UvariateBtProject):
+class Project_003(strat.UvarBtProject):
     pass
     
 def eco(
@@ -169,6 +169,7 @@ def load_p003():
             if act == "raw"
             else "demax" 
             if act == "ng_tnlog_ng" 
+            # b=-1,m=-1,f=logtanh
             else "zwdemax",
             speed = s,
             scale=scale,
@@ -195,7 +196,7 @@ def load_p003():
 
     eco_acts = [
         # None,
-        "n_tanh_p_one",
+        "n_tanh_p_one", # f=tanhrsign,params=(None,1)
         # "ng_tnlog_ng"
     ]
 
@@ -347,7 +348,7 @@ def load_p003():
         ]:
             i_str = str(i).rjust(3, "0") + "-"
             params = [
-                strat.UvariateBtParams(
+                strat.UvarBtParams(
                     asset = strat.AssetConcrete(
                         product,
                         symbol,
@@ -364,14 +365,18 @@ def load_p003():
                 for product, symbol, signal
                 in product_symbol_signals
             ]
-            domain, univ = strat.UvariateBtDomain.new(
+            domain, univ = strat.UvarBtDomain.new(
                 PROJECT + "-" + name,
             )
             domain, univ, bts = domain.with_bts(
                 univ, *params
             )
-            domain, univ, rx_agg = domain.with_agg(
-                univ, bts
+            rx = pfo.Collection.new(
+                univ.get_parent(domain),
+                univ.path + "-rx"
+            )
+            domain, rx, rx_agg = domain.with_agg(
+                rx, bts
             )
             project = (
                 project.with_bt_page(

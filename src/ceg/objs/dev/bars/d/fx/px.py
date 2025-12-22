@@ -41,6 +41,7 @@ from .root import *
 
 @dataclass(frozen=True)
 class FxDailyPx(
+    DependsDomainSync,
     HasFxDailyParent,
     BarDaily,
 ):
@@ -56,7 +57,9 @@ class FxDailyPx(
         type: Literal["FxDailyPxSnap"] = "FxDailyPxSnap"
  
     def get_snap(
-        self, domain: Domain
+        self,
+        domain: Domain,
+        t: Type[DailySnap] | None = None,
     ) -> FxDailyPx.Snap | None:
         return self.snap_key_val(domain).get(self.path, FxDailyPx.Snap)
     
@@ -270,7 +273,7 @@ class FxDailyPxDomain(FxDailyDomainOnlyPx):
         return cast(FxDailyPxDomain, self)
     
 @dataclass(frozen=True)
-class HasFxDailyPxParent(Object):
+class DependsFxDailyPxParent(DependsParentValue):
     parent: FxDailyPx | str
 
     def get_parent(self, domain: Domain) -> FxDailyPx:
@@ -286,7 +289,7 @@ __all__ = [
     "HandleNewFxDailyPx",
     "FxDailyDomainOnlyPx",
     "FxDailyPxDomain",
-    "HasFxDailyPxParent",
+    "DependsFxDailyPxParent",
 ]
 # TODO: if __name__ == __main__:
 # run domain by name

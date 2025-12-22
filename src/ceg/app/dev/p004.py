@@ -20,7 +20,7 @@ from .p003 import eco
 PROJECT = "p004"
 
 @dataclass(frozen=True)
-class Project_004(strat.UvariateBtProject):
+class Project_004(strat.UvarBtProject):
     pass
     
 ECO_SPEEDS: list[float] = [
@@ -32,7 +32,9 @@ ECO_SPEEDS: list[float] = [
     # 1024, 
     2048
 ]
-MOM_SPEEDS = ECO_SPEEDS
+MOM_SPEEDS: list[float] = [
+    16, 32, 128
+]
 
 def f_cmom(
     symb_sc: dict[str, float],
@@ -57,18 +59,33 @@ def f_cmom(
         ("ETF", symb, None, None, None)
         for symb in symb_sc.keys()
     ] + [
+        ("ETF", symb, eosc(int(sp)), None, None)
+        for symb in symb_sc.keys()
+        for sp in mom_speeds
+    ] + [
         (
             "ETF",
             symb,
             eosc(int(sp)),
             eco_sig, 
-            f"{symb}-{int(sp)}-{eco_sig.label()}"
+            f"{symb}-{eosc(int(sp)).label()}"
         )
         for sp in mom_speeds
         for symb, sc in symb_sc.items()
         for eco_sig in eco_sigs
     ]
 
+
+# SPY:
+# NOTE: fast (16) 16 mom, slow credit signals condition does well in crisis, flat elsewhere (so little contribution to total notional budget when not active)
+
+# TODO: try average z scores, vs average positions?
+# TODO: compare ES?
+
+# TODO: try replace TLT with TN (so only excess return)?
+
+# TODO: eur eq vol?
+# TODO: jp? 
 
 def load_p004():
     project = (
@@ -78,6 +95,7 @@ def load_p004():
 
     spread_acts: dict[str, str | None] = {
         "ez": "unit_tanh"
+        # unit_tanh = a=1,f=tanh,m=0.5
     }
 
     SPY_CMOM = f_cmom(
@@ -85,11 +103,11 @@ def load_p004():
             "SPY": 1.,
         },
         {
-            "VIX": -1.,
-            # "D_US_BAA": -1.,
-            # "D_US_BAA_FF": -1.,
-            # "US_IG_OAS": -1.,
-            # "US_HY_OAS": -1.,
+            "VIX": 1.,
+            "D_US_BAA": 1.,
+            "D_US_BAA_FF": 1.,
+            "US_IG_OAS": 1.,
+            "US_HY_OAS": 1.,
         },
         spread_acts
     )
@@ -99,11 +117,11 @@ def load_p004():
             "TLT": 1.,
         },
         {
-            "VIX": -1.,
-            # "D_US_BAA": -1.,
-            # "D_US_BAA_FF": -1.,
-            # "US_IG_OAS": -1.,
-            # "US_HY_OAS": -1.,
+            "VIX": 1.,
+            "D_US_BAA": 1.,
+            "D_US_BAA_FF": 1.,
+            "US_IG_OAS": 1.,
+            "US_HY_OAS": 1.,
         },
         spread_acts
     )
@@ -114,7 +132,7 @@ def load_p004():
             "EZU": 1.,
         },
         {
-            "EUR_HY_OAS": -1.,
+            "EUR_HY_OAS": 1.,
         },
         spread_acts
     )
@@ -131,8 +149,14 @@ def load_p004():
             # ("-m", "3D1W"),
         ]:
             i_str = str(i).rjust(3, "0") + "-"
+            configs_w_cond = [
+                (product, symbol, signal, cond, alias)
+                for product, symbol, signal, cond, alias
+                in product_symbol_signal_cond_aliases
+                if cond is not None
+            ]
             params = [
-                strat.UvariateBtParams(
+                strat.UvarBtParams(
                     asset = strat.AssetConcrete(
                         product,
                         symbol,
@@ -147,17 +171,16 @@ def load_p004():
                     rebal=rebal,
                 )
                 for product, symbol, signal, cond, alias
-                in product_symbol_signal_cond_aliases
-                if cond is not None
+                in configs_w_cond
             ]
-            domain, univ = strat.UvariateBtDomain.new(
-                PROJECT + "-" + name,
+            domain, univ = strat.UvarBtDomain.new(
+                PROJECT + "-" + name + "-raw",
             )
             domain, univ, bts = domain.with_bts(
                 univ, *params
             )
             params = [
-                strat.UvariateBtParams(
+                strat.UvarBtParams(
                     asset = strat.AssetConcrete(
                         product,
                         symbol,
@@ -171,14 +194,19 @@ def load_p004():
                     ),
                     rebal=rebal,
                 )
+                for product, symbol, signal, cond, alias
+                in product_symbol_signal_cond_aliases
                 if cond is None
-                else strat.UvariateBtParams(
+            ] + [
+                strat.UvarBtParams(
                     asset = strat.AssetSynthetic(
                         bt.assume_res().rx,
                         alias=alias,
                     ),
                     scale=strat.ScaleVol(
                         span=256
+                        # TODO: just const?
+                        # (given rescale)
                     ),
                     signal=cond,
                     # rescale=strat.ScaleVol(
@@ -189,23 +217,21 @@ def load_p004():
                 for bt, (
                     product, symbol, signal, cond, alias
                 )
-                in zip(
-                    bts,
-                    product_symbol_signal_cond_aliases
-                )
+                in zip(bts, configs_w_cond)
             ]
+            domain, univ = domain.with_univ(
+                PROJECT + "-" + name,
+            )
             domain, univ, bts = domain.with_bts(
                 univ, *params
             )
-            domain, univ, rx_agg = domain.with_agg(
-                univ, bts
+            rx = pfo.Collection.new(
+                univ.get_parent(domain),
+                univ.path + "-rx"
             )
-            
-            # TODO: presumably the issue is we just listen for new rather than for the existence of upstream?
-            # TODO: can maybe try ordering the sync, but better to just fix the dependency logic
-
-            # idealyl also deal with changing defs so we dont have to keep deleting the db cache
-
+            domain, rx, rx_agg = domain.with_agg(
+                rx, bts
+            )
             project = (
                 project.with_bt_page(
                     i_str + name + "-v" + suff,

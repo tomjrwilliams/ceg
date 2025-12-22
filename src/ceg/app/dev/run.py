@@ -6,10 +6,6 @@ sys.path.append("./src")
 from typing import Callable
 from pathlib import Path
 
-import ceg
-
-fut = ceg.objs.dev.fut
-
 os.environ["FRD_DATA"] = "./__local__/frd"
 
 project_name: str = ""
@@ -24,9 +20,26 @@ if __name__ == "__main__":
         # TODO: dev in path?
         app_cache = f"./__local__/apps/{app_name}"
         Path(app_cache).mkdir(exist_ok=True, parents=True)
+    
+    if len(project_name) == 0:
+        exit()
+
+    os.environ["TEST_LOGS"] = os.environ.get(
+        "TEST_LOGS", f"./__local__/logs/{project_name}.log"
+    )
+    log_fp = Path(os.environ["TEST_LOGS"])
+    
+    if log_fp.exists():
+        try:
+            os.remove(log_fp)
+        except:
+            pass
+    log_fp.parent.mkdir(parents=True, exist_ok=True)
+
+    import ceg
 
     project = ceg.app.dev.PROJECTS[project_name]()
-
+    
     if len(args) > 1:
         command = args[1]
         command_args = args[2:]

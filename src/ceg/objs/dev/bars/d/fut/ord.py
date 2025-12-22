@@ -41,6 +41,7 @@ from .root import *
 
 @dataclass(frozen=True)
 class FutDailyOrdinal(
+    DependsDomainSync,
     HasFutDailyParent,
     BarDaily,
 ):
@@ -56,7 +57,9 @@ class FutDailyOrdinal(
         type: Literal["FutDailyOrdinalSnap"] = "FutDailyOrdinalSnap"
  
     def get_snap(
-        self, domain: Domain
+        self,
+        domain: Domain,
+        t: Type[DailySnap] | None = None,
     ) -> FutDailyOrdinal.Snap | None:
         return self.snap_key_val(domain).get(self.path, FutDailyOrdinal.Snap)
     
@@ -273,7 +276,7 @@ class FutDailyOrdinalDomain(FutDailyDomainOnlyOrdinal):
         return cast(FutDailyOrdinalDomain, self)
     
 @dataclass(frozen=True)
-class HasFutDailyOrdinalParent(Object):
+class DependsFutDailyOrdinalParent(DependsParentValue):
     parent: FutDailyOrdinal | str
 
     def get_parent(self, domain: Domain) -> FutDailyOrdinal:
@@ -289,7 +292,7 @@ __all__ = [
     "HandleNewFutDailyOrdinal",
     "FutDailyDomainOnlyOrdinal",
     "FutDailyOrdinalDomain",
-    "HasFutDailyOrdinalParent",
+    "DependsFutDailyOrdinalParent",
 ]
 # TODO: if __name__ == __main__:
 # run domain by name

@@ -71,6 +71,7 @@ def apply_transform(
 
 @dataclass(frozen=True)
 class EcoDailyObservation(
+    DependsDomainSync,
     HasEcoDailyParent,
     DailyChunked,
 ):
@@ -86,7 +87,9 @@ class EcoDailyObservation(
         type: Literal["EcoDailyObservationSnap"] = "EcoDailyObservationSnap"
  
     def get_snap(
-        self, domain: Domain
+        self,
+        domain: Domain,
+        t: Type[DailySnap] | None = None,
     ) -> EcoDailyObservation.Snap | None:
         return self.snap_key_val(domain).get(self.path, EcoDailyObservation.Snap)
     
@@ -290,7 +293,6 @@ class EcoDailyObservationDomain(EcoDailyDomainOnlyObservation):
     shape: (8,)
     Series: 'test-eco-d-VIXCLS-fred' [f64]
     [
-        16.08
         15.78
         15.41
         null
@@ -298,6 +300,7 @@ class EcoDailyObservationDomain(EcoDailyDomainOnlyObservation):
         16.66
         16.93
         15.77
+        14.85
     ]
     >>> obj = EcoDailyObservation.new(
     ...     eng,
@@ -352,7 +355,7 @@ class EcoDailyObservationDomain(EcoDailyDomainOnlyObservation):
         return cast(EcoDailyObservationDomain, self)
     
 @dataclass(frozen=True)
-class HasEcoDailyObservationParent(Object):
+class DependsEcoDailyObservationParent(DependsParentValue):
     parent: EcoDailyObservation | str
 
     def get_parent(self, domain: Domain) -> EcoDailyObservation:
@@ -366,7 +369,7 @@ __all__ = [
     "HandleNewEcoDailyObservation",
     "EcoDailyDomainOnlyObservation",
     "EcoDailyObservationDomain",
-    "HasEcoDailyObservationParent",
+    "DependsEcoDailyObservationParent",
 ]
 # TODO: if __name__ == __main__:
 # run domain by name

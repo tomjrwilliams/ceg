@@ -28,104 +28,78 @@ from frozendict import frozendict
 import numpy as np
 import polars as pl
 
-from ..... import apis
-from .....apis import t
-from .....apis import kv
-from .....engine import *
+from .... import apis
+from ....apis import t
+from ....apis import kv
+from ....engine import *
 
-from ...calc import *
+from ..calc import *
 
-from ..root import *
-from .bt import *
+from .collections import *
 
 #  ------------------
 
 @dataclass(frozen=True)
-class DailyBtValue():
-    bt: int
-    metric: Object | str # TODO: rename value?
-    index: int = -1
-
-@dataclass(frozen=True)
-class DailyBtMetric(
-    UseRootConfigs,
-):
-    parent: UniverseDaily | str
-    
-    name: str
-    values: tuple[DailyBtValue, ...]
-    # calc however you see fit, eg. dv01
-    # NOTE: optional: eg. if name=dd, will use returns instead
-
-    version: int = 0
-    type: Literal["DailyBtMetric"] = "DailyBtMetric"
-
-    def get_parent(self, domain: Domain) -> UniverseDaily:
-        return domain.get(self.parent, t=UniverseDaily)
-    
-    @classmethod
-    def new(
-        cls,
-        parent: UniverseDaily,
-        name: str,
-        values: tuple[DailyBtValue, ...] = (),
-    ):
-        return cls(
-            parent=parent,
-            path=parent.extend_path(name),
-            name=name,
-            values=values,
-        )
-
-@dataclass(frozen=True)
-class DailyBtAggregate(
+class DailyAggregate(
     DailyChunked,
     DependsSelfNew,
-    DependsDomainSync,
+    DependsParentValue,
 ):
-    parent: DailyBtMetric | str
+    parent: Collection | str
     
+    metric: str
     index: int # index of agg in pfolio
 
     version: int = 0
-    type: Literal["DailyBtAggregate"] = "DailyBtAggregate"
+    type: Literal["DailyAggregate"] = "DailyAggregate"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
-        type: Literal["DailyBtAggregateSnap"] = "DailyBtAggregateSnap"
+    class Snap(Daily.Snap):
+        type: Literal["DailyAggregateSnap"] = "DailyAggregateSnap"
 
-    def get_parent(self, domain: Domain) -> DailyBtMetric:
-        return domain.get(self.parent, t=DailyBtMetric)
+    def get_parent(self, domain: Domain) -> Collection:
+        return domain.get(self.parent, t=Collection)
 
     @classmethod
     def new(
         cls,
-        parent: DailyBtMetric,
+        parent: Collection,
+        metric: str,
         index: int,
     ):
         index_pad = str(index).zfill(3)
         return cls(
             parent=parent,
             path=parent.extend_path(index_pad),
+            metric=metric,
             index=index,
         )
     
     def depends(self, domain: Domain) -> list[Dependency]:
+        # TODO: rx of the bts in agg (or all if empty)
+        # no parent?
+        # then inherit from tracks latest upstream
         return (
             self.depends_self(domain)
-            + self.depends_domain(domain)
+            + self.depends_parent(domain)
         )
     
     def handlers(self, event: Event, domain: Domain) -> list[Handler]:
         parent = self.get_parent(domain)
         res: list[Handler] = []
 
+        obj = domain.get(event.obj, Object)
+
         object_new = isinstance(event, ObjectNew)
         object_change = isinstance(event, ObjectChange)
 
-        if object_new and parent.name == "rx":
-            assert self.path == event.obj, (self, event)
-            res.append(HandleNewDailyBtSumRx())
+        parent_update = (
+            isinstance(event, ValueUpdate)
+            and obj.path == parent.path
+        )
+
+        if parent_update and self.metric == "hsum":
+            res.append(HandleNewDailyHSum())
 
         # TODO: if upstream target change
 
@@ -137,7 +111,7 @@ class DailyBtAggregate(
         return res
     
 @dataclass(frozen=True)
-class HandleNewDailyBtAggRx(
+class HandleNewDailyHAgg(
     HandleNewValueFromPl,
     HandleNewDailyFromDf,
 ):
@@ -153,7 +127,7 @@ class HandleNewDailyBtAggRx(
     def handle(
         self,
         event: ObjectNew,
-        obj: DailyBtAggregate,
+        obj: DailyAggregate,
         domain: Domain,
     ):
         snap = obj.get_snap(domain)
@@ -162,31 +136,29 @@ class HandleNewDailyBtAggRx(
             # NOTE: should already be handled?
             return None
         
-        parent = obj.get_parent(domain)
-
-        assert parent.name == "rx", parent
-        assert len(parent.values)== 0, parent
-
-        univ = parent.get_parent(domain)
+        parent = univ = obj.get_parent(domain)
 
         agg = univ.agg[obj.index]
 
-        if len(agg.bt) == 0:
-            bts = [
-                DailyBt.new(univ, bt)
-                for bt in range(len(univ.bt))
+        if len(agg.objs) == 0:
+            rxs = [
+                univ.get_object(
+                    i, domain, Daily
+                )
+                for i in range(
+                    len(univ.objects)
+                )           
             ]
-        
-        bts = [
-            DailyBt.new(univ, bt)
-            for bt in agg.bt
-        ]
-        rxs = [
-            DailyBtRx.new(bt) for bt in bts
-        ]
+        else:
+            rxs = [
+                univ.get_object(
+                    i, domain, Daily
+                )
+                for i in agg.objs
+            ]
 
         rx_dfs = [
-            daily_to_df(rx, domain)
+            daily_pl_df(rx, domain)
             for rx in rxs
         ]
         rx_df = apis.pl.join_dfs(
@@ -223,8 +195,8 @@ class HandleNewDailyBtAggRx(
 
 
 @dataclass(frozen=True)
-class HandleNewDailyBtSumRx(
-    HandleNewDailyBtAggRx
+class HandleNewDailyHSum(
+    HandleNewDailyHAgg
 ):
 
     def agg_rx(
@@ -240,7 +212,5 @@ class HandleNewDailyBtSumRx(
         )
 
 __all__ = [
-    "DailyBtValue",
-    "DailyBtMetric",
-    "DailyBtAggregate",
+    "DailyAggregate",
 ]

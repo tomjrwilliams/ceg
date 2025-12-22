@@ -37,6 +37,7 @@ from ..bars.d import *
 from ..calc.d import *
 from ..eco.d import *
 
+from ..agg import *
 from ..pfo import *
 
 #  ------------------
@@ -51,8 +52,8 @@ class ScaleNotional:
     
     def with_scale(
         self,
-        params: UvariateBtParams,
-        result: UvariateBtResult,
+        params: UvarBtParams,
+        result: UvarBtResult,
         universe: UniverseDaily,
         eng: EngineRoot,
     ):
@@ -81,13 +82,15 @@ class ScaleVol:
     span: int
     # method = rms or sdev
 
+    ann: bool = True
+
     def label(self):
         return f"cv-{self.span}"
     
     def with_scale(
         self,
-        params: UvariateBtParams,
-        result: UvariateBtResult,
+        params: UvarBtParams,
+        result: UvarBtResult,
         universe: UniverseDaily,
         eng: EngineRoot,
     ):
@@ -98,18 +101,19 @@ class ScaleVol:
             rx,
             span=self.span,
             alpha=None,
+            ann=self.ann,
         )
         univ, res = universe.with_scale(
             scale,
             into=result,
-            scale=1./16, # annualisation
+            scale=1.,
         )
         return univ, res
     
     def with_rescale(
         self,
-        params: UvariateBtParams,
-        result: UvariateBtResult,
+        params: UvarBtParams,
+        result: UvarBtResult,
         universe: UniverseDaily,
         eng: EngineRoot,
     ):
@@ -122,23 +126,25 @@ class ScaleVol:
                 result.res.rx, Daily
             ),
             span=self.span,
+            ann=True,
         )
-        univ, res = universe.with_scale(
-            (
-                result.domain.get(
-                    result.scale, Daily
-                ),
-                rescale,
-            ),
-            into=result,
-            agg="prod",
-            scale=(
-                1/16
-                if isinstance(i_sc, int)
-                else i_sc.scale / 16
+        res = result.with_obj(rescale)
+        assert result.i is not None, result
+        bt = DailyBtUvar.new(
+            universe,
+            result.i,
+            rescale=rescale
+        )
+        bt_pos = DailyBtPos.new(bt)
+        bt_rx = DailyBtRx.new(bt)
+        res = replace(
+            res,
+            res = DailyBtUvarValues(
+                bt_pos.path,
+                bt_rx.path,
             )
-        )
-        return univ, res
+        ).with_obj((bt, bt_pos, bt_rx))
+        return universe, res
 
 @dataclass(frozen=True)
 class SignalEco:
@@ -156,8 +162,8 @@ class SignalEco:
     
     def with_signal(
         self,
-        params: UvariateBtParams,
-        result: UvariateBtResult,
+        params: UvarBtParams,
+        result: UvarBtResult,
         universe: UniverseDaily,
         eng: EngineRoot,
     ):
@@ -166,6 +172,7 @@ class SignalEco:
             symbol=self.symbol,
             source="fred",
         )
+        sig: Daily
         if self.method == "z":
             sig = DailyZ.new(
                 v_eco, window=self.speed
@@ -181,7 +188,7 @@ class SignalEco:
         elif self.method == "ezw":
             sig = DailyEZW.new(
                 v_eco, span=self.speed
-            ), 
+            )
         elif self.method == "rz":
             sig = DailyRZ.new(
                 v_eco, window=self.speed
@@ -215,12 +222,31 @@ class SignalEco:
         elif self.method == "raw":
             sig = v_eco
         else:
-            raise ValueError((bt))        
+            raise ValueError((bt))
+        if self.activation is not None:
+            act = self.activation
+            if act == "tanh":
+                sig = DailyTF.new(
+                    sig, f="tanh"
+                )
+            elif act == "n_tanh_p_one":
+                sig = DailyTF.new(
+                    sig, f="tanhrsign",params=(None,1)
+                )
+            elif act == "ng_tnlog_ng":
+                sig = DailyTF.new(
+                    sig,
+                    b=-1,
+                    f="logtanh",
+                    m=-1,
+                )
+            else:
+                raise ValueError(self)
         univ, res = universe.with_signal(
             sig,
             into=result,
             scale=self.scale,
-            activation=self.activation,
+            # activation=self.activation,
         )
         return univ, res
         
@@ -236,8 +262,8 @@ class SignalOsc:
 
     def with_signal(
         self,
-        params: UvariateBtParams,
-        result: UvariateBtResult,
+        params: UvarBtParams,
+        result: UvarBtResult,
         universe: UniverseDaily,
         eng: EngineRoot,
     ):
@@ -292,8 +318,8 @@ class AssetConcrete:
     
     def with_rx(
         self,
-        params: UvariateBtParams,
-        result: UvariateBtResult,
+        params: UvarBtParams,
+        result: UvarBtResult,
         universe: UniverseDaily,
         eng: EngineRoot,
     ):
@@ -318,11 +344,9 @@ class AssetConcrete:
             else None
         )
         assert rx is not None, self
-        res = result.with_obj(rx)
-        res = replace(
-            res, rx=rx.path
+        return universe.with_rx(
+            rx, into=result
         )
-        return universe, res
 
 @dataclass(frozen=True)
 class AssetSynthetic:
@@ -333,23 +357,21 @@ class AssetSynthetic:
         return self.alias or self.name
     
     def with_rx(self, 
-        params: UvariateBtParams,
-        result: UvariateBtResult,
+        params: UvarBtParams,
+        result: UvarBtResult,
         universe: UniverseDaily,
         eng: EngineRoot,
-    ) -> tuple[UniverseDaily, BtResult]:
+    ):
         assert result.domain is not None, result
         rx = result.domain.get(self.name, t=Daily)
         assert rx is not None, self
-        res = result.with_obj(rx)
-        res = replace(
-            res, rx=rx.path
+        return universe.with_rx(
+            rx, into=result
         )
-        return universe, res
 
 
 @dataclass(frozen=True)
-class UvariateBtParams(BtParams):
+class UvarBtParams(BtParams):
     asset: AssetConcrete | AssetSynthetic
     scale: ScaleNotional | ScaleVol
     signal: SignalOsc | SignalEco | None = None
@@ -377,8 +399,8 @@ class UvariateBtParams(BtParams):
         )
 
 @dataclass(frozen=True)
-class UvariateBtResult(DailyBtResult):
-    params: UvariateBtParams
+class UvarBtResult(DailyBtUvarResult):
+    params: UvarBtParams
 
     # symbol: str
     # fut_px: FutDailyOrdinal
@@ -390,10 +412,10 @@ class UvariateBtResult(DailyBtResult):
 
     def cast_self(
         self, univ_result: tuple[Universe, BtResult]
-    ) -> tuple[UniverseDaily, UvariateBtResult]:
+    ) -> tuple[UniverseDaily, UvarBtResult]:
         univ, res = univ_result
         assert isinstance(univ, UniverseDaily), univ
-        assert isinstance(res, UvariateBtResult), res
+        assert isinstance(res, UvarBtResult), res
         return univ, res
 
     def load(self, univ: UniverseDaily, eng: EngineRoot):
@@ -419,24 +441,14 @@ class UvariateBtResult(DailyBtResult):
                 univ,
                 eng,
             ))
-        
-        univ, self = cast_self(univ.with_pos(
-            self,
-            rebalance=params.rebal,
-            unit=1.,
-            # TODO: calendar etc
-        ))
-
-        assert self.domain is not None, self
-        assert self.rx is not None, self
-        rx = self.domain.get(
-            self.rx, Daily
-        )
 
         univ, self = cast_self(univ.with_bt(
             self, 
-            rx=rx
+            rebalance=self.rebalance,
+            unit=1.,
         ))
+
+        univ, self = cast_self(univ.into_uvar(self))
 
         if params.rescale is None:
             return univ, self.done()
@@ -447,30 +459,26 @@ class UvariateBtResult(DailyBtResult):
             univ,
             eng,
         ))
-
-        univ, self = cast_self(univ.with_pos(
-            self,
-            rebalance=params.rebal,
-            unit=1.,
-        ))
-        univ, self = cast_self(univ.with_bt(
-            self, 
-            rx=rx
-        ))
         
         return univ, self.done()
     
 @dataclass(frozen=True)
-class UvariateBtDomain(Domain):
+class UvarBtDomain(Domain):
     """
-    >>> spec = UvariateBtParams(
+    >>> spec = UvarBtParams(
     ...     asset=AssetConcrete("FUT", "ES"),
     ...     signal=SignalOsc(32, 96, 48),
-    ...     scale=ScaleVol(span=48)
+    ...     scale=ScaleVol(span=48, ann=False)
     ... )
-    >>> dom, univ = UvariateBtDomain.new("example")
+    >>> dom, univ = UvarBtDomain.new("example")
     >>> dom, univ, bts = dom.with_bts(univ, spec)
-    >>> dom, univ, agg = dom.with_agg(univ, bts)
+    >>> rx = Collection.new(
+    ...     univ.get_parent(dom),
+    ...     univ.path + "-rx"
+    ... )
+    >>> dom, _, agg = dom.with_agg(
+    ...     rx, bts
+    ... )
     >>> dom = dom.sync()
     >>> pos = dom.get(bts[0].res.pos, Daily)
     >>> rx = dom.get(bts[0].res.rx, Daily)
@@ -479,7 +487,7 @@ class UvariateBtDomain(Domain):
     >>> v_agg = agg.value_key_val(dom).get(agg.path).ser
     >>> v_pos.tail(8)
     shape: (8,)
-    Series: 'p-example-bt-000-pos' [f64]
+    Series: 'example-bt-000-pos' [f64]
     [
         -0.006311
         null
@@ -492,7 +500,7 @@ class UvariateBtDomain(Domain):
     ]
     >>> v_rx.tail(8)
     shape: (8,)
-    Series: 'p-example-bt-000-rx' [f64]
+    Series: 'example-bt-000-rx' [f64]
     [
         -0.032185
         null
@@ -505,7 +513,7 @@ class UvariateBtDomain(Domain):
     ]
     >>> v_agg.tail(8)
     shape: (8,)
-    Series: 'p-example-rx-000' [f64]
+    Series: 'example-rx-000' [f64]
     [
         -0.032185
         0.0
@@ -541,7 +549,17 @@ class UvariateBtDomain(Domain):
     class Root(UseRootConfigs):
 
         version: int = 0
-        type: Literal["UvariateBtDomain"] = "UvariateBtDomain"
+        type: Literal["UvarBtDomain"] = "UvarBtDomain"
+
+        @dataclass(frozen=True)
+        class Snap(Snap):
+            event: (
+                DomainSync
+                | ObjectNew
+                | ObjectChange
+                | ValueUpdate
+            )
+            type: Literal["UvarBtDomainSnap"] = "UvarBtDomainSnap"
 
         @classmethod
         def new(
@@ -564,11 +582,10 @@ class UvariateBtDomain(Domain):
             | EqDailyRx
             | BarDailyEOsc
             | DailyERms
-            | DailyBt
+            | DailyBtUvar
             | DailyBtPos
             | DailyBtRx
-            | DailyBtMetric
-            | DailyBtAggregate
+            | DailyAggregate
             | DailyZ | DailyEZ
             | DailyRZ | DailyERZ
             | DailyZW | DailyEZW
@@ -577,6 +594,9 @@ class UvariateBtDomain(Domain):
             | DailyDEMin
             | DailyDEMA
             | EcoDailyObservation
+            | Universe
+            | DailyAggregate
+            | Collection
         )
 
     @dataclass(frozen=True)
@@ -588,10 +608,10 @@ class UvariateBtDomain(Domain):
             | EqDailyRx.Snap
             | BarDailyEOsc.Snap
             | DailyERms.Snap
-            | DailyBt.Snap
+            | DailyBtUvar.Snap
             | DailyBtPos.Snap
             | DailyBtRx.Snap
-            | DailyBtAggregate.Snap
+            | DailyAggregate.Snap
             | DailyZ.Snap | DailyEZ.Snap
             | DailyRZ.Snap | DailyERZ.Snap
             | DailyZW.Snap | DailyEZW.Snap
@@ -600,6 +620,10 @@ class UvariateBtDomain(Domain):
             | DailyDEMax.Snap
             | DailyDEMA.Snap
             | EcoDailyObservation.Snap
+            | Universe.Snap
+            | DailyAggregate.Snap
+            | UvarBtDomain.Root.Snap
+            | Collection.Snap
         )
 
     @classmethod
@@ -617,61 +641,80 @@ class UvariateBtDomain(Domain):
             eng, name,
         )
         return self, univ
+    
+    def with_univ(
+        self,
+        name: str,
+        eng: EngineRoot | None = None,
+    ):
+        if eng is None:
+            eng = EngineRoot.new(ROOT)
+
+        univ = UniverseDaily.new(
+            eng, name,
+        )
+        return self, univ
+
 
     def with_bts(
         self,
         univ: UniverseDaily,
-        *bt_params: UvariateBtParams,
+        *bt_params: UvarBtParams,
     ):
         eng = univ.get_parent(self)
 
-        res: list[UvariateBtResult] = []
+        res: list[UvarBtResult] = []
 
         for params in bt_params:
-            univ, (result, self) = UvariateBtResult(
+            univ, (result, self) = UvarBtResult(
                 params=params,
                 domain=self,
             ).load(univ, eng)
             res.append(
-                cast(UvariateBtResult, result)
+                cast(UvarBtResult, result)
             )
         
         self = self.with_objs(
             univ,
             force=True,
-            t=UvariateBtDomain
+            t=UvarBtDomain
         )
+
         # TODO: return on notional is relevant when vol scaling
 
         return self, univ, res
 
     def with_agg(
         self,
-        univ: UniverseDaily,
-        res: list[UvariateBtResult]
+        coll: Collection,
+        res: list[UvarBtResult]
     ):
-        univ, i_agg = univ.with_agg(
-            tuple([
-                r.res.i for r in res
-                if r.res is not None
-            ])
-        )
+        
+        # TODO: replace with a basket backtest (mvar)
 
-        rx_metric = DailyBtMetric.new(univ, "rx")
-        rx_agg = DailyBtAggregate.new(rx_metric, i_agg)
+        # which we can eg. vol rescale as well
+        
+        agg = []
+        for r in res:
+            assert r.res is not None, (r)
+            coll, i = coll.with_object(r.res.rx)
+            agg.append(i)
+        
+        coll, i_agg = coll.with_agg(tuple(agg))
+
+        rx_sum = DailyAggregate.new(coll, "hsum", i_agg)
         
         return self.with_objs(
-            univ,
-            rx_metric,
-            rx_agg,
+            coll,
+            rx_sum,
             force=True,
-            t=UvariateBtDomain
-        ), univ, rx_agg
+            t=UvarBtDomain
+        ), coll, rx_sum
 
 from ...vis import explorer
 
 @dataclass(frozen=True)
-class UvariateBtProject(explorer.Project):
+class UvarBtProject(explorer.Project):
 
     SPAN_FAST: ClassVar[list[int]] = []
     SPAN_RATIO: ClassVar[list[float]] = []
@@ -725,7 +768,7 @@ class UvariateBtProject(explorer.Project):
         ]
 
         params = [
-            UvariateBtParams(
+            UvarBtParams(
                 asset=AssetConcrete(
                     product,
                     symbol,
@@ -747,8 +790,8 @@ class UvariateBtProject(explorer.Project):
         self,
         name: str,
         d: Domain,
-        bts: list[UvariateBtResult],
-        rx_agg: DailyBtAggregate | None = None,
+        bts: list[UvarBtResult],
+        rx_agg: DailyAggregate | None = None,
     ):
         self = self.with_domains(**{
             name: lambda sync: explorer.AppDomain(
@@ -759,6 +802,27 @@ class UvariateBtProject(explorer.Project):
             type="daily",
             domain=name,
         )
+
+        # --
+
+        # one table where individual perf rows are indicated, stacked, displayed
+
+        # another where spread to benchmark perf rows are indicated (with extra key to indicate benchmark)
+        # if any 
+
+        # --
+
+        # then, per partn / mutation:
+        # relevant distribution visualisation across strategies for tha partn/mutation comb
+
+        # so pass the partn/mutn in here or unpack dynamically?
+        
+        # --
+
+        # and, again per partn / mutation across all strategy benchmark spreads
+
+        # --
+
         if rx_agg is not None:
             self = self.with_object(
                 rx_agg.path,
@@ -801,4 +865,4 @@ class UvariateBtProject(explorer.Project):
             1,
             "line"
         )
-        return cast(UvariateBtProject, self)
+        return cast(UvarBtProject, self)

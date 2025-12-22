@@ -36,271 +36,71 @@ from .....engine import *
 
 from ...calc import *
 
-from ..root import *
+from ..bt import *
+from .core import *
 
 #  ------------------
 
 
-def apply_activation(
-    ser: pl.Series,
-    activation: str | None = None
-):
-    if activation is None:
-        return ser.fill_nan(None)
-    activation = (
-        activation.replace("ng", "neg")
-        .replace("tnlog", "tanhlog")
-    )
-    if activation == "tanh":
-        return ser.tanh().fill_nan(None)
-    elif activation == "unit_tanh":
-        return (1 + ser.tanh().fill_nan(None)) / 2
-    elif activation == "neg":
-        return (-1 * ser).fill_nan(None)
-    elif activation == "neg_tanhlog":
-        return (
-            -1 * ser.log().tanh()
-        ).fill_nan(None)
-    elif activation == "neg_tanhlog_neg":
-        return (
-            -1 * (-1 * ser).log().tanh()
-        ).fill_nan(None)
-    elif activation == "n_tanh_p_one":
-        return (
-            pl.DataFrame({VALUE: ser.tanh()})
-            .select(
-                pl.when(pl.col(VALUE).is_null())
-                .then(None)
-                .when(pl.col(VALUE) < 0)
-                .then(pl.col(VALUE))
-                .otherwise(1)
-                .alias(VALUE)
-            )
-            .get_column(VALUE).fill_nan(None)
-        )
-    elif activation == "n_one_p_tanh":
-        return (
-            pl.DataFrame({VALUE: ser.tanh()})
-            .select(
-                pl.when(pl.col(VALUE).is_null())
-                .then(None)
-                .when(pl.col(VALUE) > 0)
-                .then(pl.col(VALUE))
-                .otherwise(-1)
-                .alias(VALUE)
-            )
-            .get_column(VALUE).fill_nan(None)
-        )
-    else:
-        raise ValueError((ser, activation))
-
-
-def get_value(
-    obj: Daily | list[Daily],
-    domain: Domain,
-    scale: float = 1.0,
-    method: str | None = None,
-    activation: str | None = None,
-):
-    if isinstance(obj, Object):
-        s = (
-            obj.value_key_val(domain)
-            .get(obj.path, ValuePlSeries)
-        )
-        assert s is not None, s
-        ser = s.ser
-        ser = apply_activation(ser, activation) * scale
-        snap = obj.snap_key_val(domain).get(
-            obj.path, DailySnap
-        )
-        assert snap is not None, obj
-        return ValuePlSeries.synthetic(
-            ser, start=snap.first, end=snap.last
-        )
-    vs = [
-        o.value_key_val(domain)
-        .get(o.path, ValuePlSeries)
-        for o in obj
-    ]
-    snap = obj[0].snap_key_val(domain).get(
-        obj[0].path, DailySnap
-    )
-    assert snap is not None, obj
-
-    # TODO: df join if given diff dates by snap
-    sers = [
-        v.ser.alias(v.obj) for v in vs if v is not None
-    ]
-    assert len(sers) == len(vs), (obj, len(sers), len(vs))
-
-    df = pl.DataFrame()
-    if method == "sum":
-        df = df.select(
-            pl.sum_horizontal(pl.all()).alias("res")
-        )
-    elif method == "mean":
-        df = df.select(
-            pl.mean_horizontal(pl.all()).alias("res")
-        )
-    elif method == "prod":
-        df = df.select(
-            pl.fold(
-                acc=pl.lit(1), 
-                function=lambda acc, x: acc * x, 
-                exprs=pl.all(),
-                return_dtype=pl.Float64,
-            )
-            .alias("res")
-        )
-    else:
-        assert len(obj) == 1, obj
-        assert len(vs) == 1, obj
-        v = vs[0]
-        assert v is not None, obj
-        df = df.select(
-            pl.col(v.obj).alias("res")
-        )
-    ser = df.get_column("res")
-    ser = apply_activation(ser, activation) * scale
-    return ValuePlSeries.synthetic(
-        ser, start=snap.first, end=snap.last
-    )
-
 @dataclass(frozen=True)
-class DailyBtValues(BtValues):
-    i: int
+class DailyBtUvarValues(BtValues):
+    # i: int
     pos: str
     rx: str
 
 @dataclass(frozen=True)
-class DailyBtResult(BtResult):
-    res: DailyBtValues | None = None
+class DailyBtUvarResult(BtResult):
+    res: DailyBtUvarValues | None = None
     
+@dataclass(frozen=True)
+class DailyBtMvarValues(BtValues):
+    agg: str
+    pos: tuple[str, ...]
+    rx: tuple[str, ...]
+
+@dataclass(frozen=True)
+class DailyBtMvarResult(BtResult):
+    res: DailyBtMvarValues | None = None
+
+#  ------------------
+
 @dataclass(frozen=True)
 class UniverseDaily(Universe):
 
     type: Literal["UniverseDaily"] = "UniverseDaily"
 
-    def finish_bt(
+    def into_uvar(
         self,
         res: BtResult
     ):
-        assert isinstance(res, DailyBtResult), res
+        assert isinstance(res, DailyBtUvarResult), res
         assert isinstance(self, UniverseDaily), self
-        bt = DailyBt.new(self, res.i_bt)
+        assert res.i is not None, res
+        bt = DailyBtUvar.new(self, res.i)
         bt_pos = DailyBtPos.new(bt)
         bt_rx = DailyBtRx.new(bt)
         res = replace(
             res,
-            res = DailyBtValues(
-                res.i_bt,
+            res = DailyBtUvarValues(
+                # res.i,
                 bt_pos.path,
                 bt_rx.path,
             )
         ).with_obj((bt_pos, bt_rx))
-        return res
-
-    def scale_value(
-        self, i: int | UniverseScale, domain: Domain, 
-    ) -> ValuePlSeries:
-        if isinstance(i, int):
-            obj = self.get_scale(i, domain, Daily)
-            return get_value(
-                obj,
-                domain,
-            )
-        objs = [
-            self.get_scale(ii, domain, Daily)
-            for ii in i.index
-        ]
-        return get_value(
-            objs,
-            domain,
-            method=i.method,
-            scale=i.scale,
-            activation=i.activation,
-        )
-
-    def signal_value(
-        self, i: int | UniverseSignal, domain: Domain, 
-    ) -> ValuePlSeries:
-        if isinstance(i, int):
-            obj = self.get_signal(i, domain, Daily)
-            assert obj is not None, obj
-            return get_value(
-                obj,
-                domain,
-            )
-        objs = [
-            self.get_signal(ii, domain, Daily)
-            for ii in i.index
-        ]
-        assert all([obj is not None for obj in objs]), objs
-        return get_value(
-            objs, # type: ignore
-            domain,
-            method=i.method,
-            scale=i.scale,
-            activation=i.activation,
-        )
-
-    def rebalance_value(
-        self, 
-        i: int | str | None, 
-        domain: Domain, 
-        value: Daily | None = None,
-    ):
-        if i is None:
-            return None
-        elif isinstance(i, int):
-            obj = self.get_rebalance(i, domain, Daily)
-            assert obj is not None, i
-            v = (
-                obj.value_key_val(domain)
-                .get(obj.path, ValuePlSeries)
-            )
-            return v
-        else:
-            assert value is not None, value
-            snap = value.get_snap(domain)
-            assert isinstance(snap, DailySnap), snap
-            df = pl.select(
-                pl.date_range(snap.first, snap.last)
-                .alias("date")
-            ).select(
-                apis.cal.rebalance_mask(i)
-                .alias("mask")
-            )
-            return ValuePlSeries.synthetic(
-                df.get_column("mask")
-            )
-        
-X = "x"
-
-# TODO: separate objects for cum, daily path dependent, etc.
+        return self.with_uvar(BtUvar(bt.index)), res
 
 @dataclass(frozen=True)
-class DailyBt(
+class DailyBtXvar(
     UseRootConfigs,
     DependsSelfNew,
-    DependsDomainSync,
+    DependsParentValue
 ):
     parent: UniverseDaily | str
 
-    index: int # of a bt line in parent
+    index: int # of a uvar line in parent
 
-    version: int = 0
-    type: Literal["DailyBt"] = "DailyBt"
+    rescale: Daily | str | None = None
 
-    @dataclass(frozen=True)
-    class Snap(DailySnap):
-        type: Literal["DailyBtSnap"] = "DailyBtSnap"
-
-    def get_snap(
-        self, domain: Domain
-    ) -> DailyBt.Snap | None:
-        return self.snap_key_val(domain).get(self.path, DailyBt.Snap)
-    
     def get_parent(self, domain: Domain) -> UniverseDaily:
         return domain.get(self.parent, UniverseDaily)
     
@@ -309,36 +109,70 @@ class DailyBt(
         cls,
         parent: Universe | UniverseDaily,
         index: int,
+        rescale: Daily | str | None = None,
     ):
         assert isinstance(parent, UniverseDaily), (
             parent, cls
         )
         index_pad = str(index).zfill(3)
+        path = f"bt-{index_pad}"
+        if rescale is not None:
+            assert isinstance(rescale, DailyERms), rescale
+            rescale_path = obj_path(rescale.parent)
+            assert rescale_path == cls.new(
+                parent, index=index, rescale=None
+            ).path + "-rx", (rescale, rescale_path)
+            rescale_span = rescale.path.split("-erms")[-1]
+            path = path + "-sc-erms-" + rescale_span
         return cls(
             parent=parent,
-            path=parent.extend_path(f"bt-{index_pad}"),
+            path=parent.extend_path(path),
             index=index,
+            rescale=rescale,
         )
     
     def depends(self, domain: Domain) -> list[Dependency]:
-        return (
+        res = (
             self.depends_self(domain)
-            + self.depends_domain(domain)
+            + self.depends_parent(domain)
         )
+        if self.rescale is None:
+            return res
+        return res + [
+            Dependency(
+                self.path, 
+                obj_path(self.rescale), 
+                events=("ValueUpdate",)
+            )
+        ]
+
+@dataclass(frozen=True)
+class DailyBtUvar(DailyBtXvar):
+
+    version: int = 0
+    type: Literal["DailyBtUvar"] = "DailyBtUvar"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyBtUvarSnap"] = "DailyBtUvarSnap"
+
+    def get_snap(
+        self,
+        domain: Domain,
+        t: Type[DailySnap] | None = None,
+    ) -> DailyBtUvar.Snap | None:
+        return self.snap_key_val(domain).get(self.path, DailyBtUvar.Snap)
     
     def handler_object_new(
         self
-    ) -> HandleNewDailyBt:
-        return HandleNewDailyBt()
+    ) -> HandleNewDailyBtUvar:
+        return HandleNewDailyBtUvar()
 
     def handlers(self, event: Event, domain: Domain) -> list[Handler]:
         res: list[Handler] = []
-        if isinstance(event, ObjectNew):
-            assert self.path == event.obj, (self, event)
+        if isinstance(event, ValueUpdate):
+            # assert self.get_parent(domain).path == event.obj, (self, event)
             res.append(self.handler_object_new())
-
-        # TODO: if upstream target change
-
         elif isinstance(event, ObjectChange):
             # TODO: throw? unless only chunk change
             # then just rechunk
@@ -346,19 +180,68 @@ class DailyBt(
             raise ValueError((self, event))
         return res
     
+    def explorer_df(self, domain: Domain):
+
+        # TODO: return df with signal, scale, etc.
+
+        # all stacked, relevant group keys
+
+        return    
+
 @dataclass(frozen=True)
-class HandleNewDailyBt(
+class DailyBtMvar(DailyBtXvar):
+    version: int = 0
+    type: Literal["DailyBtMvar"] = "DailyBtMvar"
+
+    @dataclass(frozen=True)
+    class Snap(DailySnap):
+        type: Literal["DailyBtMvarSnap"] = "DailyBtMvarSnap"
+
+    def get_snap(
+        self,
+        domain: Domain,
+        t: Type[DailySnap] | None = None,
+    ) -> DailyBtUvar.Snap | None:
+        return self.snap_key_val(domain).get(self.path, DailyBtUvar.Snap)
+    
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyBtUvar:
+        return HandleNewDailyBtUvar()
+
+    def handlers(self, event: Event, domain: Domain) -> list[Handler]:
+        res: list[Handler] = []
+        if isinstance(event, ValueUpdate):
+            # assert self.get_parent(domain).path == event.obj, (self, event)
+            res.append(self.handler_object_new())
+        elif isinstance(event, ObjectChange):
+            # TODO: throw? unless only chunk change
+            # then just rechunk
+            # or backend type / loc, then move
+            raise ValueError((self, event))
+        return res
+    
+    def explorer_df(self, domain: Domain):
+
+        # TODO: return df with signal, scale, etc.
+
+        # all stacked, relevant group keys
+
+        return    
+    
+#  ------------------
+
+@dataclass(frozen=True)
+class HandleNewDailyBtUvar(
     HandleNewValueFromPl
 ):
 
     def handle(
         self,
         event: ObjectNew,
-        obj: DailyBt,
+        obj: DailyBtUvar,
         domain: Domain,
     ):
-        obj_rx = DailyBtRx.new(obj)
-        obj_pos = DailyBtPos.new(obj)
 
         snap = obj.get_snap(domain)
 
@@ -366,117 +249,60 @@ class HandleNewDailyBt(
             # NOTE: should already be handled?
             return None
 
+        if obj.rescale is not None:
+            rescale = domain.get(obj.rescale, Object)
+            if rescale is None:
+                return None
+            rescale_snap = rescale.get_snap(
+                domain, Daily.Snap
+            )
+            if rescale_snap is None:
+                return None
+            
         univ = obj.get_parent(domain)
 
-        bt = univ.bt[obj.index]
-        pos = univ.pos[bt.pos]
+        uvar = univ.uvar[obj.index]
+        bt = univ.bt[uvar.i]
 
-        rx = domain.get(bt.rx, Daily)
-
-        v_scale = univ.scale_value(
-            pos.scale, domain
-        )
-        v_rebalance = univ.rebalance_value(
-            pos.rebalance, domain, 
-            value=rx
-        )
-        v_signal = (
-            None if pos.signal is None 
-            else univ.signal_value(pos.signal, domain)
-        )
-
-        calendar = univ.get_calendar(
-            pos.calendar, domain, Daily
-        )
-        weight = univ.get_weight(
-            pos.weight, domain, Daily
+        (
+            df_rx,
+            df_scale,
+            df_signal,
+            df_rebalance,
+            df_calendar,
+            df_weight,
+            df_cap,
+            df_fx,
+        ) = get_backtest_dfs(
+            bt, domain, univ
         )
 
-        rx_snap = rx.get_snap(domain)
-        assert isinstance(rx_snap, DailySnap), (rx, rx_snap)
-
-        v_rx = (
-            rx.value_key_val(domain)
-            .get(rx.path, ValuePlSeries)
-        )
-        assert v_rx is not None, obj
-
-        v_calendar = None if calendar is None else (
-            calendar.value_key_val(domain)
-            .get(calendar.path, ValuePlSeries)
-        )
-        v_weight = None if weight is None else (
-            weight.value_key_val(domain)
-            .get(weight.path, ValuePlSeries)
-        )
-        # TODO: parametrise out the lag
-
-        df = pl.DataFrame({
-            "rx": v_rx.ser,
-            "scale": (
-                v_scale.ser.forward_fill()
-                .shift(1, fill_value=0)
-            )
-        }).with_columns(
-            pl.date_range(rx_snap.first, rx_snap.last)
-            .alias("date")
-        )
-        if v_signal is not None:
-            df_sig = pl.DataFrame({
-                "signal": v_signal.ser
-            }).with_columns(
-                pl.date_range(
-                    v_signal.start, # type: ignore
-                    v_signal.end, # type: ignore
-                ).alias("date")
-            )
-            df = df.join(
-                df_sig,
-                on="date",
-                coalesce=True,
-                how="left"
-            ).with_columns(
-                signal=(
-                    pl.col("signal").forward_fill()
-                    .shift(1, fill_value=0)
-                )
-            )
-        if v_rebalance is not None:
-            df = df.with_columns(
-                rebalance=v_rebalance.ser
-            )
-        if v_calendar is not None:
-            df = df.with_columns(
-                calendar=v_calendar.ser
-            )
-        if v_weight is not None:
-            df = df.with_columns(
-                weight=(
-                    v_weight.ser.forward_fill()
-                    .shift(1, fill_value=0)
-                )
-            ).with_columns(
-                scale=pl.col("scale") * pl.col("weight")
-            )
-
-        df = apis.perf.with_backtest(
-            df,
-            ("pos", "rx"),
-            cum=False,
-            rx="rx",
-            scale="scale",
-            signal=None if pos.signal is None else "signal",
-            rebal=None if v_rebalance is None else "rebalance",
-            calendar=None if calendar is None else "calendar",
-            unit=pos.unit
+        df = run_backtest(
+            df_rx,
+            df_scale,
+            df_signal=df_signal,
+            df_rebalance=df_rebalance,
+            df_calendar=df_calendar,
+            df_weight=df_weight,
+            df_cap=df_cap,
+            df_fx=df_fx,
+            # TODO: lags 
+            unit=bt.unit,
         )
 
-        assert len(df) == (
-            (rx_snap.last - rx_snap.first).days + 1
-        ), (df, rx_snap)
-
+        obj_rx = DailyBtRx.new(obj)
+        obj_pos = DailyBtPos.new(obj)
+        
         df_pos = df.select("pos")
         df_rx = df.select("rx")
+
+        (
+            first,
+            last
+        ) = df.select(
+            pl.col("date").min().item().alias("min"),
+            pl.col("date").max().item().alias("max"),
+        ).row(0)
 
         e_pos, _ = self.set_value_from_df(
             obj_pos,
@@ -495,15 +321,15 @@ class HandleNewDailyBt(
             publish=True,
         )
 
-        snap_new: DailyBt.Snap = (
+        snap_new: DailyBtUvar.Snap = (
             obj.snap_key_val(domain)
             .set(obj.path, type(obj).Snap(
                 event,
                 obj.path,
                 dt.datetime.now(),
-                rx_snap.first,
-                rx_snap.last,
-            ), DailyBt.Snap)
+                first,
+                last,
+            ), DailyBtUvar.Snap)
         )
 
         # TODO: if numpy we assume dense, use snap to infer dates
@@ -531,30 +357,257 @@ class HandleNewDailyBt(
 
         return e_pos, e_rx
     
+#  ------------------
+
+@dataclass(frozen=True)
+class HandleNewDailyBtMvar(
+    HandleNewValueFromPl
+):
+
+    def handle(
+        self,
+        event: ObjectNew,
+        obj: DailyBtUvar,
+        domain: Domain,
+    ):
+
+        snap = obj.get_snap(domain)
+
+        if snap is not None:
+            # NOTE: should already be handled?
+            return None
+
+        if obj.rescale is not None:
+            rescale = domain.get(obj.rescale, Object)
+            if rescale is None:
+                return None
+            rescale_snap = rescale.get_snap(
+                domain, Daily.Snap
+            )
+            if rescale_snap is None:
+                return None
+            
+        univ = obj.get_parent(domain)
+        mv = univ.mvar[obj.index]
+        
+        bts = [
+            univ.bt[i] for i in mv.i
+        ]
+        
+        df_pos = None
+        df_rx = None
+
+        for i, bt in enumerate(bts):
+            i_str = str(i)
+            (
+                df_rx,
+                df_scale,
+                df_signal,
+                df_rebalance,
+                df_calendar,
+                df_weight,
+                df_cap,
+                df_fx,
+            ) = get_backtest_dfs(
+                bt, domain, univ
+            )
+
+            df = run_backtest(
+                df_rx,
+                df_scale,
+                df_signal=df_signal,
+                df_rebalance=df_rebalance,
+                df_calendar=df_calendar,
+                df_weight=df_weight,
+                df_cap=df_cap,
+                df_fx=df_fx,
+                # TODO: lags 
+                unit=bt.unit,
+            )
+            if df_pos is None:
+                df_pos = df.select(
+                    "date", pl.col("pos").alias(i_str)
+                )
+            else:
+                df_pos = df_pos.join(
+                    df.select(
+                        "date", pl.col("pos").alias(i_str)
+                    ),
+                    on="date",
+                    how="full",
+                    coalesce=True,
+                )
+            if df_rx is None:
+                df_rx = df.select(
+                    "date", pl.col("rx").alias(i_str)
+                )
+            else:
+                df_rx = df_rx.join(
+                    df.select(
+                        "date", pl.col("rx").alias(i_str)
+                    ),
+                    on="date",
+                    how="full",
+                    coalesce=True,
+                )
+        
+        assert df_rx is not None, obj
+        assert df_pos is not None, obj
+
+        (
+            first,
+            last
+        ) = df_rx.select(
+            pl.col("date").min().item(),
+            pl.col("date").max().item(),
+        ).row(0)
+
+        assert (first, last) == df_pos.select(
+            pl.col("date").min().item(),
+            pl.col("date").max().item(),
+        ).row(0)
+
+        for i, bt in enumerate(bts):
+
+            obj_rx = DailyBtRx.new(obj, index=i)
+            obj_pos = DailyBtPos.new(obj, index=i)
+
+            e_pos, _ = self.set_value_from_df(
+                obj_pos,
+                domain,
+                df_pos.select(pl.col(str(i)).alias("pos")),
+                "pos",
+                t = self.key_value_type(obj, domain),
+                publish=True,
+            )
+            e_rx, _ = self.set_value_from_df(
+                obj_rx,
+                domain,
+                df_rx.select(pl.col(str(i)).alias("rx")),
+                "rx",
+                t = self.key_value_type(obj, domain),
+                publish=True,
+            )
+
+            snap_pos = (
+                obj_pos.snap_key_val(domain)
+                .set(obj_pos.path, type(obj_pos).Snap(
+                    event,
+                    obj_pos.path,
+                    dt.datetime.now(),
+                    first,
+                    last,
+                ))
+            )
+            snap_rx = (
+                obj_rx.snap_key_val(domain)
+                .set(obj_rx.path, type(obj_rx).Snap(
+                    event,
+                    obj_rx.path,
+                    dt.datetime.now(),
+                    first,
+                    last,
+                ))
+            )
+
+        df_agg = df_rx.select(
+            pl.col("date"),
+            pl.all_horizontal([
+                pl.col(str(i)).is_null()
+                for i, _ in enumerate(bts)
+            ]).alias("mask"),
+            pl.sum_horizontal(*[
+                pl.col(str(i)) for i, _ in enumerate(bts)
+            ]).alias("rx")
+        ).select(
+            "date",
+            pl.when(pl.col("mask"))
+            .then(None)
+            .otherwise("rx")
+            .alias("rx")
+        )
+
+        snap_mvar: DailyBtMvar.Snap = (
+            obj.snap_key_val(domain)
+            .set(obj.path, type(obj).Snap(
+                event,
+                obj.path,
+                dt.datetime.now(),
+                first,
+                last,
+            ), DailyBtMvar.Snap)
+        )
+
+        obj_rx_agg = DailyBtRx.new(obj)
+
+        e_agg, _ = self.set_value_from_df(
+            obj_rx_agg,
+            domain,
+            df_agg,
+            "rx",
+            t = self.key_value_type(obj, domain),
+            publish=True,
+        )
+
+        snap_rx = (
+            obj_rx_agg.snap_key_val(domain)
+            .set(obj_rx_agg.path, type(obj_rx_agg).Snap(
+                event,
+                obj_rx_agg.path,
+                dt.datetime.now(),
+                first,
+                last,
+            ))
+        )
+
+        snap_agg = (
+            obj_rx_agg.snap_key_val(domain)
+            .set(obj_rx_agg.path, type(obj_rx_agg).Snap(
+                event,
+                obj_rx_agg.path,
+                dt.datetime.now(),
+                first,
+                last,
+            ))
+        )
+        return e_pos, e_rx, e_agg
+    
+#  ------------------
+
+    
 @dataclass(frozen=True)
 class DailyBtPos(
     DailyChunked,
 ):
-    parent: DailyBt | str
+    parent: DailyBtUvar | DailyBtMvar | str
+
+    index: int | None = None
 
     version: int = 0
     type: Literal["DailyBtPos"] = "DailyBtPos"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyBtPosSnap"] = "DailyBtPosSnap"
 
-    def get_parent(self, domain: Domain) -> DailyBt:
-        return domain.get(self.parent, DailyBt)
+    def get_parent(self, domain: Domain) -> DailyBtUvar | DailyBtMvar:
+        return domain.get(
+            self.parent, DailyBtUvar | DailyBtMvar
+        )
 
     @classmethod
     def new(
         cls,
-        parent: DailyBt,
+        parent: DailyBtUvar | DailyBtMvar,
+        index: int | None = None,
     ):
+        if isinstance(parent, DailyBtMvar):
+            assert index is not None, (index, parent)
+        # TODO: index in path
         return cls(
             parent=parent,
             path=parent.extend_path("pos"),
+            index=index,
         )
     
     def depends(self, domain: Domain) -> list[Dependency]:
@@ -564,38 +617,51 @@ class DailyBtPos(
 class DailyBtRx(
     DailyChunked,
 ):
-    parent: DailyBt | str
+    parent: DailyBtUvar | DailyBtMvar | str
+
+    index: int | None = None
 
     version: int = 0
     type: Literal["DailyBtRx"] = "DailyBtRx"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyBtRxSnap"] = "DailyBtRxSnap"
 
-    def get_parent(self, domain: Domain) -> DailyBt:
-        return domain.get(self.parent, DailyBt)
+    def get_parent(self, domain: Domain) -> DailyBtUvar | DailyBtMvar:
+        return domain.get(
+            self.parent, DailyBtUvar | DailyBtMvar
+        )
 
     @classmethod
     def new(
         cls,
-        parent: DailyBt,
+        parent: DailyBtUvar | DailyBtMvar,
+        index: int | None = None,
     ):
+        # TODO: index in path
         return cls(
             parent=parent,
             path=parent.extend_path("rx"),
+            index=index,
         )
     
     def depends(self, domain: Domain) -> list[Dependency]:
         return []
     
+#  ------------------
+
 
 __all__ = [
     "UniverseDaily",
-    "DailyBt",
+    "DailyBtUvar",
+    "DailyBtMvar",
     "DailyBtPos",
     "DailyBtRx",
-    "DailyBtValues",
-    "DailyBtResult",
-    "HandleNewDailyBt",
+    "DailyBtUvarValues",
+    "DailyBtUvarResult",
+    "DailyBtMvarValues",
+    "DailyBtMvarResult",
+    "HandleNewDailyBtUvar",
+    "HandleNewDailyBtMvar",
 ]

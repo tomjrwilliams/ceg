@@ -33,12 +33,18 @@ from .. import apis
 from ..apis import kv
 
 from .objects import *
+from .depends import *
 from .values import *
+from .events import *
 from .snaps import *
 
 from .d import *
 
 VALUE = "VALUE"
+
+from ..apis import logs
+
+logger, log_kw = logs.prepare_logger(__file__)
 
 class HasSetFromDf(Protocol):
     def set_from_df(
@@ -123,16 +129,44 @@ class HandleNewValueFromPl(Handler):
     
     
 @dataclass(frozen=True)
-class DailyWithDailyParent(Daily):
-
+class DailyWithDailyParent(
+    DependsParentValue,
+    Daily,
+):
     def get_parent(
         self, domain: Domain
     ) -> Daily:
         return domain.get(self.parent, Daily)
+    
+    def depends(self, domain: Domain) -> list[Dependency]:
+        return (
+            self.depends_self(domain)
+            + self.depends_parent(domain)
+        )
+    
+    def handler_object_new(self) -> Handler: ...
+
+    def handlers(self, event: Event, domain: Domain) -> list[Handler]:
+        res: list[Handler] = []
+
+        if isinstance(event, ValueUpdate):
+            assert self.get_parent(domain).path == event.obj, (self, event)
+            res.append(self.handler_object_new())
+
+        elif isinstance(event, ObjectChange):
+            # TODO: throw? unless only chunk change
+            # then just rechunk
+            # or backend type / loc, then move
+            raise ValueError((self, event))
+        return res
+
+@dataclass(frozen=True)
+class HandleFromParent(Handler):
+    pass
 
 @dataclass(frozen=True)
 class HandleFromParentPl(
-    Handler
+    HandleFromParent
 ):
 
     def get_parent_pl(
@@ -216,11 +250,11 @@ class HandleNewDailyFromDailyParent(
         return (
             obj.snap_key_val(domain)
             .set(obj.path, type(obj).Snap(
-                event,
-                obj.path,
-                dt.datetime.now(),
-                parent_snap.first,
-                parent_snap.last,
+                event=event,
+                obj=obj.path,
+                updated=dt.datetime.now(),
+                first=parent_snap.first,
+                last=parent_snap.last,
             ))
         )
 
@@ -267,6 +301,77 @@ class HandleNewDailyFromDailyParentPl(
 
         return e
 
+@dataclass(frozen=True)
+class TracksLatestUpstream(Object):
+
+    def upstream_paths(self) -> list[str]: ...
+
+    @dataclass(frozen=True)
+    class Snap(Snap):
+        latest: int
+        n_upstream: int
+        upstream: dict[str, int]
+
+        type: Literal["TracksLatestUpstreamSnap"] = "TracksLatestUpstreamSnap"
+
+@dataclass(frozen=True)
+class HandleUpdateLatestUpstream(Handler):
+
+    def handle(
+        self,
+        event: ValueUpdate,
+        obj: TracksLatestUpstream,
+        domain: Domain,
+    ):
+        i = event.i
+        assert i is not None, event
+
+        snap = obj.get_snap(domain)
+
+        if snap is None:
+            upstream = {}
+            latest = -1 # to ensure changed_i > latest
+            snap = type(obj).Snap(
+                event,
+                obj.path,
+                n_upstream=len(obj.upstream_paths()),
+                latest=latest,
+                upstream=upstream,
+            )
+        else:
+            assert isinstance(snap, TracksLatestUpstream.Snap), snap
+            upstream = snap.upstream
+            latest = snap.latest
+
+        n_upstream = len(upstream)
+
+        if i > upstream.get(event.obj, -1):
+            upstream = {
+                **upstream,
+                **{event.obj: i}
+            }
+            snap = replace(
+                snap, 
+                event=event,
+                upstream=upstream,
+            )
+
+        log_kw(event=event, snap=snap)
+
+        e = None
+        if len(upstream) == snap.n_upstream and (
+            i > latest or len(upstream) > n_upstream
+         ):
+            snap = replace(snap, latest=i)
+            e = cast(
+                ValueUpdate,
+                obj.publish(ValueUpdate(obj.path), domain)
+            )
+
+        obj.snap_key_val(domain).set(obj.path, snap)
+        
+        return e
+    
 __all__ = [
     "VALUE",
     "DailyWithDailyParent",
@@ -276,4 +381,6 @@ __all__ = [
     "HandleNewDailyFromDf",
     "HandleNewDailyFromDailyParent",
     "HandleNewDailyFromDailyParentPl",
+    "TracksLatestUpstream",
+    "HandleUpdateLatestUpstream",
 ]

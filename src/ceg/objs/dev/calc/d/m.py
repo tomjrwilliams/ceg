@@ -140,7 +140,7 @@ class DailyMA(DailyM):
     SUFFIX: ClassVar[str] = "ma"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyMASnap"] = "DailyMASnap"
  
     def handler_object_new(
@@ -190,7 +190,7 @@ class DailyKurt(DailyM):
     SUFFIX: ClassVar[str] = "kurt"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyKurtSnap"] = "DailyKurtSnap"
  
     def handler_object_new(
@@ -237,7 +237,7 @@ class DailyMax(DailyM):
     SUFFIX: ClassVar[str] = "max"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyMaxSnap"] = "DailyMaxSnap"
  
     def handler_object_new(
@@ -285,7 +285,7 @@ class DailyMed(DailyM):
     SUFFIX: ClassVar[str] = "med"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyMedSnap"] = "DailyMedSnap"
  
     def handler_object_new(
@@ -335,7 +335,7 @@ class DailyMid(DailyM):
     SUFFIX: ClassVar[str] = "mid"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyMidSnap"] = "DailyMidSnap"
  
     def handler_object_new(
@@ -488,7 +488,7 @@ class DailyMin(DailyM):
     SUFFIX: ClassVar[str] = "min"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyMinSnap"] = "DailyMinSnap"
  
     def handler_object_new(
@@ -537,7 +537,7 @@ class DailyPLast(DailyM):
     SUFFIX: ClassVar[str] = "plast"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyPLastSnap"] = "DailyPLastSnap"
  
     def handler_object_new(
@@ -669,7 +669,7 @@ class DailyQile(DailyM):
     SUFFIX: ClassVar[str] = "qile"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyQileSnap"] = "DailyQileSnap"
  
     def handler_object_new(
@@ -791,7 +791,7 @@ class DailyRank(DailyM):
     SUFFIX: ClassVar[str] = "rank"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyRankSnap"] = "DailyRankSnap"
  
     def handler_object_new(
@@ -839,7 +839,7 @@ class DailyRms(DailyM):
     SUFFIX: ClassVar[str] = "rms"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyRmsSnap"] = "DailyRmsSnap"
  
     def handler_object_new(
@@ -890,7 +890,7 @@ class DailyRng(DailyM):
     SUFFIX: ClassVar[str] = "rng"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyRngSnap"] = "DailyRngSnap"
  
     def handler_object_new(
@@ -1023,7 +1023,7 @@ class DailySDev(DailyM):
     SUFFIX: ClassVar[str] = "sdev"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailySDevSnap"] = "DailySDevSnap"
  
     def handler_object_new(
@@ -1069,7 +1069,7 @@ class DailySkew(DailyM):
     SUFFIX: ClassVar[str] = "skew"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailySkewSnap"] = "DailySkewSnap"
  
     def handler_object_new(
@@ -1119,7 +1119,7 @@ class DailyVar(DailyM):
     SUFFIX: ClassVar[str] = "var"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyVarSnap"] = "DailyVarSnap"
  
     def handler_object_new(
@@ -1167,7 +1167,7 @@ class DailyZ(DailyM):
     SUFFIX: ClassVar[str] = "z"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyZSnap"] = "DailyZSnap"
  
     def handler_object_new(
@@ -1224,7 +1224,7 @@ class DailyZW(DailyM):
     SUFFIX: ClassVar[str] = "zw"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyZWSnap"] = "DailyZWSnap"
  
     def handler_object_new(
@@ -1298,7 +1298,7 @@ class DailyRZ(DailyM):
     SUFFIX: ClassVar[str] = "rz"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyRZSnap"] = "DailyRZSnap"
  
     def handler_object_new(
@@ -1473,7 +1473,7 @@ class DailyRZW(DailyRZ):
     SUFFIX: ClassVar[str] = "rzw"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyRZWSnap"] = "DailyRZWSnap"
  
     def handler_object_new(

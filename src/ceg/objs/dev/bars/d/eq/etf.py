@@ -44,6 +44,7 @@ from ......apis.eq import *
 
 @dataclass(frozen=True)
 class EqDailyEtf(
+    DependsDomainSync,
     HasEqDailyParent,
     BarDaily,
 ):
@@ -59,7 +60,9 @@ class EqDailyEtf(
         type: Literal["EqDailyEtfSnap"] = "EqDailyEtfSnap"
  
     def get_snap(
-        self, domain: Domain
+        self,
+        domain: Domain,
+        t: Type[DailySnap] | None = None,
     ) -> EqDailyEtf.Snap | None:
         return self.snap_key_val(domain).get(self.path, EqDailyEtf.Snap)
     
@@ -447,7 +450,7 @@ class EqDailyEtfDomain(EqDailyDomainOnlyEtf):
         return cast(EqDailyEtfDomain, self)
     
 @dataclass(frozen=True)
-class HasEqDailyEtfParent(Object):
+class DependsEqDailyEtfParent(DependsParentValue):
     parent: EqDailyEtf | str
 
     def get_parent(self, domain: Domain) -> EqDailyEtf:
@@ -461,7 +464,7 @@ __all__ = [
     "HandleNewEqDailyEtf",
     "EqDailyDomainOnlyEtf",
     "EqDailyEtfDomain",
-    "HasEqDailyEtfParent",
+    "DependsEqDailyEtfParent",
 ]
 # TODO: if __name__ == __main__:
 # run domain by name
