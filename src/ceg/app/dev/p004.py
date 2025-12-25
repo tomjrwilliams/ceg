@@ -9,8 +9,8 @@ from ...objs.vis import explorer
 from ...objs.dev import calc
 from ...objs.dev import bars
 from ...objs.dev import pfo
-
-from ...objs.dev.strat import uvar as strat
+from ...objs.dev import agg
+from ...objs.dev import strat
 
 from .core import PROJECTS
 
@@ -20,7 +20,7 @@ from .p003 import eco
 PROJECT = "p004"
 
 @dataclass(frozen=True)
-class Project_004(strat.UvarBtProject):
+class Project_004(strat.StratProject):
     pass
     
 ECO_SPEEDS: list[float] = [
@@ -87,9 +87,16 @@ def f_cmom(
 # TODO: eur eq vol?
 # TODO: jp? 
 
-def load_p004():
+def load_p004(root: str = "./__local__/apps"):
+    """
+    >>> root = "./__local__/test"
+    >>> proj = load_p004(root=root).reset()
+    >>> nav = explorer.prepare_app(PROJECT, root, proj.domains)
+    >>> nav[0]()
+    >>> nav[1]()
+    """
     project = (
-        Project_004()
+        Project_004(root=root)
         .with_config(explorer.ExplorerConfig(PROJECT))
     )
 
@@ -156,7 +163,7 @@ def load_p004():
                 if cond is not None
             ]
             params = [
-                strat.UvarBtParams(
+                strat.StratParams(
                     asset = strat.AssetConcrete(
                         product,
                         symbol,
@@ -173,14 +180,14 @@ def load_p004():
                 for product, symbol, signal, cond, alias
                 in configs_w_cond
             ]
-            domain, univ = strat.UvarBtDomain.new(
+            domain, univ = strat.StratDomain.new().with_univ(
                 PROJECT + "-" + name + "-raw",
             )
-            domain, univ, bts = domain.with_bts(
+            domain, univ, bts = domain.with_strats(
                 univ, *params
             )
             params = [
-                strat.UvarBtParams(
+                strat.StratParams(
                     asset = strat.AssetConcrete(
                         product,
                         symbol,
@@ -198,7 +205,7 @@ def load_p004():
                 in product_symbol_signal_cond_aliases
                 if cond is None
             ] + [
-                strat.UvarBtParams(
+                strat.StratParams(
                     asset = strat.AssetSynthetic(
                         bt.assume_res().rx,
                         alias=alias,
@@ -222,22 +229,14 @@ def load_p004():
             domain, univ = domain.with_univ(
                 PROJECT + "-" + name,
             )
-            domain, univ, bts = domain.with_bts(
+            domain, univ, bts = domain.with_strats(
                 univ, *params
-            )
-            rx = pfo.Collection.new(
-                univ.get_parent(domain),
-                univ.path + "-rx"
-            )
-            domain, rx, rx_agg = domain.with_agg(
-                rx, bts
             )
             project = (
                 project.with_bt_page(
                     i_str + name + "-v" + suff,
                     domain,
                     bts,
-                    rx_agg=rx_agg
                 )
             )
         i += 1

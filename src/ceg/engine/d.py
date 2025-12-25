@@ -237,10 +237,7 @@ def daily_pl_values(
 
     (
         first, last
-    ) = df.select(
-        pl.col("date").min().item().alias("min"),
-        pl.col("date").max().item().alias("max"),
-    ).row(0)
+    ) = df.pipe(apis.pl.select_min_max, "date", dt.date)
 
     if agg == "sum":
         df = df.select(

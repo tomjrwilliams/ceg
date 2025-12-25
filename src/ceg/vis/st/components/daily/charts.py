@@ -14,7 +14,7 @@ from pathlib import Path
 import datetime as dt
 import numpy as np
 import polars as pl
-import streamlit as st
+
 import plotly.express as px
 
 from dataclasses import replace
@@ -30,6 +30,8 @@ from ..dates import *
 from ..dfs import *
 
 from ..... import apis
+st = apis.st.library()
+
 from .....apis import t
 from .....apis import perf
 
@@ -66,6 +68,7 @@ class DailyLinePlot(ExploreDailyComponent):
                 .cum_prod()
                 .over(exp.label_key)
                 .pipe(apis.pl.null_mask, pl.col(exp.value_key))
+                .alias(exp.value_key)
             )
         elif self.norm == "pct" and self.cum:
             df = df.with_columns(
@@ -75,6 +78,7 @@ class DailyLinePlot(ExploreDailyComponent):
                 .cum_prod()
                 .over(exp.label_key)
                 .pipe(apis.pl.null_mask, pl.col(exp.value_key))
+                .alias(exp.value_key)
             )
         elif self.cum:
             df = df.with_columns(
@@ -82,6 +86,7 @@ class DailyLinePlot(ExploreDailyComponent):
                 .cum_sum()
                 .over(exp.label_key)
                 .pipe(apis.pl.null_mask, pl.col(exp.value_key))
+                .alias(exp.value_key)
             )
         elif self.norm is None:
             pass

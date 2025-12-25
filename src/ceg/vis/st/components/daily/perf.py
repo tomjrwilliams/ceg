@@ -14,7 +14,7 @@ from pathlib import Path
 import datetime as dt
 import numpy as np
 import polars as pl
-import streamlit as st
+
 import plotly.express as px
 
 from dataclasses import replace
@@ -30,6 +30,8 @@ from ..dates import *
 from ..dfs import *
 
 from ..... import apis
+st = apis.st.library()
+
 from .....apis import t
 from .....apis import perf
 
@@ -122,8 +124,12 @@ class DailyBenchmarking(ExploreDailyComponent):
             return self
         
         exp = self.explorer
-        df = self.render_date_filter(df)
+        # df = self.render_date_filter(df)
 
+        if "group" in df.schema:
+            df = df.filter(pl.col("group") == "perf")
+
+        st.dataframe(df)
         
         return self
         

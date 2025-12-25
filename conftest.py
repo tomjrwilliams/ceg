@@ -4,7 +4,12 @@ from pathlib import Path
 TEST_DB = Path("./__local__/test.db")
 TEST_LOGS = Path("./__local__/test.log")
 
+os.environ["MOCK_STREAMLIT"] = "true"
 os.environ["FRD_DATA"] = "./__local__/frd"
+
+import shutil
+if Path("./__local__/test").exists():
+    shutil.rmtree("./__local__/test")
 
 if TEST_DB.exists():
     os.remove(TEST_DB)

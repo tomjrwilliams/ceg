@@ -144,6 +144,24 @@ def backtest_rx(
         res_pos[t] = pos
     return res_pos, res_rx
 
+def backtest_rx_pos(
+    rx: np.ndarray,
+    pos: np.ndarray,
+):
+    # res_pos = np.zeros(rx.shape, dtype=rx.dtype) * np.nan
+    res_rx = np.zeros(rx.shape, dtype=rx.dtype) * np.nan
+    p = np.nan
+
+    for t in range(len(rx)):
+
+        if not np.isnan(p):
+            res_rx[t] = rx[t] * p
+
+        if not np.isnan(pos[t]):
+            p = pos[t]
+
+    return res_rx
+
 def backtest_px(
     px: np.ndarray, # always abs
     calendar: np.ndarray,

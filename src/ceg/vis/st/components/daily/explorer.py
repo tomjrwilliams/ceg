@@ -14,7 +14,7 @@ from pathlib import Path
 import datetime as dt
 import numpy as np
 import polars as pl
-import streamlit as st
+
 import plotly.express as px
 
 from dataclasses import replace
@@ -30,6 +30,8 @@ from ..dates import *
 from ..dfs import *
 
 from ..... import apis
+st = apis.st.library()
+
 from .....apis import t
 from .....apis import perf
 
@@ -53,14 +55,18 @@ class ExploreDaily(Component):
         elif "date" in df:
             df = df.rename({"date": self.date_key})
         else:
-            raise ValueError((self, df.schema))
+            # TODO: throw only if daily_series
+            # raise ValueError((self, df.schema))
+            pass
         
         if self.value_key in df:
             pass
         elif "value" in df:
             df = df.rename({"value": self.value_key})
         else:
-            raise ValueError((self, df.schema))     
+            # TODO: throw only if daily_series
+            # raise ValueError((self, df.schema))
+            pass
            
         return df
 
@@ -150,7 +156,7 @@ class ExploreDailyFromRows(
                 # TODO: take this from caller
             }
         ).render()
-
+    
         if graphs.df is None:
             # or throw?
             return self
@@ -202,11 +208,12 @@ class ExploreDailyFromRows(
                 part_key = "graph"
             else:
                 part_key = f"graph_{part}"
-
+        
             data = self.get_data(part_df)
+        
             if data is None:
                 continue
-
+        
             if (
                 self.group_key in data.schema 
                 and not len(data.filter(

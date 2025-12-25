@@ -356,7 +356,7 @@ class HandleUpdateLatestUpstream(Handler):
                 upstream=upstream,
             )
 
-        log_kw(event=event, snap=snap)
+        log_kw(event=event, snap=snap, paths = obj.upstream_paths())
 
         e = None
         if len(upstream) == snap.n_upstream and (

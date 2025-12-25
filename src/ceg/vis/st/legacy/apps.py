@@ -1,20 +1,28 @@
 
 from typing import Callable
 
-import streamlit as st
+from .... import apis
+
 from streamlit.navigation.page import StreamlitPage
 
 def app(
-    pages: list[StreamlitPage] | dict[str, StreamlitPage | dict[
-        str, StreamlitPage | Callable[
-            [], 
-            # StreamlitPage
-            None
-        ]]
-    ],
+    pages: (
+        list[StreamlitPage] 
+        | dict[
+            str,
+            StreamlitPage | dict[
+                str, StreamlitPage | Callable[
+                    [], 
+                    # StreamlitPage
+                    None
+                ]
+            ]
+        ]
+    ),
     init_elements: Callable = lambda: None,
     page_config: dict = {"layout": "wide"},
 ):
+    st = apis.st.library()
     if len(page_config):
         st.set_page_config(**page_config)
     init_elements()

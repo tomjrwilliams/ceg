@@ -8,8 +8,9 @@ else:
 from ...objs.vis import explorer
 from ...objs.dev import bars
 from ...objs.dev import pfo
+from ...objs.dev import agg
 
-from ...objs.dev.strat import uvar as strat
+from ...objs.dev import strat
 
 from .core import PROJECTS
 from .p001 import *
@@ -33,7 +34,7 @@ SPAN_RATIO = [
 ]
 
 @dataclass(frozen=True)
-class Project_002(strat.UvarBtProject):
+class Project_002(strat.StratProject):
     SPAN_FAST: ClassVar[list[int]] = SPAN_POW_2
     SPAN_RATIO: ClassVar[list[float]] = SPAN_RATIO
     SPAN_VOL_SIG: ClassVar[list[int]] = SPAN_VOL_SIG
@@ -44,9 +45,17 @@ def eosc(fast: int, ratio: float = 1.5, vol: int = 48):
         fast, int(fast * ratio), vol
     )
 
-def load_p002():
+def load_p002(root: str = "./__local__/apps"):
+    """
+    >>> root = "./__local__/test"
+    >>> proj = load_p002(root=root).reset()
+    >>> nav = explorer.prepare_app(PROJECT, root, proj.domains)
+    >>> nav[0]()
+    >>> nav[1]()
+    """
+
     project = (
-        Project_002()
+        Project_002(root=root)
         .with_config(explorer.ExplorerConfig(PROJECT))
     )
 
@@ -74,7 +83,7 @@ def load_p002():
         ]:
             i_str = str(i).rjust(3, "0") + "-"
             params = [
-                strat.UvarBtParams(
+                strat.StratParams(
                     asset = strat.AssetConcrete(
                         product,
                         symbol,
@@ -91,25 +100,17 @@ def load_p002():
                 for product, symbol, signal
                 in product_symbol_signals
             ]
-            domain, univ = strat.UvarBtDomain.new(
+            domain, univ = strat.StratDomain.new().with_univ(
                 PROJECT + "-" + name,
             )
-            domain, univ, bts = domain.with_bts(
+            domain, univ, bts = domain.with_strats(
                 univ, *params
-            )
-            rx = pfo.Collection.new(
-                univ.get_parent(domain),
-                univ.path + "-rx"
-            )
-            domain, rx, rx_agg = domain.with_agg(
-                rx, bts
             )
             project = (
                 project.with_bt_page(
                     i_str + name + "-v" + suff,
                     domain,
                     bts,
-                    rx_agg=rx_agg
                 )
             )
         i += 1

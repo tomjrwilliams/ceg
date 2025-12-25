@@ -14,7 +14,7 @@ from pathlib import Path
 import datetime as dt
 import numpy as np
 import polars as pl
-import streamlit as st
+
 import plotly.express as px
 
 from dataclasses import replace
@@ -30,6 +30,8 @@ from ..dates import *
 from ..dfs import *
 
 from ..... import apis
+st = apis.st.library()
+
 from .....apis import t
 from .....apis import perf
 

@@ -9,8 +9,9 @@ from ...objs.vis import explorer
 from ...objs.dev import calc
 from ...objs.dev import bars
 from ...objs.dev import pfo
+from ...objs.dev import agg
 
-from ...objs.dev.strat import uvar as strat
+from ...objs.dev import strat
 
 from .core import PROJECTS
 from .p001 import *
@@ -18,7 +19,7 @@ from .p001 import *
 PROJECT = "p003"
 
 @dataclass(frozen=True)
-class Project_003(strat.UvarBtProject):
+class Project_003(strat.StratProject):
     pass
     
 def eco(
@@ -28,9 +29,16 @@ def eco(
 ):
     return strat.SignalEco(symbol, method, **kwargs)
         
-def load_p003():
+def load_p003(root: str = "./__local__/apps"):
+    """
+    >>> root = "./__local__/test"
+    >>> proj = load_p003(root=root).reset()
+    >>> nav = explorer.prepare_app(PROJECT, root, proj.domains)
+    >>> nav[0]()
+    >>> nav[1]()
+    """
     project = (
-        Project_003()
+        Project_003(root=root)
         .with_config(explorer.ExplorerConfig(PROJECT))
     )
     
@@ -348,7 +356,7 @@ def load_p003():
         ]:
             i_str = str(i).rjust(3, "0") + "-"
             params = [
-                strat.UvarBtParams(
+                strat.StratParams(
                     asset = strat.AssetConcrete(
                         product,
                         symbol,
@@ -365,25 +373,17 @@ def load_p003():
                 for product, symbol, signal
                 in product_symbol_signals
             ]
-            domain, univ = strat.UvarBtDomain.new(
+            domain, univ = strat.StratDomain.new().with_univ(
                 PROJECT + "-" + name,
             )
-            domain, univ, bts = domain.with_bts(
+            domain, univ, bts = domain.with_strats(
                 univ, *params
-            )
-            rx = pfo.Collection.new(
-                univ.get_parent(domain),
-                univ.path + "-rx"
-            )
-            domain, rx, rx_agg = domain.with_agg(
-                rx, bts
             )
             project = (
                 project.with_bt_page(
                     i_str + name + "-v" + suff,
                     domain,
                     bts,
-                    rx_agg=rx_agg
                 )
             )
         i += 1

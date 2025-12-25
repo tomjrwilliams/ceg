@@ -207,7 +207,17 @@ class HandleNewDailyHSum(
     ) -> pl.DataFrame:
         return rxs.select(
             pl.col("date"),
-            pl.sum_horizontal(pl.exclude("date"))
+            pl.when(
+                pl.all_horizontal([
+                    pl.col(k).is_null()
+                    for k in rxs.columns
+                    if k != "date"
+                ])
+            )
+            .then(None)
+            .otherwise(pl.sum_horizontal(
+                pl.exclude("date")
+            ))
             .alias(VALUE)
         )
 

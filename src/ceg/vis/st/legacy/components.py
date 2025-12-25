@@ -2,7 +2,9 @@ from typing import Callable
 
 import numpy as np
 import polars as pl
-import streamlit as st
+
+from .... import apis
+st = apis.st.library()
 
 from ....apis.st import cache
 

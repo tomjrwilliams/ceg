@@ -68,6 +68,13 @@ def select_items(
         assert_is(df.select(e).item(), t) for e in es
     ])
 
+def select_min_max(
+    df: pl.DataFrame, k: str, t: Type[T]
+) -> tuple[T, T]:
+    return df.pipe(
+        select_items, (pl.col(k).min(), pl.col(k).max()), t=t
+    )
+
 def drop_zero(
     df: pl.DataFrame,
     col: str,

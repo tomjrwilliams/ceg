@@ -56,7 +56,9 @@ class BtParams:
 
 @dataclass(frozen=True)
 class BtValues:
-    pass
+    i: int
+    bt: str
+    rx: str
 
 @dataclass(frozen=True)
 class BtResult:
@@ -75,8 +77,8 @@ class BtResult:
     # TODO: calendar
     # TODO: weight
 
-    i_scale: int | BtScale = -1
-    i_rx: int = -1
+    i_scale: int | BtScale | None = None
+    i_rx: int | None = None
     i_signal: int | BtSignal | None = None
     i_rebalance: int | None = None
     i_calendar: int | None = None
@@ -84,7 +86,7 @@ class BtResult:
     i_cap: int | None = None
     i_fx: int | None = None
 
-    i: int | None = None
+    i: int | None = None # uv or mv
 
     res: BtValues | None = None
     # subtype with rx and pos
@@ -112,7 +114,7 @@ class BtResult:
         domain = self.domain
         assert domain is not None, self
         return replace(self, domain=None), domain
-
+    
 TBtParams = TypeVar(
     "TBtParams", bound=BtParams
 )
@@ -122,7 +124,7 @@ TBtResult = TypeVar(
 
 @dataclass(frozen=True)
 class Backtest():
-    scale: int | BtScale
+    scale: int | BtScale | None = None
     rx: int | None = None
     signal: int | BtSignal | None=None
     rebalance: int | str | None = None
@@ -163,6 +165,7 @@ class Backtest():
     ]:
         if isinstance(self.scale, int):
             return self.scale, 1., None
+        assert self.scale is not None, self
         return (
             self.scale.index,
             self.scale.scale,
@@ -183,11 +186,12 @@ class Backtest():
 
 @dataclass(frozen=True)
 class BtUvar():
-    i: int
+    bt: int
     
 @dataclass(frozen=True)
 class BtMvar():
-    i: tuple[int, ...]
+    bt: int
+    bts: tuple[int, ...]
     
 
 # TODO: rename BtUniverse?
@@ -200,6 +204,12 @@ class Universe(Collection):
     
     version: int = 0
     type: Literal["Universe"] = "Universe"
+
+    def fork(self, domain: Domain, depth: int = 0, ):
+        return type(self).new(
+            self.get_parent(domain),
+            name=f"{self.name}-{depth}",
+        )
 
     @dataclass(frozen=True)
     class Snap(TracksLatestUpstream.Snap):
@@ -231,8 +241,16 @@ class Universe(Collection):
         )
     
     def with_uvar(self, bt: BtUvar):
-        self = replace(self, uvar=self.uvar + (bt,))
-        return self
+        return (
+            replace(self, uvar=self.uvar + (bt,)), 
+            len(self.uvar)
+        )
+    
+    def with_mvar(self, bt: BtMvar):
+        return (
+            replace(self, mvar=self.mvar + (bt,)), 
+            len(self.mvar)
+        )
     
     @overload
     def with_scale(
@@ -565,6 +583,7 @@ class Universe(Collection):
     ) -> tuple[Universe, BtResult | int]:
         i = len(self.bt)
         res: BtResult | int = i
+
         if isinstance(bt, BtResult):
             scale = bt.i_scale
             assert signal is None, signal

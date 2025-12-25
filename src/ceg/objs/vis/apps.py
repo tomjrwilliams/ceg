@@ -14,7 +14,10 @@ from pathlib import Path
 import datetime as dt
 import numpy as np
 import polars as pl
-import streamlit as st
+
+from ... import apis
+st = apis.st.library()
+
 import plotly.express as px
 import json
 
@@ -164,5 +167,5 @@ class App:
                 self.pages[name] = page
             else:
                 raise ValueError(config)
-            
+    
         return pages

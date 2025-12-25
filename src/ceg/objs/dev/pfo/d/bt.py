@@ -41,7 +41,6 @@ from .core import *
 
 #  ------------------
 
-
 @dataclass(frozen=True)
 class UniverseDaily(Universe):
 
@@ -49,13 +48,14 @@ class UniverseDaily(Universe):
 
 @dataclass(frozen=True)
 class DailyBtXvar(
+    Daily,
     UseRootConfigs,
     DependsSelfNew,
     DependsParentValue
 ):
     parent: UniverseDaily | str
 
-    index: int # of a uvar line in parent
+    index: int # of a bt in universe
 
     rescale: Daily | str | None = None
 
@@ -68,26 +68,24 @@ class DailyBtXvar(
         parent: Universe | UniverseDaily,
         index: int,
         rescale: Daily | str | None = None,
+    ) -> DailyBtXvar: ...
+
+    @classmethod
+    def rescale_suffix(
+        cls,
+        parent: Universe | UniverseDaily,
+        index: int,
+        rescale: Daily | str | None = None,
     ):
-        assert isinstance(parent, UniverseDaily), (
-            parent, cls
-        )
-        index_pad = str(index).zfill(3)
-        path = f"bt-{index_pad}"
         if rescale is not None:
             assert isinstance(rescale, DailyERms), rescale
-            rescale_path = obj_path(rescale.parent)
-            assert rescale_path == cls.new(
+            rx_path = obj_path(rescale.parent)
+            assert rx_path == cls.new(
                 parent, index=index, rescale=None
-            ).path + "-rx", (rescale, rescale_path)
+            ).path + "-rx", (rescale, rx_path)
             rescale_span = rescale.path.split("-erms")[-1]
-            path = path + "-sc-erms-" + rescale_span
-        return cls(
-            parent=parent,
-            path=parent.extend_path(path),
-            index=index,
-            rescale=rescale,
-        )
+            return "-sc-erms" + rescale_span
+        return ""
     
     def depends(self, domain: Domain) -> list[Dependency]:
         res = (
@@ -111,21 +109,42 @@ class DailyBtUvar(DailyBtXvar):
     type: Literal["DailyBtUvar"] = "DailyBtUvar"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyBtUvarSnap"] = "DailyBtUvarSnap"
 
     def get_snap(
         self,
         domain: Domain,
-        t: Type[DailySnap] | None = None,
+        t: Type[Daily.Snap] | None = None,
     ) -> DailyBtUvar.Snap | None:
         return self.snap_key_val(domain).get(self.path, DailyBtUvar.Snap)
+    
+    @classmethod
+    def new(
+        cls,
+        parent: Universe | UniverseDaily,
+        index: int,
+        rescale: Daily | str | None = None,
+    ):
+        assert isinstance(parent, UniverseDaily), (
+            parent, cls
+        )
+        index_pad = str(index).zfill(3)
+        path = f"bt-uv-{index_pad}" + cls.rescale_suffix(
+            parent, index, rescale=rescale
+        )
+        return cls(
+            parent=parent,
+            path=parent.extend_path(path),
+            index=index,
+            rescale=rescale,
+        )
     
     def handler_object_new(
         self
     ) -> HandleNewDailyBtUvar:
         return HandleNewDailyBtUvar()
-
+    
     def handlers(self, event: Event, domain: Domain) -> list[Handler]:
         res: list[Handler] = []
         if isinstance(event, ValueUpdate):
@@ -138,34 +157,58 @@ class DailyBtUvar(DailyBtXvar):
             raise ValueError((self, event))
         return res
     
-    def explorer_df(self, domain: Domain):
+    # def explorer_df(self, domain: Domain):
 
-        # TODO: return df with signal, scale, etc.
+    #     # TODO: return df with signal, scale, etc.
 
-        # all stacked, relevant group keys
+    #     # all stacked, relevant group keys
 
-        return    
+    #     return    
 
 @dataclass(frozen=True)
 class DailyBtMvar(DailyBtXvar):
+    
+    rescale: Daily | str | None = None
+
     version: int = 0
     type: Literal["DailyBtMvar"] = "DailyBtMvar"
 
     @dataclass(frozen=True)
-    class Snap(DailySnap):
+    class Snap(Daily.Snap):
         type: Literal["DailyBtMvarSnap"] = "DailyBtMvarSnap"
 
     def get_snap(
         self,
         domain: Domain,
-        t: Type[DailySnap] | None = None,
-    ) -> DailyBtUvar.Snap | None:
-        return self.snap_key_val(domain).get(self.path, DailyBtUvar.Snap)
+        t: Type[Daily.Snap] | None = None,
+    ) -> DailyBtMvar.Snap | None:
+        return self.snap_key_val(domain).get(self.path, DailyBtMvar.Snap)
+    
+    @classmethod
+    def new(
+        cls,
+        parent: Universe | UniverseDaily,
+        index: int,
+        rescale: Daily | str | None = None,
+    ):
+        assert isinstance(parent, UniverseDaily), (
+            parent, cls
+        )
+        index_pad = str(index).zfill(3)
+        path = f"bt-mv-{index_pad}" + cls.rescale_suffix(
+            parent, index, rescale=rescale
+        )
+        return cls(
+            parent=parent,
+            path=parent.extend_path(path),
+            index=index,
+            rescale=rescale,
+        )
     
     def handler_object_new(
         self
-    ) -> HandleNewDailyBtUvar:
-        return HandleNewDailyBtUvar()
+    ) -> HandleNewDailyBtMvar:
+        return HandleNewDailyBtMvar()
 
     def handlers(self, event: Event, domain: Domain) -> list[Handler]:
         res: list[Handler] = []
@@ -179,13 +222,13 @@ class DailyBtMvar(DailyBtXvar):
             raise ValueError((self, event))
         return res
     
-    def explorer_df(self, domain: Domain):
+    # def explorer_df(self, domain: Domain):
 
-        # TODO: return df with signal, scale, etc.
+    #     # TODO: return df with signal, scale, etc.
 
-        # all stacked, relevant group keys
+    #     # all stacked, relevant group keys
 
-        return    
+    #     return    
     
 #  ------------------
 
@@ -220,7 +263,7 @@ class HandleNewDailyBtUvar(
         univ = obj.get_parent(domain)
 
         uvar = univ.uvar[obj.index]
-        bt = univ.bt[uvar.i]
+        bt = univ.bt[uvar.bt]
 
         (
             df_rx,
@@ -234,6 +277,8 @@ class HandleNewDailyBtUvar(
         ) = get_backtest_dfs(
             bt, domain, univ
         )
+        assert df_rx is not None, obj
+        assert df_scale is not None, obj
 
         df = run_backtest(
             df_rx,
@@ -257,10 +302,7 @@ class HandleNewDailyBtUvar(
         (
             first,
             last
-        ) = df.select(
-            pl.col("date").min().item().alias("min"),
-            pl.col("date").max().item().alias("max"),
-        ).row(0)
+        ) = df.pipe(apis.pl.select_min_max, "date", dt.date)
 
         e_pos, _ = self.set_value_from_df(
             obj_pos,
@@ -317,6 +359,37 @@ class HandleNewDailyBtUvar(
     
 #  ------------------
 
+def combine_mv_dfs(
+    df_uv: pl.DataFrame | None,
+    df_mv: pl.DataFrame | None,
+    k: str,
+):
+    if df_uv is None:
+        return df_mv
+    elif df_mv is None:
+        return df_uv
+    return df_uv.join(
+        df_mv.rename({"signal": VALUE}),
+        on="date",
+        how="full",
+        coalesce=True,
+    ).sort(by="date").select(
+        "date",
+        (pl.col(VALUE) * pl.col("signal")).alias("signal")
+    )
+
+def combine_mv_scale(
+    df_uv: pl.DataFrame | None,
+    df_mv: pl.DataFrame | None,
+):
+    return combine_mv_dfs(df_uv, df_mv, "scale")
+
+def combine_mv_signal(
+    df_uv: pl.DataFrame | None,
+    df_mv: pl.DataFrame | None,
+):
+    return combine_mv_dfs(df_uv, df_mv, "signal")
+
 @dataclass(frozen=True)
 class HandleNewDailyBtMvar(
     HandleNewValueFromPl
@@ -325,15 +398,20 @@ class HandleNewDailyBtMvar(
     def handle(
         self,
         event: ObjectNew,
-        obj: DailyBtUvar,
+        obj: DailyBtMvar,
         domain: Domain,
     ):
-
         snap = obj.get_snap(domain)
 
         if snap is not None:
             # NOTE: should already be handled?
             return None
+
+        # TODO: utiliser the object own scale, signal etc.
+
+        # if given
+
+        # on top (multiply into) the asset level
 
         if obj.rescale is not None:
             rescale = domain.get(obj.rescale, Object)
@@ -349,11 +427,30 @@ class HandleNewDailyBtMvar(
         mv = univ.mvar[obj.index]
         
         bts = [
-            univ.bt[i] for i in mv.i
+            univ.bt[i] for i in mv.bts
         ]
+        bt = univ.bt[mv.bt]
+
+        (
+            _,
+            mv_df_scale,
+            mv_df_signal,
+            mv_df_rebalance,
+            mv_df_calendar,
+            mv_df_weight,
+            mv_df_cap,
+            mv_df_fx,
+        ) = get_backtest_dfs(
+            bt, domain, univ, with_rx=False
+        )
+
+        assert mv_df_calendar is None, obj
+        assert mv_df_weight is None, obj
+        assert mv_df_cap is None, obj
+        assert mv_df_fx is None, obj
         
-        df_pos = None
-        df_rx = None
+        df_res_pos = None
+        df_res_rx = None
 
         for i, bt in enumerate(bts):
             i_str = str(i)
@@ -367,8 +464,20 @@ class HandleNewDailyBtMvar(
                 df_cap,
                 df_fx,
             ) = get_backtest_dfs(
-                bt, domain, univ
+                bt, domain, univ, with_rx=True
             )
+            assert df_rx is not None, obj
+
+            df_scale = combine_mv_scale(df_scale, mv_df_scale)
+            df_signal = combine_mv_signal(
+                df_signal, mv_df_signal
+            )
+            df_rebalance = mv_df_rebalance or df_rebalance
+
+            if df_scale is None:
+                df_scale = df_rx.select(
+                    "date", pl.lit(1.).alias("scale")
+                )
 
             df = run_backtest(
                 df_rx,
@@ -382,12 +491,12 @@ class HandleNewDailyBtMvar(
                 # TODO: lags 
                 unit=bt.unit,
             )
-            if df_pos is None:
-                df_pos = df.select(
+            if df_res_pos is None:
+                df_res_pos = df.select(
                     "date", pl.col("pos").alias(i_str)
                 )
             else:
-                df_pos = df_pos.join(
+                df_res_pos = df_res_pos.join(
                     df.select(
                         "date", pl.col("pos").alias(i_str)
                     ),
@@ -395,12 +504,12 @@ class HandleNewDailyBtMvar(
                     how="full",
                     coalesce=True,
                 )
-            if df_rx is None:
-                df_rx = df.select(
+            if df_res_rx is None:
+                df_res_rx = df.select(
                     "date", pl.col("rx").alias(i_str)
                 )
             else:
-                df_rx = df_rx.join(
+                df_res_rx = df_res_rx.join(
                     df.select(
                         "date", pl.col("rx").alias(i_str)
                     ),
@@ -408,22 +517,23 @@ class HandleNewDailyBtMvar(
                     how="full",
                     coalesce=True,
                 )
+
+        assert df_res_pos is not None, obj
+        assert df_res_rx is not None, obj
         
-        assert df_rx is not None, obj
-        assert df_pos is not None, obj
+        df_pos= df_res_pos.sort(by="date")
+        df_rx= df_res_rx.sort(by="date")
 
         (
             first,
             last
-        ) = df_rx.select(
-            pl.col("date").min().item(),
-            pl.col("date").max().item(),
-        ).row(0)
+        ) = df_rx.pipe(apis.pl.select_min_max, "date", dt.date)
 
-        assert (first, last) == df_pos.select(
-            pl.col("date").min().item(),
-            pl.col("date").max().item(),
-        ).row(0)
+        assert (first, last) == df_pos.pipe(
+            apis.pl.select_min_max, "date", dt.date
+        ), (first, last) + df_pos.pipe(
+            apis.pl.select_min_max, "date", dt.date
+        )
 
         for i, bt in enumerate(bts):
 
@@ -561,10 +671,10 @@ class DailyBtPos(
     ):
         if isinstance(parent, DailyBtMvar):
             assert index is not None, (index, parent)
-        # TODO: index in path
+        path = "pos" if index is None else f"pos-{index}"
         return cls(
             parent=parent,
-            path=parent.extend_path("pos"),
+            path=parent.extend_path(path),
             index=index,
         )
     
@@ -597,10 +707,12 @@ class DailyBtRx(
         parent: DailyBtUvar | DailyBtMvar,
         index: int | None = None,
     ):
-        # TODO: index in path
+        path = "rx" if index is None else f"rx-{index}"
+        # TODO: string to indicate mvar agg?
+        # versus none for uvar
         return cls(
             parent=parent,
-            path=parent.extend_path("rx"),
+            path=parent.extend_path(path),
             index=index,
         )
     

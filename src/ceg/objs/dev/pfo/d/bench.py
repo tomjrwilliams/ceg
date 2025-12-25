@@ -193,6 +193,8 @@ class DailyBtBench(
     UseDataFrameValues,
     DependsParentValue,
     Daily, # NOTE: not chunked, store as df not series
+
+    # TODO: not really daily? certainly cant be passed to eg. tf / rolling etc.
 ):
     parent: DailyBtRx | str
     
@@ -281,11 +283,11 @@ class DailyBtBench(
             raise ValueError((self, event))
         return res
 
-    def explorer_df(self, domain: Domain):
+    # def explorer_df(self, domain: Domain):
 
-        # TODO: call explorer df for the rx, bench, drawdown and regime
+    #     # TODO: call explorer df for the rx, bench, drawdown and regime
 
-        return
+    #     return
 
 @dataclass(frozen=True)
 class HandleNewDailyBench(
@@ -302,6 +304,8 @@ class HandleNewDailyBench(
         
         rx = obj.get_parent(domain)
         df = df.rename({VALUE: "rx"})
+
+        # TODO: date range in cols
         
         if obj.mutation is None:
 

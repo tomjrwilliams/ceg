@@ -8,8 +8,9 @@ else:
 from ...objs.vis import explorer
 from ...objs.dev import bars
 from ...objs.dev import pfo
+from ...objs.dev import agg
 
-from ...objs.dev.strat import uvar as strat
+from ...objs.dev import strat
 
 from .core import PROJECTS
 
@@ -35,16 +36,24 @@ SPAN_RATIO = [
 ]
 
 @dataclass(frozen=True)
-class Project_001(strat.UvarBtProject):
+class Project_001(strat.StratProject):
     SPAN_FAST: ClassVar[list[int]] = SPAN_POW_2
     SPAN_RATIO: ClassVar[list[float]] = SPAN_RATIO
     SPAN_VOL_SIG: ClassVar[list[int]] = SPAN_VOL_SIG
     SPAN_VOL_SCALE: ClassVar[list[int]] = SPAN_VOL_SCALE
 
 
-def load_p001():
+def load_p001(root: str = "./__local__/apps"):
+    """
+    >>> root = "./__local__/test"
+    >>> proj = load_p001(root=root).reset()
+    >>> nav = explorer.prepare_app(PROJECT, root, proj.domains)
+    >>> nav[0]()
+    >>> nav[1]()
+    """
+
     project = (
-        Project_001()
+        Project_001(root=root)
         .with_config(explorer.ExplorerConfig(PROJECT))
     )
 
@@ -93,25 +102,17 @@ def load_p001():
                 span_vol_rescale=[256],
                 rebal=rebal,
             )
-            domain, univ = strat.UvarBtDomain.new(
+            domain, univ = strat.StratDomain.new().with_univ(
                 PROJECT + "-" + name,
             )
-            domain, univ, bts = domain.with_bts(
+            domain, univ, bts = domain.with_strats(
                 univ, *params
-            )
-            rx = pfo.Collection.new(
-                univ.get_parent(domain),
-                univ.path + "-rx"
-            )
-            domain, rx, rx_agg = domain.with_agg(
-                rx, bts
             )
             project = (
                 project.with_bt_page(
                     i_str + name + "-v" + suff,
                     domain,
                     bts,
-                    rx_agg=rx_agg
                 )
             )
         i += 1

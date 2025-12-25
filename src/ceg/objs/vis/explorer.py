@@ -8,7 +8,9 @@ import shutil
 import json
 from pathlib import Path
 import polars as pl
-import streamlit as st
+
+from ... import apis
+st = apis.st.library()
 
 from ...engine import *
 from ... import vis
@@ -123,10 +125,11 @@ class ExplorerConfig:
 
     def write(self, root: str = "./__local__/apps"):
         dp = Path(root) / self.app
-        if "__local__" in str(dp):
-            assert "frd" not in str(dp), dp
-            shutil.rmtree(dp)
-            dp.mkdir(exist_ok=True, parents=True)
+        if dp.exists():
+            if "__local__" in str(dp):
+                assert "frd" not in str(dp), dp
+                shutil.rmtree(dp)
+                dp.mkdir(exist_ok=True, parents=True)
         for page in self.pages:
             name = page.name
             dp_page = dp / name
@@ -228,7 +231,7 @@ class Project:
     def reset(self):
         if self.config is not None:
             self.config.write(root=self.root)
-        return
+        return self
 
     def with_domain(
         self,
@@ -304,15 +307,20 @@ def prepare_app(
     root_fp: str,
     domain_funcs: dict[
         str, Callable[[dict], AppDomain]
-    ]
+    ],
+    suffix_root: bool = True,
 ):
     DOMAINS: dict[str, AppDomain] = {}
     DOMAIN_SYNC = {}
+
+    if suffix_root:
+        root_fp = f"{root_fp}/{name}"
 
     @cache()
     def obj_to_daily_ts(
         domain: str | None, **kwargs: str
     ) -> pl.DataFrame | None:
+    
         if domain is None or not len(domain):
             return None
 
@@ -333,42 +341,72 @@ def prepare_app(
 
         o = d.get(obj, t = None)
         
-        if hasattr(o, "explorer_df"):
-            return o.explorer_df(d) # type: ignore
+        # if hasattr(o, "explorer_df"):
+        #     return o.explorer_df(d) # type: ignore
         
-        val_kv = o.value_key_val(d)
-        snap_kv = o.snap_key_val(d)
+        t = kwargs.get("type", "daily_series")
 
-        snap = snap_kv.get(o.path, Daily.Snap)
-        assert snap is not None, (domain, type(o), o)
+        if isinstance(o, UseDataFrameValues):
 
-        v = val_kv.get(
-            o.path, ValuePlSeries
-        )
-        assert v is not None, (domain, type(o), o)
+            val_kv = o.value_key_val(d)
+            snap_kv = o.snap_key_val(d)
 
-        d0, d1 = snap.first, snap.last
+            snap = snap_kv.get(o.path, Daily.Snap)
+            assert snap is not None, (domain, type(o), o)
 
-        try:
-            df = pl.DataFrame([
-                v.ser.alias("value").fill_nan(None),
-            ])
-            df = df.with_columns(
-                pl.lit(o.path).alias("key"),
-                pl.date_range(d0, d1).alias("date")
+            v = val_kv.get(
+                o.path, ValuePlDataFrame
             )
-        except:
-            raise ValueError((
-                snap, df
-            ))
-        
-        params = kwargs.pop("params")
-        # TODO: if params is not None (eg. transform, etc.)
+            assert v is not None, (domain, type(o), o)
 
-        for k in ["group"]:
-            if k in kwargs:
-                df = df.with_columns(pl.lit(kwargs[k]).alias(k))
-        return df
+            df = v.df
+
+            params = kwargs.pop("params")
+            # TODO: if params is not None (eg. transform, etc.)
+
+            for k in ["group"]:
+                if k in kwargs:
+                    df = df.with_columns(pl.lit(kwargs[k]).alias(k))
+
+            return df
+        
+        elif isinstance(o, Daily):
+
+            val_kv = o.value_key_val(d)
+            snap_kv = o.snap_key_val(d)
+
+            snap = snap_kv.get(o.path, Daily.Snap)
+            assert snap is not None, (domain, type(o), o)
+
+            v = val_kv.get(
+                o.path, ValuePlSeries
+            )
+            assert v is not None, (domain, type(o), o)
+
+            d0, d1 = snap.first, snap.last
+
+            try:
+                df = pl.DataFrame([
+                    v.ser.alias("value").fill_nan(None),
+                ])
+                df = df.with_columns(
+                    pl.lit(o.path).alias("key"),
+                    pl.date_range(d0, d1).alias("date")
+                )
+            except:
+                raise ValueError((
+                    snap, df
+                ))
+            
+            params = kwargs.pop("params")
+            # TODO: if params is not None (eg. transform, etc.)
+
+            for k in ["group"]:
+                if k in kwargs:
+                    df = df.with_columns(pl.lit(kwargs[k]).alias(k))
+            return df
+        
+        raise ValueError((obj, kwargs))
     
     @dataclass(frozen=True)
     class ExploreDailyObjsFromRows(
@@ -415,6 +453,7 @@ def prepare_app(
         def pre_render(self):
             domain = self.gen_domain().render()
             d = domain.data.get()
+            
             if d is None or not len(d):
                 return
             

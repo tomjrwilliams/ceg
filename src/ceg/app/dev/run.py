@@ -52,7 +52,8 @@ if __name__ == "__main__":
     app = ceg.objs.vis.explorer.prepare_app(
         app_name,
         app_cache,
-        project.domains
+        project.domains,
+        suffix_root = False,
     ).run()
 
 # py -m streamlit run ./src/ceg/app/dev/run.py p001 reset

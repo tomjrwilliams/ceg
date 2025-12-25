@@ -55,23 +55,23 @@ def run_backtest(
     unit: float = 1.,
 ):
     df = df_rx.join(
-        df_scale.with_columns(
-            scale=(
-                pl.col("scale").forward_fill()
-                .shift(1, fill_value=None)
-            )
-        ),
+        df_scale,
         on="date",
-        how="left",
+        how="full",
         coalesce=True,
+    ).sort(by="date").with_columns(
+        scale=(
+            pl.col("scale").forward_fill()
+            .shift(1, fill_value=None)
+        )
     )
     if df_signal is not None:
         df = df.join(
             df_signal,
             on="date",
             coalesce=True,
-            how="left"
-        ).with_columns(
+            how="full"
+        ).sort(by="date").with_columns(
             signal=(
                 pl.col("signal").forward_fill()
                 .shift(1, fill_value=1)
@@ -82,26 +82,26 @@ def run_backtest(
             df_rebalance,
             on="date",
             coalesce=True,
-            how="left"
+            how="full"
         )
     if df_calendar is not None:
         df = df.join(
             df_calendar,
             on="date",
             coalesce=True,
-            how="left"
+            how="full"
         )
     if df_weight is not None:
         df = df.join(
-            df_weight.with_columns(
-                weight=(
-                    pl.col("weight").forward_fill()
-                    .shift(1, fill_value=None)
-                )
-            ),
+            df_weight,
             on="date",
             coalesce=True,
             how="left"
+        ).sort(by="date").with_columns(
+            weight=(
+                pl.col("weight").forward_fill()
+                .shift(1, fill_value=None)
+            )
         ).with_columns(
             (pl.col("scale") * pl.col("weight"))
             .alias("scale")
@@ -111,23 +111,23 @@ def run_backtest(
             df_fx,
             on="date",
             coalesce=True,
-            how="left"
+            how="full"
         )
     if df_cap is not None:
         df = df.join(
-            df_cap.with_columns(
-                cap=(
-                    pl.col("cap").forward_fill()
-                    .shift(1, fill_value=0)
-                )
-            ),
+            df_cap,
             on="date",
             coalesce=True,
-            how="left"
+            how="full"
+        ).sort(by="date").with_columns(
+            cap=(
+                pl.col("cap").forward_fill()
+                .shift(1, fill_value=0)
+            )
         )
         
     df = apis.perf.with_backtest(
-        df,
+        df.sort(by="date"),
         ("pos", "rx"),
         cum=False,
         rx="rx",
@@ -140,9 +140,9 @@ def run_backtest(
         unit=unit
     )
 
-    assert len(df) == len(df_rx), dict(
-        df=df, rx=df_rx
-    )
+    # assert len(df) == len(df_rx), dict(
+    #     df=df, rx=df_rx
+    # )
 
     return df
 
@@ -150,29 +150,35 @@ def get_backtest_dfs(
     bt: Backtest,
     domain: Domain,
     univ: Universe,
+    with_rx: bool = True,
 ):
 
     # TODO: if any are none that shouldnt be, skip?
+    if with_rx:
+        assert bt.rx is not None, bt
+        df_rx = daily_pl_values(
+            domain,
+            "df",
+            bt.rx,
+            alias="rx",
+            objs=univ.objects
+        )
+    else:
+        df_rx = None
 
-    assert bt.rx is not None, bt
-    df_rx = daily_pl_values(
-        domain,
-        "df",
-        bt.rx,
-        alias="rx",
-        objs=univ.objects
-    )
-    scale_i, scale_v, scale_agg = bt.get_scale()
-
-    df_scale = daily_pl_values(
-        domain,
-        "df",
-        scale_i, 
-        scale=scale_v,
-        agg=scale_agg,
-        alias="scale",
-        objs=univ.objects
-    )
+    if bt.scale is None:
+        df_scale = None
+    else:
+        scale_i, scale_v, scale_agg = bt.get_scale()
+        df_scale = daily_pl_values(
+            domain,
+            "df",
+            scale_i, 
+            scale=scale_v,
+            agg=scale_agg,
+            alias="scale",
+            objs=univ.objects
+        )
     if bt.signal is None:
         df_signal = None
     else:
@@ -186,17 +192,21 @@ def get_backtest_dfs(
             alias="signal",
             objs=univ.objects
         )
+
+    df_index = (
+        df_scale if df_scale is not None
+        else df_rx if df_rx is not None
+        else df_signal
+    )
+    if isinstance(bt.rebalance, str):
+        assert df_index is not None, bt
+
     df_rebalance = (
         None if bt.rebalance is None
-        else daily_pl_value(
-            domain.get(univ.objects[bt.rx], Daily),
-            domain,
-            "df",
-            expr= (
-                apis.cal.rebalance_mask(bt.rebalance)
-                .alias("mask")
-            ),
-            alias="rebalance"
+        else apis.t.not_none(df_index).select(
+            "date",
+            apis.cal.rebalance_mask(bt.rebalance)
+            .alias("rebalance")
         )
         if isinstance(bt.rebalance, str)
         else daily_pl_values(
