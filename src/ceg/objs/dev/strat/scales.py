@@ -123,6 +123,7 @@ class ScaleVol:
         result: BtResult,
         universe: UniverseDaily,
         eng: EngineRoot,
+        **kws,
     ):
         i_sc = result.i_scale
         assert isinstance(result.scale, str), result
@@ -155,7 +156,8 @@ class ScaleVol:
                     universe,
                     res.res.i,
                     rescale=rescale
-                )
+                ),
+                **kws
             )
         else:
             raise ValueError(result)

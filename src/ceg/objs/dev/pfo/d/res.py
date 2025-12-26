@@ -112,6 +112,9 @@ class DailyBtMvarValues(BtValues):
     perf: str
     i_rx: tuple[str, ...]
     i_pos: tuple[str, ...]
+    i_perf: tuple[str, ...] | None = None
+    i_signal: tuple[str, ...] | None = None
+    i_scale: tuple[str, ...] | None = None
 
 @dataclass(frozen=True)
 class DailyBtMvarResult(BtResult):
@@ -144,9 +147,13 @@ class DailyBtMvarResult(BtResult):
         univ: UniverseDaily,
         bts: list[int],
         bt: DailyBtMvar | None = None,
+        with_i_perf: bool = False,
+        with_i_signal: bool = False,
+        with_i_scale: bool = False,
     ):
         assert isinstance(self, DailyBtMvarResult), self
         assert isinstance(univ, UniverseDaily), univ
+        # TODO: dont need to bind the other objects if going to rescale?
         if bt is None:
             assert self.i is not None, self
             univ, i = univ.with_mvar(
@@ -164,6 +171,33 @@ class DailyBtMvarResult(BtResult):
             DailyBtRx.new(bt, index=i)
             for i in range(len(bts))
         ]
+        objs: tuple[Object, ...] = (
+            (bt_rx, bt_bench)
+            + tuple(bts_pos)
+            + tuple(bts_rx)
+        )
+        i_perf = None
+        i_signal = None
+        i_scale = None
+        if with_i_perf:
+            bts_perf = tuple([
+                DailyBtBench.new(rx) for rx in bts_rx
+            ])
+            objs = objs + bts_perf
+            i_perf = tuple([o.path for o in bts_perf])
+        if with_i_signal:
+            bts_signal = tuple([
+                univ.assume_one_signal(i, Daily)
+                for i in bts
+            ])
+            objs = objs + bts_signal
+            i_scale = tuple([o.path for o in bts_signal])
+        if with_i_scale:
+            bts_scale = tuple([
+                univ.assume_one_signal(i, Daily) 
+            ])
+            objs = objs + bts_scale
+            i_signal = tuple([o.path for o in bts_scale])
         self = replace(
             self,
             res = DailyBtMvarValues(
@@ -173,10 +207,11 @@ class DailyBtMvarResult(BtResult):
                 bt_bench.path,
                 tuple((rx.path for rx in bts_rx)),
                 tuple((pos.path for pos in bts_pos)),
+                i_perf = i_perf,
+                i_signal = i_signal,
+                i_scale = i_scale,
             )
-        ).with_obj(
-            (bt_rx, bt_bench) + tuple(bts_pos) + tuple(bts_rx)
-        )
+        ).with_obj(objs)
         return univ, self
 
 __all__ =  [

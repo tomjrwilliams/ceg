@@ -85,6 +85,36 @@ class BasketParams(BtParamsWithAsset):
 class BasketResult(DailyBtMvarResult):
     params: BasketParams
 
+    # TODO: acc paths for sub signals?
+
+    def vis_spec_perf(self):
+        return (
+            self.assume_res().perf,
+            self.params.label(), 
+            dict(group="perf")
+        )
+    
+    def vis_spec_rx(self, i: int | None = None):
+        if i is None:
+            return (
+                self.assume_res().rx,
+                self.params.label(), 
+                dict(group="rx")
+            )
+        return (
+            self.assume_res().i_rx[i],
+            self.params.label(), 
+            dict(group="rx")
+        )
+    
+    def vis_spec_signal(self):
+        assert isinstance(self.signal, str), self
+        return (
+            self.signal,
+            self.params.label(), 
+            dict(group="signal")
+        )
+    
     def assume_res(self):
         assert self.res is not None, self
         return self.res

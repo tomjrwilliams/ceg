@@ -110,14 +110,14 @@ class DailyPerformance(ExploreDailyComponent):
 #  ------------------
 
 @dataclass(frozen=True)
-class DailyBenchmarking(ExploreDailyComponent):
+class DailyPerfTable(ExploreDailyComponent):
     key: str
     df: t.pl.DataFrame
     explorer: ExploreDaily
 
     # TODO: downsample params?
 
-    def render(self) -> DailyBenchmarking:
+    def render(self) -> DailyPerfTable:
         
         df = self.df
         if not len(df):
@@ -180,6 +180,6 @@ class DailyBenchmarking(ExploreDailyComponent):
 #  ------------------
 
 EXPLORER_COMPONENTS["perf"] = DailyPerformance
-EXPLORER_COMPONENTS["bench"] = DailyBenchmarking
+EXPLORER_COMPONENTS["perf_table"] = DailyPerfTable
 
-__all__ = ["DailyPerformance", "DailyBenchmarking"]
+__all__ = ["DailyPerformance", "DailyPerfTable"]

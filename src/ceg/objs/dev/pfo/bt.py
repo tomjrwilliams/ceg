@@ -160,6 +160,14 @@ class Backtest():
             assert self.fx >= 0, self
         return self
 
+    def assume_one_signal(self):
+        assert isinstance(self.signal, int), self
+        return self.signal
+    
+    def assume_one_scale(self):
+        assert isinstance(self.scale, int), self
+        return self.scale
+    
     def get_scale(self) -> tuple[
         int | tuple[int, ...], float, str | None
     ]:
@@ -217,7 +225,16 @@ class Universe(Collection):
 
     def get_parent(self, domain: Domain) -> EngineRoot:
         return domain.get(self.parent, t=EngineRoot)
-    
+
+    def assume_one_signal(self, i: int, t: Type[O]) -> O:
+        return self.assume_object(
+            self.bt[i].assume_one_signal(), t
+        )
+    def assume_one_scale(self, i: int, t: Type[O]) -> O:
+        return self.assume_object(
+            self.bt[i].assume_one_scale(), t
+        )
+
     @classmethod
     def new(
         cls,

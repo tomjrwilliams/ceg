@@ -3,6 +3,7 @@ from typing import (
     TYPE_CHECKING,
     TypeVar,
     Callable,
+    Type,
 )
 import shutil
 import json
@@ -293,6 +294,7 @@ class Project:
         graph: int | ExplorerGraph | None = None,
         type: str | None = None,
         params: str | None = None,
+        name: str | None = None,
     ) -> Project:
         assert self.config is not None, self
         config = self.config.with_graph(
@@ -301,6 +303,52 @@ class Project:
             params=params,
         )
         return self.with_config(config)
+    
+    def with_page_from_domain(
+        self,
+        name: str,
+        d: Domain,
+        objects: dict[str, list[tuple[str, str, dict]]],
+        # TODO: encode dict params automatically?
+
+        t: Type[Proj],
+    ) -> Proj:
+        self = self.with_domains(**{
+            name: lambda sync: AppDomain(
+                [d], sync
+            )
+        }).with_page(
+            name,
+            type="daily",
+            domain=name,
+        )
+
+        for i, (graph, objs) in enumerate(objects.items()):
+            name_type_params = graph.split(":")
+            if len(name_type_params) == 1:
+                (g_t,) = name_type_params
+                self = self.with_graph(i, g_t)
+            elif len(name_type_params) == 2:
+                (n, g_t,) = name_type_params
+                self = self.with_graph(i, g_t, name=n)
+            elif len(name_type_params) == 3:
+                (n, g_t, p) = name_type_params
+                self = self.with_graph(i, g_t, name=n, params=p)
+            else:
+                raise ValueError(graph)
+            for obj_path, label, kws in objs:
+                # TODO: encode dict params automatically?
+                # pull out those like group (or move into params?)
+                self = self.with_object(
+                    obj_path,
+                    graph=i,
+                    label=label,
+                    **kws,
+                    # group, params etc.
+                )
+
+        assert isinstance(self, t), (self, t)
+        return self
 
 def prepare_app(
     name: str,
@@ -591,3 +639,16 @@ def prepare_app(
         ),
         init_elements=app.init_page
     )
+
+Proj = TypeVar("Proj", bound=Project)
+
+__all__ = [
+    "AppDomain",
+    "ExplorerObject",
+    "ExplorerGraph",
+    "ExplorerPage",
+    "ExplorerConfig",
+    "Project",
+    "prepare_app",
+    "Proj",
+]

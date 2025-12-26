@@ -87,10 +87,12 @@ def f_cmom(
 # TODO: eur eq vol?
 # TODO: jp? 
 
-def load_p004(root: str = "./__local__/apps"):
+def load_p004(
+    root: str = "./__local__/apps", test: bool = False
+):
     """
     >>> root = "./__local__/test"
-    >>> proj = load_p004(root=root).reset()
+    >>> proj = load_p004(root=root, test=True).reset()
     >>> nav = explorer.prepare_app(PROJECT, root, proj.domains)
     >>> nav[0]()
     >>> nav[1]()
@@ -162,7 +164,11 @@ def load_p004(root: str = "./__local__/apps"):
                 in product_symbol_signal_cond_aliases
                 if cond is not None
             ]
-            params = [
+            domain, univ = strat.StratDomain.new().with_univ(
+                PROJECT + "-" + name + "-raw",
+            )
+            res_raw = []
+            for params in [
                 strat.StratParams(
                     asset = strat.AssetConcrete(
                         product,
@@ -179,14 +185,16 @@ def load_p004(root: str = "./__local__/apps"):
                 )
                 for product, symbol, signal, cond, alias
                 in configs_w_cond
-            ]
-            domain, univ = strat.StratDomain.new().with_univ(
-                PROJECT + "-" + name + "-raw",
+            ]:
+                domain, univ, res_raw = domain.with_backtest(
+                    univ, params, into = res_raw
+                )
+
+            domain, univ = domain.with_univ(
+                PROJECT + "-" + name,
             )
-            domain, univ, bts = domain.with_strats(
-                univ, *params
-            )
-            params = [
+            res = []
+            for params in [
                 strat.StratParams(
                     asset = strat.AssetConcrete(
                         product,
@@ -224,21 +232,33 @@ def load_p004(root: str = "./__local__/apps"):
                 for bt, (
                     product, symbol, signal, cond, alias
                 )
-                in zip(bts, configs_w_cond)
-            ]
-            domain, univ = domain.with_univ(
-                PROJECT + "-" + name,
-            )
-            domain, univ, bts = domain.with_strats(
-                univ, *params
-            )
-            project = (
-                project.with_bt_page(
-                    i_str + name + "-v" + suff,
-                    domain,
-                    bts,
+                in zip(res_raw, configs_w_cond)
+            ]:
+                domain, univ, res = domain.with_backtest(
+                    univ, params, into = res
                 )
+            project = project.with_page_from_domain(
+                i_str + name + "-v" + suff,
+                domain,
+                {
+                    "perf:perf_table": [
+                        bt.vis_spec_perf()
+                        for bt in res
+                    ],
+                    "rx:line_cum": [
+                        bt.vis_spec_rx()
+                        for bt in res
+                    ],
+                    "signal:line": [
+                        bt.vis_spec_signal()
+                        for bt in res
+                        if bt.signal is not None
+                    ],
+                },
+                t=Project_004
             )
+            if test:
+                return project
         i += 1
     return project
 

@@ -81,6 +81,26 @@ class StratParams(BtParamsWithAsset):
 class StratResult(DailyBtUvarResult):
     params: StratParams
 
+    def vis_spec_perf(self):
+        return (
+            self.assume_res().perf,
+            self.params.label(),
+            dict(group="perf")
+        )
+    def vis_spec_rx(self):
+        return (
+            self.assume_res().rx,
+            self.params.label(),
+            dict(group="rx")
+        )
+    def vis_spec_signal(self):
+        assert isinstance(self.signal, str), self
+        return (
+            self.signal,
+            self.params.label(),
+            dict(group="signal")
+        )
+
     def with_rx(self, 
         params: BtParams,
         result: BtResult,

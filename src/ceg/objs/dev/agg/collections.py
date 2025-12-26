@@ -41,7 +41,6 @@ class Aggregate():
 
     # NOTE: if bt is empty, assume take all (for total portfolio, default)
 
-
 @dataclass(frozen=True)
 class Collection(
     TracksLatestUpstream,
@@ -76,6 +75,11 @@ class Collection(
             objects=objects,
             agg=agg,
         )
+    
+    def assume_object(self, i: int, t: Type[O]) -> O:
+        o = self.objects[i]
+        assert isinstance(o, t), (o, t)
+        return o
     
     def upstream_paths(self):
         upstream = set()

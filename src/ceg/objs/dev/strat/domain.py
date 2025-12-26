@@ -205,7 +205,10 @@ class StratDomain(Domain):
         self,
         params: BasketParams,
         univ: UniverseDaily,
-        eng: EngineRoot
+        eng: EngineRoot,
+        with_i_perf: bool = False,
+        with_i_signal: bool = False,
+        with_i_scale: bool = False,
     ):
         result = BasketResult(
             params=params,
@@ -238,7 +241,12 @@ class StratDomain(Domain):
             univ, eng
         )
         
-        univ, result = cast_self(result.into_mvar(univ, bts))
+        univ, result = cast_self(result.into_mvar(
+            univ, bts,
+            with_i_perf=with_i_perf,
+            with_i_signal=with_i_signal,
+            with_i_scale=with_i_scale,
+        ))
 
         if params.rescale is None:
             return univ, result.done()
@@ -252,41 +260,47 @@ class StratDomain(Domain):
         
         return univ, result.done()
 
-    def with_strats(
+    def with_backtest(
         self,
         univ: UniverseDaily,
-        *params: StratParams | BasketParams,
+        params: StratParams | BasketParams,
+        into: list[StratResult | BasketResult],
+        with_i_perf: bool = False,
+        with_i_signal: bool = False,
+        with_i_scale: bool = False,
+        # TODO: into as overload
+        # if given append, else return result directly
     ):
         eng = univ.get_parent(self)
-        res: list[StratResult | BasketResult] = []
 
-        for ps in params:
-
-            if isinstance(ps, StratParams):
-                univ, (result, self) = self.with_strat(
-                    ps, univ, eng
-                )
-                result = cast(StratResult, result)
-            elif isinstance(ps, BasketParams):
-                univ, (result, self) = self.with_basket(
-                    ps, univ, eng
-                )
-                result = cast(BasketResult, result)
-            else:
-                raise ValueError(ps)
-
-            res.append(result)
-            assert isinstance(self, StratDomain), self
-
-            self = self.with_objs(
-                univ,
-                force=True,
-                t=StratDomain
+        if isinstance(params, StratParams):
+            univ, (result, self) = self.with_strat(
+                params, univ, eng
             )
+            result = cast(StratResult, result)
+        elif isinstance(params, BasketParams):
+            univ, (result, self) = self.with_basket(
+                params, univ, eng,
+                with_i_perf=with_i_perf,
+                with_i_signal=with_i_signal,
+                with_i_scale=with_i_scale,
+            )
+            result = cast(BasketResult, result)
+        else:
+            raise ValueError(params)
+
+        into.append(result)
+        assert isinstance(self, StratDomain), self
+
+        self = self.with_objs(
+            univ,
+            force=True,
+            t=StratDomain
+        )
 
         # TODO: return on notional is relevant when vol scaling
 
-        return self, univ, res
+        return self, univ, into
 
     # TODO: deprecated?
     def with_rx_agg(
