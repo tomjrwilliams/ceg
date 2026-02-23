@@ -557,6 +557,9 @@ def create_table(
             cur.execute(
                 f"CREATE TABLE IF NOT EXISTS {table} ({s})"
             )
+        except Exception as e:
+            raise ValueError((e, table, s))
+        try:
             cols = cur.execute(
                 f"; PRAGMA table_info({table})"
             ).fetchall()
@@ -773,8 +776,8 @@ def select(
     with connect(db, read_only=True) as cur:
         try:
             q = cur.execute(s)
-        except:
-            raise ValueError(s)
+        except Exception as e:
+            raise ValueError((e, s))
         res: list[tuple] = q.fetchall()
 
     parser = fields_parser(fields)

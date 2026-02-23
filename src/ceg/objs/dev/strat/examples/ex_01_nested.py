@@ -8,15 +8,14 @@ from ...agg import *
 from ...pfo import *
 
 from ..assets import *
-from ..scales import *
+from ..calcs import *
 from ..signals import *
-from ..uvar import *
-from ..mvar import *
+from ..params import *
 from ..domain import *
 
 def ex_01_nested():
     """
-    >>> spec = StratParams(
+    >>> spec = Strategy(
     ...     asset=AssetConcrete("FUT", "ES"),
     ...     signal=SignalOsc(32, 96, 48),
     ...     scale=ScaleVol(span=48, ann=True)
@@ -25,7 +24,7 @@ def ex_01_nested():
     >>> dom, univ = dom.with_univ("nested", depth=0)
     >>> dom, univ, bts = dom.with_strats(univ, spec)
     >>> dom, univ = dom.with_univ("nested", depth=1)
-    >>> spec = StratParams(
+    >>> spec = Strategy(
     ...     asset=bts[0],
     ...     scale=ScaleVol(span=256, ann=True)
     ... )

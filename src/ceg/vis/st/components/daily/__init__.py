@@ -3,3 +3,8 @@ from .bt import *
 from .charts import *
 from .perf import *
 from .tables import *
+from .heatmap import *
+from .dd_regimes import *
+from .wms import *
+from .wts import *
+from .perf_variants import *

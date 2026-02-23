@@ -1,198 +1,295 @@
 from typing import overload, Literal
 import numpy as np
 import polars as pl
+import numba as nb
+from .logs import logger
+from .pl import *
 
+logger, log = logger(
+    __file__,
+    streams=dict(formatter=True),
+)
 # NOTE: threshold for sortino (== target return, eg. 0)
 
-def expr(
-    e: bool | int | float | str | pl.Expr | None = None,
-    default: bool | int | float | None = None,
-) -> pl.Expr | None:
-    if e is None:
-        assert default is not None, dict(e=e)
-        return pl.lit(default)
-    return (
-        e if isinstance(e, pl.Expr) 
-        else pl.lit(e)
-        if isinstance(e, (bool, int, float))
-        else pl.col(e)
-    )
-
-def null_mask(e: pl.Series | pl.Expr, cal: str):
-    return pl.when(
-        pl.col(cal)
-    ).then(e).otherwise(None)
-
+@nb.jit()
 def backtest_rx_cum(
     rx: np.ndarray,
+    null: np.ndarray,
     calendar: np.ndarray,
     signal: np.ndarray, # not lagged yet
+    # signal_null: np.ndarray,
     scale: np.ndarray, # not lagged yet
+    # scale_null: np.ndarray,
     rebal: np.ndarray,
     flows: np.ndarray, # not lagged yet
+    cap: np.ndarray,
+    fx: np.ndarray,
 ):
-    res_cap = np.zeros(rx.shape, dtype=rx.dtype) * np.nan
-    res_pos = np.zeros(rx.shape, dtype=rx.dtype) * np.nan
-    res_pnl = np.zeros(rx.shape, dtype=rx.dtype) * np.nan
-    res_rx = np.zeros(rx.shape, dtype=rx.dtype) * np.nan
+    res_cap = np.zeros(rx.shape, dtype=rx.dtype)
+    res_pos = np.zeros(rx.shape, dtype=rx.dtype)
+    res_pnl = np.zeros(rx.shape, dtype=rx.dtype)
+    res_rx = np.zeros(rx.shape, dtype=rx.dtype)
     live: bool = False
     reb: bool = False
     pos: float = 0
-    cap: float = 0
-    for t in range(len(rx)):
+    capital: float = 0
+    t = 0
+    while t < len(rx):
         if rebal[t]:
             reb = True
+
         # TODO: if rebal[t] = False, reset? (latest limit)
         # then have to disambiguate none from false
-        if not calendar[t]:
-            # cant rebal on non trading, no signal
-            continue
-        if np.isnan(rx[t]):
-            continue
+        
+        # if not signal_null[t]:
         sig = signal[t]
+        # if not scale_null[t]:
         sca = scale[t]
+
+        if (
+            null[t]
+            or not calendar[t]
+        ):
+            res_cap[t] = np.nan
+            res_pos[t] = np.nan
+            res_pnl[t] = np.nan
+            res_rx[t] = np.nan
+            t += 1
+            continue
+        
         flow = flows[t]
-        pnl = rx[t] * pos
-        res_rx[t] = pnl / cap
+        pnl = (rx[t] * pos) * fx[t]
+        res_rx[t] = pnl / capital
         res_pnl[t] = pnl
-        cap = cap + pnl + flow
+        capital = capital + pnl + flow
+
         if not live:
             live = True
         if reb and sca != 0:
-            pos = (cap * sig) / sca
+            pos = (capital * sig) / sca
+            v_cap = cap[t]
+            if v_cap >= 0:
+                if pos > v_cap:
+                    pos = v_cap
+                elif pos < -v_cap:
+                    pos = -v_cap
             reb = False
         res_pos[t] = pos
-        res_cap[t] = cap
+        res_cap[t] = capital
+        t += 1
     return res_pos, res_rx, res_pnl, res_cap
 
+@nb.jit()
 def backtest_px_cum(
     px: np.ndarray, # always abs
+    null: np.ndarray,
     calendar: np.ndarray,
     signal: np.ndarray,
+    # signal_null: np.ndarray,
     scale: np.ndarray,
+    # scale_null: np.ndarray,
     rebal: np.ndarray,
     flows: np.ndarray,
+    cap: np.ndarray,
+    fx: np.ndarray,
 ):
-    res_rx = np.zeros(px.shape, dtype=px.dtype) * np.nan
+    res_rx = np.zeros(px.shape, dtype=px.dtype)
     live: bool = False
     v: float = 0.
-    for t in range(len(px)):
-        if not calendar[t]:
+    t = 0
+    while t < len(px):
+        if null[t]:
+            res_rx[t] = np.nan
+            t += 1
+            continue
+        elif not calendar[t]:
+            res_rx[t] = np.nan
             # cant rebal on non trading, no signal
+            t += 1
             continue
-        if np.isnan(px[t]):
-            continue
-        if not live:
-            live = True
-            res_rx[t] = 0
         else:
-            res_rx[t] = px[t] - v
-        v = px[t]
+            if not live:
+                live = True
+                res_rx[t] = 0
+            else:
+                res_rx[t] = px[t] - v
+            v = px[t]
+            t += 1
     return backtest_rx_cum(
         rx=res_rx,
+        null=null,
         calendar=calendar,
         signal=signal,
+        # signal_null=signal_null,
         scale=scale,
+        # scale_null=scale_null,
         rebal=rebal,
         flows=flows,
+        cap=cap,
+        fx=fx,
     )
 
 # TODO: numba jit
 
+@nb.jit()
 def backtest_rx(
     rx: np.ndarray,
+    null: np.ndarray,
     calendar: np.ndarray,
     signal: np.ndarray, # not lagged yet
+    # signal_null: np.ndarray,
     scale: np.ndarray, # not lagged yet
+    # scale_null: np.ndarray,
     rebal: np.ndarray,
+    cap: np.ndarray,
+    fx: np.ndarray,
     unit: float,
 ):
-    res_pos = np.zeros(rx.shape, dtype=rx.dtype) * np.nan
-    res_rx = np.zeros(rx.shape, dtype=rx.dtype) * np.nan
+    res_pos = np.zeros(rx.shape, dtype=rx.dtype)
+    res_rx = np.zeros(rx.shape, dtype=rx.dtype)
     live: bool = False
     reb: bool = False
+
     pos: float = 0
-    for t in range(len(rx)):
+
+    sig: float = 0
+    sca: float = 0
+
+    t = 0
+    while t < len(rx):
         if rebal[t]:
             reb = True
+
+        # if not signal_null[t]:
+        sig = signal[t]
+
+        # if not scale_null[t]:
+        sca = scale[t]
 
         # TODO: distinguish rebal first after including, versus rebal exactly
         # TODO: if rebal[t] = False, reset? (latest limit)
         # then have to disambiguate none from false
-
-        if not calendar[t]:
+        if null[t]:
+            res_pos[t] = np.nan
+            res_rx[t] = np.nan
+            t += 1
+            continue
+        elif not calendar[t]:
+            res_pos[t] = np.nan
+            res_rx[t] = np.nan
             # cant rebal on non trading, no signal
             # do we have returns on non cal days?
+            t += 1
             continue
-        if np.isnan(rx[t]):
-            continue
-        
-        sig = signal[t]
-        sca = scale[t]
-
-        if np.isnan(sig) or not np.isfinite(sig):
-            continue
-        if np.isnan(sca) or not np.isfinite(sca):
-            continue
-
-        res_rx[t] = rx[t] * pos
-        if not live:
-            live = True
-        if reb and sca != 0:
-            pos = (unit * sig) / sca
-            reb = False
-        res_pos[t] = pos
+        elif sca == 0:
+            if live:
+                res_pos[t] = pos
+                res_rx[t] = (rx[t] * pos) * fx[t]
+            else:
+                res_pos[t] = np.nan
+                res_rx[t] = np.nan
+            t += 1
+        else:
+            res_rx[t] = (rx[t] * pos) * fx[t]
+            if not live:
+                live = True
+            if reb and sca != 0:
+                pos = (unit * sig) / sca
+                v_cap = cap[t]
+                if v_cap >= 0:
+                    if pos > v_cap:
+                        pos = v_cap
+                    elif pos < -v_cap:
+                        pos = -v_cap
+                        
+                reb = False
+                
+            res_pos[t] = pos
+            t += 1
     return res_pos, res_rx
 
+@nb.jit()
 def backtest_rx_pos(
     rx: np.ndarray,
     pos: np.ndarray,
+    null_rx: np.ndarray,
+    null_pos: np.ndarray,
 ):
-    # res_pos = np.zeros(rx.shape, dtype=rx.dtype) * np.nan
-    res_rx = np.zeros(rx.shape, dtype=rx.dtype) * np.nan
-    p = np.nan
+    res_rx = np.zeros(rx.shape, dtype=rx.dtype)
+    
+    has_p: bool = False
 
-    for t in range(len(rx)):
+    p = 0
+    t = 0
+    while t < len(rx):
 
-        if not np.isnan(p):
-            res_rx[t] = rx[t] * p
+        if has_p:
+            if not null_rx[t]:
+                res_rx[t] = rx[t] * p
+            else:
+                res_rx[t] = np.nan
 
-        if not np.isnan(pos[t]):
-            p = pos[t]
+            if not null_pos[t]:
+                p = pos[t]
 
+        else:
+            res_rx[t] = np.nan
+            if not null_pos[t]:
+                p = pos[t]
+                has_p = True
+
+        t += 1
     return res_rx
 
+@nb.jit()
 def backtest_px(
     px: np.ndarray, # always abs
+    null: np.ndarray,
     calendar: np.ndarray,
     signal: np.ndarray, # not lagged yet
+    # signal_null: np.ndarray,
     scale: np.ndarray, # not lagged yet
+    # scale_null: np.ndarray,
     rebal: np.ndarray,
     # boolean mask for first day gt
     # poss false for end cutoff
+    cap: np.ndarray,
+    fx: np.ndarray,
     unit: float,
 ):
-    res_rx = np.zeros(px.shape, dtype=px.dtype) * np.nan
+    res_rx = np.zeros(px.shape, dtype=px.dtype)
     live: bool = False
     v: float = 0.
-    for t in range(len(px)):
-        if not calendar[t]:
+    t = 0
+    while t < len(px):
+        if null[t]:
+            t += 1
+            res_rx[t] = np.nan
+            continue
+        elif not calendar[t]:
+            res_rx[t] = np.nan
             # cant rebal on non trading, no signal
+            t += 1
             continue
-        if np.isnan(px[t]):
-            continue
-        if not live:
-            live = True
-            res_rx[t] = 0
         else:
-            res_rx[t] = px[t] - v
-        v = px[t]
+            if not live:
+                live = True
+                res_rx[t] = 0
+            else:
+                res_rx[t] = px[t] - v
+            v = px[t]
+            t += 1
     return backtest_rx(
         rx=res_rx,
+        null=null,
         calendar=calendar,
         signal=signal,
+        # signal_null=signal_null,
         scale=scale,
+        # scale_null=scale_null,
         rebal=rebal,
+        cap=cap,
+        fx=fx,
         unit=unit,
     )
 
@@ -200,9 +297,9 @@ def calendar_expr(
     calendar: str | pl.Expr | None = None,
     px: float | str | pl.Expr | None = None,
     rx: float | str | pl.Expr | None = None,
-):
+) -> pl.Expr:
     if calendar is not None:
-        return expr(calendar)
+        return expr(calendar, True)
     elif px is not None:
         e = expr(px)
         assert e is not None, e
@@ -213,6 +310,7 @@ def calendar_expr(
         return e.is_not_null()
     else:
         return pl.lit(True)
+
 
 def backtest(
     df: pl.DataFrame,
@@ -225,6 +323,8 @@ def backtest(
     scale: float | str | pl.Expr | None = None,
     rebal: float | str | pl.Expr | None = None,
     flows: float | str | pl.Expr | None = None,
+    cap: float | str | pl.Expr | None = None,
+    fx: float | str | pl.Expr | None = None,
     #
     unit: float | None = None,
     cum: bool = False,
@@ -233,23 +333,62 @@ def backtest(
 
     signal = expr(signal, 1.)
     scale = expr(scale, 1.)
+    fx = expr(fx, 1.)
+    cap = expr(cap, -1.)
     rebal = expr(rebal, True)
     
-    df_vs = df.select(
-        calendar=calendar,
+    df_vs = df.with_columns(
         signal=signal,
         scale=scale,
-        rebal=rebal,
+    ).select(
+        calendar=calendar.cast(pl.Float64),
+        signal=(
+            pl.when(is_null(pl.col("signal")))
+            .then(None)
+            .otherwise("signal")
+            .forward_fill()
+            .fill_null(0)
+            .alias("signal")
+        ).cast(pl.Float64),
+        scale=(
+            pl.when(is_null(pl.col("scale")))
+            .then(None)
+            .otherwise("scale")
+            .forward_fill()
+            .fill_null(0)
+            .alias("scale")
+        ).cast(pl.Float64),
+        rebal=rebal.cast(pl.Float64),
+        cap=cap.cast(pl.Float64),
+        fx=fx.cast(pl.Float64),
     )
 
-    v_calendar = df_vs.get_column("calendar").to_numpy()
-    v_signal = df_vs.get_column("signal").to_numpy()
-    v_scale = df_vs.get_column("scale").to_numpy()
-    v_rebal = df_vs.get_column("rebal").to_numpy()
+    df_nd = df_vs.to_numpy()
+
+    v_calendar = df_nd[:, 0].astype(bool)
+    v_signal = df_nd[:, 1]
+    v_scale = df_nd[:, 2]
+    v_rebal = df_nd[:, 3].astype(bool)
+    v_cap = df_nd[:, 4]
+    v_fx = df_nd[:, 5]
+
+    # v_calendar = df_vs.get_column("calendar").to_numpy()
+    # v_signal = df_vs.get_column("signal").to_numpy()
+    # v_scale = df_vs.get_column("scale").to_numpy()
+    # v_signal, v_signal_null = to_numpy_with_null(
+    #     df_vs.get_column("signal")
+    # )
+    # v_scale, v_scale_null = to_numpy_with_null(
+    #     df_vs.get_column("scale")
+    # )
+    # v_rebal = df_vs.get_column("rebal").to_numpy()
+    # v_cap = df_vs.get_column("cap").to_numpy()
+    # v_fx = df_vs.get_column("fx").to_numpy()
 
     if px is None:
         assert rx is not None, dict(px=px, rx=rx)
-        v_rx = df.select(rx=rx).get_column("rx").to_numpy()
+        s_rx = df.select(rx=rx).get_column("rx")
+        v_rx, v_null = to_numpy_with_null(s_rx)
         if cum:
             v_flows = (
                 df.select(flows=flows)
@@ -258,24 +397,35 @@ def backtest(
             )
             return backtest_rx_cum(
                 v_rx,
+                v_null,
                 v_calendar,
                 v_signal,
+                # v_signal_null,
                 v_scale,
+                # v_scale_null,
                 v_rebal,
                 v_flows,
+                v_cap,
+                v_fx,
             )
         assert unit is not None, dict(cum=cum, unit=unit)
         return backtest_rx(
             v_rx,
+            v_null,
             v_calendar,
             v_signal,
+            # v_signal_null,
             v_scale,
+            # v_scale_null,
             v_rebal,
+            v_cap,
+            v_fx,
             unit,
         )
     elif rx is None:
         assert px is not None, dict(px=px, rx=rx)
-        v_px = df.select(px=px).get_column("px").to_numpy()
+        s_px = df.select(px=px).get_column("px")
+        v_px, v_null = to_numpy_with_null(s_px)
         if cum:
             v_flows = (
                 df.select(flows=flows)
@@ -284,19 +434,29 @@ def backtest(
             )
             return backtest_px_cum(
                 v_px,
+                v_null,
                 v_calendar,
                 v_signal,
+                # v_signal_null,
                 v_scale,
+                # v_scale_null,
                 v_rebal,
                 v_flows,
+                v_cap,
+                v_fx,
             )
         assert unit is not None, dict(cum=cum, unit=unit)
         return backtest_px(
             v_px,
+            v_null,
             v_calendar,
             v_signal,
+            # v_signal_null,
             v_scale,
+            # v_scale_null,
             v_rebal,
+            v_cap,
+            v_fx,
             unit,
         )
     else:
@@ -360,8 +520,6 @@ def with_backtest(
     #
     unit: float | None = None,
 ):
-    assert fx is None, (df, alias, fx)
-    assert cap is None, (df, alias, cap)
     v_res = backtest(
         df=df,
         px=px,
@@ -373,28 +531,42 @@ def with_backtest(
         flows=flows,
         unit=unit,
         cum=cum,
+        cap=cap,
+        fx=fx,
     )
     cal = calendar_expr(calendar, px, rx)
     assert cal is not None, calendar
     cal = cal.alias("CAL")
+
+    def _null_mask(s: pl.Series | pl.Expr, k: str):
+        s = cal_mask(s.fill_nan(None), "CAL")
+        if isinstance(rx, str):
+            s = null_mask(s, pl.col(rx))
+        if isinstance(px, str):
+            s = null_mask(s, pl.col(px))
+        return s.alias(k)
+    
+    def _null_mask_self(k: str):
+        # deals with inf etc.
+        e = pl.col(k)
+        return null_mask(e, e).alias(k)
+
     if cum:
         assert len(alias) == 4, alias
         assert len(v_res) == 4, len(v_res)
+        # NOTE: cap here is capital
         a_pos, a_pct, a_pnl, a_cap = alias
         v_pos, v_pct, v_pnl, v_cap = v_res
         return df.with_columns(cal).with_columns(
-            null_mask(
-                pl.Series(v_pos), "CAL"
-            ).alias(a_pos),
-            null_mask(
-                pl.Series(v_pct), "CAL"
-            ).alias(a_pct),
-            null_mask(
-                pl.Series(v_pnl), "CAL"
-            ).alias(a_pnl),
-            null_mask(
-                pl.Series(v_cap), "CAL"
-            ).alias(a_cap),
+            _null_mask(pl.Series(v_pos), a_pos),
+            _null_mask(pl.Series(v_pct), a_pct),
+            _null_mask(pl.Series(v_pnl), a_pnl),
+            _null_mask(pl.Series(v_cap), a_cap),
+        ).with_columns(
+            _null_mask_self(a_pos),
+            _null_mask_self(a_pct),
+            _null_mask_self(a_pnl),
+            _null_mask_self(a_cap),
         )
     else:
         assert len(alias) == 2, alias
@@ -402,12 +574,11 @@ def with_backtest(
         a_pos, a_rx = alias
         v_pos, v_rx = v_res
         return df.with_columns(cal).with_columns(
-            null_mask(
-                pl.Series(v_pos), "CAL"
-            ).alias(a_pos),
-            null_mask(
-                pl.Series(v_rx), "CAL"
-            ).alias(a_rx),
+            _null_mask(pl.Series(v_pos), a_pos),
+            _null_mask(pl.Series(v_rx), a_rx),
+        ).with_columns(
+            _null_mask_self(a_pos),
+            _null_mask_self(a_rx),
         )
 
 # ---
@@ -512,6 +683,7 @@ def rx_sharpe(
     min_samples: int = 2,
     threshold: float | None = None, # for sortino
     rms: bool = False,
+    vol: str | None = None,
 ) -> pl.Expr:
     ann_vol = pl.lit(ann).sqrt()
     mu = rx_mu(
@@ -523,15 +695,15 @@ def rx_sharpe(
         threshold=threshold,
     )
     f_vol = rx_vol if not rms else rx_rms
-    vol = f_vol(
-        rx,
+    v = f_vol(
+        vol or rx,
         window=window,
         alpha=alpha,
         span=span,
         min_samples=min_samples,
         threshold=threshold,
     )
-    return (mu * ann) / (vol * ann_vol)
+    return (mu * ann) / (v * ann_vol)
 
 
 def rx_hwm(
@@ -782,6 +954,7 @@ def perf_row(
     repr: int | bool = False,
     with_pos: bool = True,
     with_keys: list[str] | None = None,
+    sharpe_vols: dict[str, str | None] | None = None,
     **kwargs
 ):
     # if isinstance(repr, int) and round is None:
@@ -817,16 +990,10 @@ def perf_row(
     else:
         assert not with_pos, df
 
-    (
-        r_mu,
-        r_sd,
-        r_rms,
-        r_skew,
-        r_shrp,
-        r_sort,
-        r_dd,
-        r_calm,
-    ) = df.select(
+    if sharpe_vols is None:
+        sharpe_vols = {"shrp": None}
+
+    perf = df.select(
         rx_mu(rx=rx)
         .mul(252)
         .alias("mu")
@@ -843,9 +1010,16 @@ def perf_row(
         .skew()
         .alias("skew")
         .item(),
-        rx_sharpe(rx=rx)
-        .alias("shrp")
-        .item(),
+        *[
+            rx_sharpe(
+                rx=rx,
+                vol=rx_vol
+            )
+            .alias(sharpe_key)
+            .item()
+            for sharpe_key, rx_vol
+            in sharpe_vols.items()
+        ],
         rx_sharpe(rx=rx, threshold=0)
         .alias("sort")
         .item(),
@@ -856,7 +1030,7 @@ def perf_row(
         .alias("calm")
         .item(),
         # *([
-    ).row(0, named=False)
+    ).row(0, named=True)
 
     if with_pos:
         assert pos is not None, (df, pos)
@@ -905,17 +1079,6 @@ def perf_row(
             )).row(0, named=True)
         }
 
-    perf = dict(
-        mu = r_mu,
-        sd = r_sd,
-        rms = r_rms,
-        skew=r_skew,
-        shrp = r_shrp,
-        sort = r_sort,
-        dd=r_dd,
-        calm = r_calm,
-        **pos_r,
-    )
     if round:
         perf = {
             k: f_round(v, round) for k, v in perf.items()
@@ -931,3 +1094,31 @@ def perf_row(
         return
     return r
 
+
+__all__ = [
+    "backtest_rx_cum",
+    "backtest_px_cum",
+    "backtest_rx",
+    "backtest_rx_pos",
+    "backtest_px",
+    "calendar_expr",
+    "backtest",
+    "with_backtest",
+    "rx_mu",
+    "rx_rms",
+    "rx_vol",
+    "rx_sharpe",
+    "rx_hwm",
+    "rx_dd",
+    "rx_dd_max",
+    "rx_calmar",
+    "with_rx_mu",
+    "with_rx_rms",
+    "with_rx_vol",
+    "with_rx_sharpe",
+    "with_rx_hwm",
+    "with_rx_dd",
+    "with_rx_calmar",
+    # "f_round",
+    "perf_row",
+]

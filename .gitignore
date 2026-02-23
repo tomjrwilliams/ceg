@@ -174,5 +174,12 @@ __local__/*
 
 .vscode/*
 
+*GSHEET_API.py
+*GSHEET_TOKEN.json
+*GSHEET_CREDENTIALS.json
+
 *FRED_API.py
 *tickers.txt
+
+*ARGS.py
+*ARGS.json

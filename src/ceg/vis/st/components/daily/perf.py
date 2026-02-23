@@ -127,7 +127,16 @@ class DailyPerfTable(ExploreDailyComponent):
         # df = self.render_date_filter(df)
 
         if "group" in df.schema:
-            df = df.filter(pl.col("group") == "perf")
+            df = df.filter(pl.col("group") == "perf").drop("group")
+
+        if "key" in df.schema and "label" in df.schema:
+            df = df.select(
+                "label",
+                *[
+                    k for k in df.schema.keys()
+                    if k not in {"key", "label"}
+                ]
+            )
 
         st.dataframe(df)
         

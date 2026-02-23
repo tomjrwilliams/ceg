@@ -15,7 +15,6 @@ from pathlib import Path
 import datetime as dt
 import numpy as np
 import polars as pl
-import streamlit as st
 
 from dataclasses import replace
 
@@ -28,6 +27,13 @@ from ..variables import *
 from .core import *
 from ....apis import t
 
+from ....apis.st import cache, library
+st = library()
+
+@cache()
+def read_text(fp: Path):
+    with fp.open('r') as f:
+        v_init = json.load(f)["value"]
 
 @dataclass(frozen=True)
 class CachedText(Component):
@@ -43,6 +49,26 @@ class CachedText(Component):
     def data(self) -> StateVariable:
         return StateVariable(f"{self.key}_data")
 
+    def load(
+        self,
+        cached: bool = True,
+        set: bool = False,
+    ):
+        fp = Path(self.fp)
+        fp.parent.mkdir(exist_ok=True, parents=True)
+        if fp.exists():
+            if cached:
+                with fp.open('r') as f:
+                    v_init = json.load(f)["value"]
+            else:
+                v_init = read_text(fp)                
+            if set:
+                self.data.set(v_init)
+        else:
+            v_init = None
+
+        return v_init
+
     def render(self) -> CachedText:
 
         # def on_change_df():
@@ -51,15 +77,7 @@ class CachedText(Component):
         v_init = None
 
         if not self.data.exists():
-            fp = Path(self.fp)
-            fp.parent.mkdir(exist_ok=True, parents=True)
-            if fp.exists():
-                with fp.open('r') as f:
-                    v_init = json.load(f)["value"]
-                # TODO: cast to schema?
-                self.data.set(v_init)
-            else:
-                v_init = None
+            v_init = self.load(cached=False, set=True)
         else:
             v_init = self.data.get(t=str)
 

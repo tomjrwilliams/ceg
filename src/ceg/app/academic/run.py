@@ -4,7 +4,8 @@ import sys
 sys.path.append("./src")
 
 import polars as pl
-import streamlit as st
+from ...apis.st import cache, library
+st = library()
 
 import ceg
 

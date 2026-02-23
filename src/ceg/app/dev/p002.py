@@ -1,11 +1,16 @@
+import os
 from typing import cast, TYPE_CHECKING, ClassVar
-
+import itertools
 if TYPE_CHECKING:
     from dataclasses import dataclass
 else:
     from pydantic.dataclasses import dataclass
 
-from ...objs.vis import explorer
+from ...vis import explorer
+
+from ... import apis
+from ... import engine
+
 from ...objs.dev import bars
 from ...objs.dev import pfo
 from ...objs.dev import agg
@@ -14,6 +19,11 @@ from ...objs.dev import strat
 
 from .core import PROJECTS
 from .p001 import *
+
+logger, log = apis.logs.logger(
+    __file__,
+    streams=dict(formatter=True),
+)
 
 PROJECT = "p002"
 
@@ -33,105 +43,125 @@ SPAN_RATIO = [
     # 3
 ]
 
-@dataclass(frozen=True)
-class Project_002(strat.StratProject):
-    SPAN_FAST: ClassVar[list[int]] = SPAN_POW_2
-    SPAN_RATIO: ClassVar[list[float]] = SPAN_RATIO
-    SPAN_VOL_SIG: ClassVar[list[int]] = SPAN_VOL_SIG
-    SPAN_VOL_SCALE: ClassVar[list[int]] = SPAN_VOL_SCALE
-
 def eosc(fast: int, ratio: float = 1.5, vol: int = 48):
     return strat.SignalOsc(
         fast, int(fast * ratio), vol
     )
 
-def load_p002(
-    root: str = "./__local__/apps", test: bool = False
-):
-    """
-    >>> root = "./__local__/test"
-    >>> proj = load_p002(root=root, test=True).reset()
-    >>> nav = explorer.prepare_app(PROJECT, root, proj.domains)
-    >>> nav[0]()
-    >>> nav[1]()
-    """
+@dataclass(frozen=True)
+class Project_002(strat.StratExplorer):
+    
+    def product_symbol_signals(self):
+        ES_TN = [
+            ("ETF", "SPY", None),
+            ("FUT", "ES", eosc(32)),
+            ("FUT", "ES", eosc(128)),
+            ("FUT", "TN", eosc(16)),
+            ("FUT", "TN", eosc(32)),
+        ]
+        GC = [
+            ("FUT", "GC", None),
+            ("FUT", "GC", eosc(32)),
+        ]
+        return [
+            ("es-tn", ES_TN),
+            ("es-tn-gc", ES_TN + GC),
+        ]
 
-    project = (
-        Project_002(root=root)
-        .with_config(explorer.ExplorerConfig(PROJECT))
-    )
+    @classmethod
+    def load(
+        cls,
+        target: str | None = None,
+        root: str = "./__local__/apps",
+        test: bool = False,
+    ):
+        """
+        >>> root = "./__local__/test"
+        >>> proj = Project_002.load(roott, test=True).reset()
+        >>> nav = proj.prepare_app()
+        >>> nav[0]()
+        >>> nav[1]()
+        """
 
-    ES_TN = [
-        ("ETF", "SPY", None),
-        ("FUT", "ES", eosc(32)),
-        ("FUT", "ES", eosc(128)),
-        ("FUT", "TN", eosc(16)),
-        ("FUT", "TN", eosc(32)),
-    ]
-    GC = [
-        ("FUT", "GC", None),
-        ("FUT", "GC", eosc(32)),
-    ]
+        WITH_UI = bool(os.environ.get("STREAMLIT"))
+        # TODO: root, test etc. from env vars
 
-    i = 0
-    for name, product_symbol_signals in [
-        ("es-tn", ES_TN),
-        ("es-tn-gc", ES_TN + GC),
-    ]:
-        for suff, rebal in [
-            ("", None),
-            ("-w", "3D"),
-            # ("-m", "3D1W"),
-        ]:
-            i_str = str(i).rjust(3, "0") + "-"
-            domain, univ = strat.StratDomain.new().with_univ(
-                PROJECT + "-" + name,
-            )
-            res = []
-            for params in [
-                strat.StratParams(
-                    asset = strat.AssetConcrete(
-                        product,
-                        symbol,
-                    ),
-                    scale=strat.ScaleVol(
-                        span=48
-                    ),
-                    signal=signal,
-                    rescale=strat.ScaleVol(
-                        span=256
-                    ),
-                    rebal=rebal,
+        self = (
+            Project_002(root=root)
+            .with_config(explorer.ExplorerConfig(PROJECT))
+        )
+        project = engine.Project.new(PROJECT)
+
+        i = 0
+        for (
+            name, product_symbol_signals
+        ), (
+            suff, rebal
+        ) in itertools.product(
+            self.product_symbol_signals(),
+            self.rebal_variants()
+        ):
+            page = f"{PROJECT}-{name}{suff}"
+            if target is not None and page != target:
+                log("INFO")( skipping=page)
+                continue
+            log("INFO")( loading=page)
+
+            with engine.context.graph(
+                page, t = strat.StrategyGraph
+            ):
+                project.set_storage_defaults([
+                    
+                ])
+                univ = strat.Strategies.new(
+                    project,
+                    f"{page}-strats",
                 )
-                for product, symbol, signal
-                in product_symbol_signals
-            ]:
-                domain, univ, res = domain.with_backtest(
-                    univ, params, into=res
+                res = []
+                for params in [
+                    strat.Strategy(
+                        asset = strat.AssetConcrete(
+                            product,
+                            symbol,
+                        ),
+                        params = strat.StrategyParams(
+                            scale=strat.ScaleVol(
+                                span=48
+                            ),
+                            signal=signal,
+                            rebal=rebal,
+                        )
+                    )
+                    for product, symbol, signal
+                    in product_symbol_signals
+                ]:
+                    univ, res = params.bind(
+                        univ, strat.Strategies, into=res
+                    )
+                
+                engine.context.get().with_obj(
+                    univ, force=True
                 )
-            project = project.with_page_from_domain(
-                i_str + name + "-v" + suff,
-                domain,
-                {
-                    "perf:perf_table": [
-                        bt.vis_spec_perf()
-                        for bt in res
-                    ],
-                    "rx:line_cum": [
-                        bt.vis_spec_rx()
-                        for bt in res
-                    ],
-                    "signal:line": [
-                        bt.vis_spec_signal()
-                        for bt in res
-                        if bt.signal is not None
-                    ],
-                },
-                t=Project_002
-            )
-            if test:
-                return project
-        i += 1
-    return project
+                # TODO: rescale?
 
-PROJECTS[PROJECT] = load_p002
+                self = self.with_page(
+                    page,
+                    type="daily",
+                    graph=True,
+                    t=Project_002
+                ).with_perf_table(
+                    res, t=Project_002
+                ).with_rx_graph(
+                    res, t=Project_002
+                # ).with_signal_graph(
+                #     res, t=Project_002
+                ).with_graph(
+                    engine.context.get(),
+                    t=Project_002
+                )
+                if test:
+                    return self
+                i += 1
+        return self
+
+PROJECTS[PROJECT] = Project_002

@@ -11,6 +11,13 @@ from dataclasses import dataclass, field
 from frozendict import frozendict
 
 from ...t import *
+from ...logs import logger
+
+logger, log = logger(
+    __file__,
+    streams = dict(formatter=True),
+    # when=log_when
+)
 
 # TODO: rename keyValstoreConfig
 # TODO: convience registry on keyValStore to the class object
@@ -122,6 +129,15 @@ class KeyValIO(Generic[ID, KeyI, ValI, KeyO, ValO]):
         assert isinstance(val_o, self.type_val_o)
         return val_o
 
+def is_eq(v1, v2, k):
+    try:
+        return v1 == v2
+    except TypeError as e:
+        log("INFO")(
+            eq_type_err=(k, e),
+        )
+    return False
+
 
 @dataclass(frozen=True)
 class KeyVal(
@@ -133,6 +149,8 @@ class KeyVal(
     on_update: Callable[[KeyO, ValO], None] | None = None
 
     # NOTE: if on_update is none, cannot update
+
+    # TODO: optional lru cache on get?
 
     @overload
     def get(
@@ -223,7 +241,7 @@ class KeyVal(
         i, val_o = self.iget(key)
 
         if i is not None and (
-            val_o is None and val is None or val_o == val
+            val_o is None and val is None or is_eq(val_o, val, key)
         ):
             return i, val
 

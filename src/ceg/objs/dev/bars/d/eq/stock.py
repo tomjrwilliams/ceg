@@ -33,18 +33,50 @@ from ......apis import t
 from ......apis import kv
 from ......engine import *
 
-from ..root import *
-from .root import *
+from ..ident import *
 
 #  ------------------
 
+@dataclass(frozen=True)
+class EqDailyStockTags(BarDailyTags):
+    symbol: str
+    ident: None # tbc
+    field: str
+    adjust: str
+    source: str
+    fx: str | None = None  # ccy to convert to
+
+# TODO: stock data not yet downloaded
 
 @dataclass(frozen=True)
 class EqDailyStock(
-    HasEqDailyParent,
+    # DependsGraphSync,  # TODO
     BarDaily,
 ):
-    parent: EqDaily | str
+    # """
+    # >>> obj = EqDailyStock.new(
+    # ...     eng,
+    # ...     symbol="AAPL",
+    # ...     field="close",
+    # ...     adjust="full",
+    # ...     source="frd",
+    # ... )
+    # >>> Graph().with_obj(obj).sync()
+    # >>> obj.value_key_val().get(obj.path).tail(8)
+    # shape: (8,)
+    # Series: 'test-fut-d-AAPL-1-close-full-frd' [f64]
+    # [
+    #     5718.25
+    #     null
+    #     null
+    #     5815.5
+    #     5826.5
+    #     5759.5
+    #     5739.25
+    #     5623.0
+    # ]
+    # """
+    parent: Project | str | None
 
     tags: EqDailyStockTags
     
@@ -52,29 +84,20 @@ class EqDailyStock(
     type: Literal["EqDailyStock"] = "EqDailyStock"
 
     @dataclass(frozen=True)
-    class Snap(EqDaily.Snap):
+    class Snap(Daily.Snap):
         type: Literal["EqDailyStockSnap"] = "EqDailyStockSnap"
- 
-    def get_snap(
-        self,
-        domain: Domain,
-        t: Type[DailySnap] | None = None,
-    ) -> EqDailyStock.Snap | None:
-        return self.snap_key_val(domain).get(self.path, EqDailyStock.Snap)
     
     @classmethod
     def new(
         cls,
-        parent: EqDaily | EngineRoot,
         symbol: str,
         ident: int | str | None = None,
         field: str | None = None,
         adjust: str | None = None,
         source: str | None = None,
         fx: str | None = None,
+        parent: Project | str | None = None,
     ):
-        if isinstance(parent, EngineRoot):
-            parent = EqDaily.new(parent)
         (
             ident,
             symbol,
@@ -94,7 +117,12 @@ class EqDailyStock(
         )
         assert adjust in EQ_ADJUSTMENTS, adjust
         return cls(
-            path=parent.extend_path(ident),
+            path=cls.build_path(
+                parent,
+                "eq-stock-d",
+                ident,
+                strict=False,
+            ),
             parent=parent,
             tags=EqDailyStockTags(
                 symbol=symbol,
@@ -106,33 +134,19 @@ class EqDailyStock(
             ),
         )
 
-    def depends(self, domain: Domain) -> list[Dependency]:
-        return (
-            self.depends_self(domain)
-            + self.depends_domain(domain)
-        )
 
-    def handlers(self, event: Event, domain: Domain) -> list[Handler]:
-        res: list[Handler] = []
-        if isinstance(event, DomainSync):
-            res.append(HandleUpdateEqDailyStock())
-        elif isinstance(event, ObjectNew):
-            assert self.path == event.obj, (self, event)
-            res.append(HandleNewEqDailyStock())
-        elif isinstance(event, ObjectChange):
-            # TODO: throw? unless only chunk change
-            # then just rechunk
-            # or backend type / loc, then move
-            raise ValueError((self, event))
-        return res
+    def handler(self, event: Event, snap: Snap) -> Handler:
+        if isinstance(event, GraphSync):
+            return HandleNewEqDailyStock()
+        # elif isinstance(event, ValueUpdate):
+        raise ValueError((self, event))
 
 @dataclass(frozen=True)
 class HandleUpdateEqDailyStock(Handler):
     def handle(
         self,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: EqDailyStock,
-        domain: Domain,
     ):
         # TODO:
         # check latest update, if today, skip
@@ -147,17 +161,11 @@ class HandleNewEqDailyStock(
 ):
     def handle(
         self,
-        event: ObjectNew,
+        event: ObjectChange,
+        snap: EqDailyStock.Snap,
         obj: EqDailyStock,
-        domain: Domain,
     ):
         tags = obj.tags
-        snap = obj.get_snap(domain)
-
-        if snap is not None:
-            return None
-            # # NOTE: should already be handled?
-            # raise ValueError((self, event))
 
         if tags.source == "frd":
             df = apis.data.frd.read_file(
@@ -174,20 +182,23 @@ class HandleNewEqDailyStock(
         else:
             raise ValueError(obj)
 
-        e, v = self.set_value_from_df(
+        v = self.set_value_from_df(
             obj,
-            domain,
             df,
             tags.field,
-            publish=True,
-            t = self.key_value_type(obj, domain),
+            t = self.key_value_type(obj),
         )
 
-        snap = self.set_snap_from_df(
-            df, event, obj, domain
-        )
-
-        return e
+        new_snap = self.update_snap_from_df(snap, df)
+        if (
+            new_snap.first != snap.first
+            and new_snap.last != snap.last
+        ):
+            return ValueUpdate.from_snap(
+                self.update_snap_from_df(snap, df),
+                into=frozendict()
+            )
+        return frozendict().set(obj.path, (snap, []))
 
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
@@ -197,89 +208,11 @@ class HandleNewEqDailyStock(
 #  ------------------
 
 @dataclass(frozen=True)
-class EqDailyDomainOnlyStock(EqDailyDomainBase):
-
-    @dataclass(frozen=True)
-    class object_parser(ObjectParser):
-        obj: (
-            EngineRoot
-            | EqDaily
-            | EqDailyStock
-        )
-
-    @dataclass(frozen=True)
-    class snap_parser(SnapParser):
-        snap: EqDailyStock.Snap
-
-# TODO: stock data not yet downloaded
-
-@dataclass(frozen=True)
-class EqDailyStockDomain(EqDailyDomainOnlyStock):
-    # """
-    # >>> eng = EngineRoot.new(ROOT)
-    # >>> obj = EqDailyStock.new(
-    # ...     eng,
-    # ...     symbol="AAPL",
-    # ...     field="close",
-    # ...     adjust="full",
-    # ...     source="frd",
-    # ... )
-    # >>> domain = (
-    # ...    EqDailyStockDomain.empty(eng)
-    # ...     .with_obj(obj)
-    # ...     .sync()
-    # ... )
-    # >>> obj.value_key_val(domain).get(obj.path).tail(8)
-    # shape: (8,)
-    # Series: 'test-fut-d-AAPL-1-close-full-frd' [f64]
-    # [
-    #     5718.25
-    #     null
-    #     null
-    #     5815.5
-    #     5826.5
-    #     5759.5
-    #     5739.25
-    #     5623.0
-    # ]
-    # """
-    @dataclass(frozen=True)
-    class Root(EqDailyDomainBase.Root):
-        parent: EqDaily | str
-        version: int = 0
-        type: Literal["EqDailyStockDomain"] = "EqDailyStockDomain"
-
-        SUFFIX: ClassVar[str] = "stock"
-
-    @classmethod
-    def empty(cls, engine: EngineRoot):
-        root = EqDailyStockDomain.Root.new(engine)
-        return EqDailyStockDomain(root)
-
-    @classmethod
-    def new(
-        cls, symbol: str = "AAPL"
-    ) -> EqDailyStockDomain:
-        eng = EngineRoot.new(ROOT)
-        self = EqDailyStockDomain.empty(eng)
-        for adj in EQ_ADJUSTMENTS:
-            obj = EqDailyStock.new(
-                eng,
-                symbol=symbol, 
-                ident = 1,
-                field="close",
-                adjust=adj,
-                source="frd",
-            )
-            self = self.with_obj(obj)
-        return cast(EqDailyStockDomain, self)
-    
-@dataclass(frozen=True)
 class DependsEqDailyStockParent(DependsParentValue):
     parent: EqDailyStock | str
 
-    def get_parent(self, domain: Domain) -> EqDailyStock:
-        return domain.get(self.parent, EqDailyStock)
+    def get_parent(self) -> EqDailyStock:
+        return context.get().get(self.parent, EqDailyStock)
 
 #  ------------------
 
@@ -287,8 +220,6 @@ __all__ = [
     "EqDailyStock",
     "HandleUpdateEqDailyStock",
     "HandleNewEqDailyStock",
-    "EqDailyDomainOnlyStock",
-    "EqDailyStockDomain",
     "DependsEqDailyStockParent",
 ]
 # TODO: if __name__ == __main__:

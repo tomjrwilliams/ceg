@@ -32,9 +32,12 @@ import numpy as np
 import polars as pl
 
 from ..... import apis
-from .....apis import t
-from .....apis import kv
+from .....apis import t, kv, assert_is
+from .....apis.pl import *
+
 from .....engine import *
+
+from ...bars.d import *
 
 P = ParamSpec("P")
 O = TypeVar("O", bound=Object)
@@ -52,12 +55,24 @@ class DailyMParams(DailyParams):
     # only back-end layout
     # NOTE: likewise for back-end type: np vs pq etc.
 
+    def build_path(
+        self,
+        cls: Type[DailyM],
+    ):
+        window = self.window
+        if window is None:
+            params = "ex"
+        else:
+            params = str(window)
+        return f"{cls.SUFFIX}-" + params
+
 
 @dataclass(frozen=True)
 class DailyM(DailyWithDailyParent, DailyChunked):
-    parent: Object | str
-    # tags: DailyTags
+    parent: Daily | str
     params: DailyMParams
+
+    project: Project | str | None = None
 
     version: int = 0
     type: Literal["DailyM"] = "DailyM"
@@ -67,58 +82,26 @@ class DailyM(DailyWithDailyParent, DailyChunked):
     # NOTE: to override
     
     @classmethod
-    def params_suffix(
+    def new(
         cls,
+        parent: Daily,
         window: int | None = None,
+        project: Project | None = None,
     ):
-        if window is None:
-            params = "ex"
-        else:
-            params = str(window)
-        return f"{cls.SUFFIX}-" + params
-    
-    @overload
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: None = None,
-        window: int | None = None,
-    ): ...
-    @overload
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ],
-        window: int | None,
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ): ...
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ] | None = None,
-        window: int | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ):
-        if isinstance(parent, EngineRoot):
-            assert t is not None, t
-            parent = t(parent, *args, **kwargs)
+        params = DailyMParams(
+            window=window,
+        )
+        assert cls.SUFFIX != "M", cls
+        path = parent.extend_path(
+            params.build_path(cls)
+        )
+        if project is not None:
+            path = project.extend_path(path)
         return cls(
-            path=parent.extend_path(cls.params_suffix(
-                window=window,
-            )),
+            path=path,
             parent=parent,
-            params=DailyMParams(
-                window=window,
-            ),
+            params=params,
+            project=project,
         )
 
 #  ------------------
@@ -134,6 +117,30 @@ class HandleNewDailyM(
 
 @dataclass(frozen=True)
 class DailyMA(DailyM):
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyMA.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-ma-4' [f64]
+    [
+        5707.5
+        null
+        null
+        5766.875
+        5821.0
+        5800.5
+        5785.1875
+        5737.0625
+    ]
+    """
     version: int = 0
     type: Literal["DailyMA"] = "DailyMA"
 
@@ -154,23 +161,20 @@ class HandleNewDailyMA(HandleNewDailyM):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         return (
@@ -184,6 +188,30 @@ class HandleNewDailyMA(HandleNewDailyM):
     
 @dataclass(frozen=True)
 class DailyKurt(DailyM):
+    """
+    >>> ord = FutDailyRx.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyKurt.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-rx-kurt-4' [f64]
+    [
+        -1.116847
+        null
+        null
+        -2.0
+        -2.0
+        -1.5
+        -1.070286
+        -1.379246
+    ]
+    """
     version: int = 0
     type: Literal["DailyKurt"] = "DailyKurt"
 
@@ -197,29 +225,27 @@ class DailyKurt(DailyM):
         self
     ) -> HandleNewDailyKurt:
         return HandleNewDailyKurt()
+    
 @dataclass(frozen=True)
 class HandleNewDailyKurt(HandleNewDailyM):
 
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         return (
@@ -231,6 +257,30 @@ class HandleNewDailyKurt(HandleNewDailyM):
 
 @dataclass(frozen=True)
 class DailyMax(DailyM):
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyMax.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-max-4' [f64]
+    [
+        5729.75
+        null
+        null
+        5815.5
+        5826.5
+        5826.5
+        5826.5
+        5826.5
+    ]
+    """
     version: int = 0
     type: Literal["DailyMax"] = "DailyMax"
 
@@ -250,23 +300,20 @@ class HandleNewDailyMax(HandleNewDailyM):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         return(
@@ -279,6 +326,30 @@ class HandleNewDailyMax(HandleNewDailyM):
 
 @dataclass(frozen=True)
 class DailyMed(DailyM):
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyMed.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-med-4' [f64]
+    [
+        5715.5
+        null
+        null
+        5766.875
+        5821.0
+        5815.5
+        5787.5
+        5749.375
+    ]
+    """
     version: int = 0
     type: Literal["DailyMed"] = "DailyMed"
 
@@ -292,29 +363,27 @@ class DailyMed(DailyM):
         self
     ) -> HandleNewDailyMed:
         return HandleNewDailyMed()
+    
 @dataclass(frozen=True)
 class HandleNewDailyMed(HandleNewDailyM):
 
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         return(
@@ -326,7 +395,30 @@ class HandleNewDailyMed(HandleNewDailyM):
 
 @dataclass(frozen=True)
 class DailyMid(DailyM):
-
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyMid.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-mid-4' [f64]
+    [
+        5699.5
+        null
+        null
+        5766.875
+        5821.0
+        5793.0
+        5782.875
+        5724.75
+    ]
+    """
     params: DailyMidParams
 
     version: int = 0
@@ -342,71 +434,30 @@ class DailyMid(DailyM):
         self
     ) -> HandleNewDailyMid:
         return HandleNewDailyMid()
-
+    
     @classmethod
-    def params_suffix(
+    def new(
         cls,
+        parent: Daily,
         window: int | None = None,
         width: float | None = None,
+        project: Project | None = None,
     ):
-        if window is None:
-            params = "ex"
-        else:
-            params = str(window)
-        return f"{cls.SUFFIX}-" + params + (
-            ""
-            if width is None
-            else f"-{width}"
+        params=DailyMidParams(
+            window=window,
+            width=width,
         )
-    
-    @overload
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: None = None,
-        window: int | None = None,
-        width: float | None = None,
-    ): ...
-    
-    @overload
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ],
-        window: int | None = None,
-        width: float | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ): ...
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ] | None = None,
-        window: int | None = None,
-        width: float | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ):
-        if isinstance(parent, EngineRoot):
-            assert t is not None, t
-            parent = t(parent, *args, **kwargs)
+        assert cls.SUFFIX != "M", cls
+        path = parent.extend_path(
+            params.build_path(cls)
+        )
+        if project is not None:
+            path = project.extend_path(path)
         return cls(
-            path=parent.extend_path(cls.params_suffix(
-                window=window,
-                width=width,
-            )),
+            path=path,
             parent=parent,
-            params=DailyMidParams(
-                window=window,
-                width=width,
-            ),
+            params=params,
+            project=project,
         )
     
     
@@ -418,6 +469,22 @@ class DailyMidParams(DailyMParams):
     window: int | None = None
     width: float | None = None
 
+    def build_path(
+        self,
+        cls: Type[DailyM],
+    ):
+        window = self.window
+        width = self.width
+        if window is None:
+            params = "ex"
+        else:
+            params = str(window)
+        return f"{cls.SUFFIX}-" + params + (
+            ""
+            if width is None
+            else f"-{width}"
+        )
+
     
 @dataclass(frozen=True)
 class HandleNewDailyMid(HandleNewDailyM):
@@ -425,23 +492,20 @@ class HandleNewDailyMid(HandleNewDailyM):
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyMid,
-        domain: Domain,
     ) -> pl.DataFrame:
         return self._calc_df(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyMid,
-        domain: Domain,
     ) -> pl.DataFrame:
         params = obj.params
         e = pl.col(VALUE)
@@ -482,6 +546,30 @@ class HandleNewDailyMid(HandleNewDailyM):
 
 @dataclass(frozen=True)
 class DailyMin(DailyM):
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyMin.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-min-4' [f64]
+    [
+        5669.25
+        null
+        null
+        5718.25
+        5815.5
+        5759.5
+        5739.25
+        5623.0
+    ]
+    """
     version: int = 0
     type: Literal["DailyMin"] = "DailyMin"
 
@@ -502,23 +590,20 @@ class HandleNewDailyMin(HandleNewDailyM):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         
@@ -529,8 +614,264 @@ class HandleNewDailyMin(HandleNewDailyM):
             )
         )
 
+
+@dataclass(frozen=True)
+class DailyMOscParams(DailyMParams):
+    
+    chunk: int = 32
+    # TODO: db?
+
+    window: int | None = None
+    slow: int | None = None
+    vol: int | None = None
+    activation: str | None = None
+
+    # TODO: norm
+
+    def build_path(
+        self,
+        cls: Type[DailyOsc],
+    ):
+        window = self.window
+        slow = self.slow
+        vol = self.vol
+        activation = self.activation
+
+        fast = 1 if window is None else window
+        s_slow = "ex" if slow is None else slow
+        s_vol = "ex" if vol is None else vol
+        res = f"{cls.SUFFIX}-{fast}-{s_slow}-{s_vol}"
+        if activation is not None:
+            return f"{res}-{activation}"
+        return res
+
+@dataclass(frozen=True)
+class DailyOsc(DailyM):
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyOsc.new(ord, fast=4, slow=12, vol=8)
+    >>> unit = DailyOsc.new(ord, fast=4, slow=12, vol=8, activation="tanh")
+    >>> Graph().with_objs(obj, unit).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-osc-4-12-8' [f64]
+    [
+        0.979022
+        null
+        null
+        1.240631
+        1.349691
+        1.105384
+        0.828809
+        0.060248
+    ]
+    >>> unit.value_key_val().get(unit.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-osc-4-12-8-tanh' [f64]
+    [
+        0.752642
+        null
+        null
+        0.845635
+        0.87398
+        0.802425
+        0.679836
+        0.060175
+    ]
+    """
+    parent: (
+        str
+        | Daily
+        | FutDailyOrdinal
+        | FutDailyRx
+        | EqDailyEtf
+        | EqDailyStock
+        | EqDailyRx
+        | IndexDailyPx
+        | IndexDailyRx
+        | FxDailyPx
+        | FxDailyRx
+    )
+
+    params: DailyMOscParams
+
+    version: int = 0
+    type: Literal["DailyOsc"] = "DailyOsc"
+
+    SUFFIX: ClassVar[str] = "osc"
+
+    @classmethod
+    def new(
+        cls,
+        parent: (
+            Daily
+            | FutDailyOrdinal
+            | FutDailyRx
+            | EqDailyEtf
+            | EqDailyStock
+            | EqDailyRx
+            | IndexDailyPx
+            | IndexDailyRx
+            | FxDailyPx
+            | FxDailyRx
+        ),
+        # --
+        fast: int | None = None,
+        slow: int | None = None,
+        vol: int | None = None,
+        activation: str | None = None,
+        #
+        project: Project | None = None,
+    ):
+        params=DailyMOscParams(
+            window=fast,
+            slow=slow,
+            vol=vol,
+            activation=activation
+        )
+        assert cls.SUFFIX != "M", cls
+        path = parent.extend_path(
+            params.build_path(cls)
+        )
+        if project is not None:
+            path = project.extend_path(path)
+        return cls(
+            path=path,
+            parent=parent,
+            params=params,
+            project=project,
+        )
+
+    @dataclass(frozen=True)
+    class Snap(Daily.Snap):
+        type: Literal["DailyOscSnap"] = "DailyOscSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyOsc:
+        return HandleNewDailyOsc()
+
+@dataclass(frozen=True)
+class HandleNewDailyOsc(
+    HandleNewDailyFromDailyParentPl,
+):
+
+    def calc_df(
+        self,
+        df: pl.DataFrame,
+        event: Event,
+        obj: DailyOsc,
+    ) -> pl.DataFrame:
+        params = obj.params
+        parent = obj.get_parent()
+        if isinstance(parent, FutDailyRx):
+            tags = parent.get_parent().tags
+            rx = pl.col(VALUE)
+            if tags.adjust == "pct":
+                px = (1 + rx).cum_prod().pipe(
+                    null_mask, rx
+                )
+            elif tags.adjust == "abs":
+                px = rx.cum_sum().pipe(
+                    null_mask, rx
+                )
+            else:
+                raise ValueError(obj)
+        elif isinstance(parent, FutDailyOrdinal):
+            tags = parent.tags
+            px = pl.col(VALUE)
+            if tags.adjust == "pct":
+                rx = px.forward_fill().pct_change().pipe(
+                    null_mask, px
+                )
+            elif tags.adjust == "abs":
+                rx = px.forward_fill().diff().pipe(
+                    null_mask, px
+                )
+            else:
+                raise ValueError(obj)
+        else:
+            raise ValueError((obj, parent))
+        
+        df = df.select(VALUE=pl.col(VALUE), px=px, rx=rx)
+        px = pl.col("px")
+        rx = pl.col("rx")
+
+        px_fast = (
+            px 
+            if params.window is None or params.window == 1
+            else px.rolling_mean(
+                params.window, min_samples=2
+            )
+        )
+        px_slow = (
+            px.rolling_mean(
+                len(df), min_samples=2
+            )
+            if params.slow is None
+            else px.rolling_mean(
+                params.slow, min_samples=2
+            )
+        )
+        # TODO: or default to rms?
+        rx_vol = (
+            rx.rolling_std(
+                len(df), min_samples=2
+            )
+            if params.vol is None
+            else px.rolling_std(
+                params.vol, min_samples=2
+            )
+        )
+
+        e = (
+            ((px_fast - px_slow) / rx_vol)
+            .pipe(null_mask, pl.col(VALUE))
+        )
+        if params.activation is None:
+            pass
+        elif params.activation == "tanh":
+            e = e.tanh()
+        else:
+            raise ValueError(obj)
+
+        df = df.select(
+            e.alias(VALUE)
+        )
+        return df
+
 @dataclass(frozen=True)
 class DailyPLast(DailyM):
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyPLast.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-plast-4' [f64]
+    [
+        0.333333
+        null
+        null
+        0.0
+        0.0
+        0.666667
+        1.0
+        1.0
+    ]
+    """
     version: int = 0
     type: Literal["DailyPLast"] = "DailyPLast"
 
@@ -552,22 +893,19 @@ class HandleNewDailyPLast(HandleNewDailyM):
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.DataFrame:
         return self._calc_df(
             df,
             event,
             obj,
-            domain,
         )
     def _calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.DataFrame:
         params = obj.params
         s = df.get_column(VALUE)
@@ -660,6 +998,30 @@ def calc_p_last(
     
 @dataclass(frozen=True)
 class DailyQile(DailyM):
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyQile.new(ord, window=4, quantile=.5)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-qile-4-0.5' [f64]
+    [
+        5718.25
+        null
+        null
+        5815.5
+        5826.5
+        5815.5
+        5815.5
+        5759.5
+    ]
+    """
 
     params: DailyQileParams
 
@@ -678,64 +1040,28 @@ class DailyQile(DailyM):
         return HandleNewDailyQile()
     
     @classmethod
-    def params_suffix(
+    def new(
         cls,
+        parent: Daily,
         window: int | None = None,
         quantile: float | None = None,
+        project: Project | None = None,
     ):
-        assert quantile is not None, (cls, quantile)
-        if window is None:
-            params = "ex"
-        else:
-            params = str(window)
-        return f"{cls.SUFFIX}-" + params + f"-{quantile}"
-    @overload
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: None = None,
-        window: int | None = None,
-        quantile: float | None = None,
-    ): ...
-    @overload
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ],
-        window: int | None = None,
-        quantile: float | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ): ...
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ] | None = None,
-        window: int | None = None,
-        quantile: float | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ):
-        if isinstance(parent, EngineRoot):
-            assert t is not None, t
-            parent = t(parent, *args, **kwargs)
+        params=DailyQileParams(
+            window=window,
+            quantile=quantile,
+        )
+        assert cls.SUFFIX != "M", cls
+        path = parent.extend_path(
+            params.build_path(cls)
+        )
+        if project is not None:
+            path = project.extend_path(path)
         return cls(
-            path=parent.extend_path(cls.params_suffix(
-                window=window,
-                quantile=quantile,
-            )),
+            path=path,
             parent=parent,
-            params=DailyQileParams(
-                window=window,
-                quantile=quantile,
-            ),
+            params=params,
+            project=project,
         )
     
 @dataclass(frozen=True)
@@ -746,30 +1072,39 @@ class DailyQileParams(DailyMParams):
     window: int | None = None
     quantile: float | None = None
 
-
+    def build_path(
+        self,
+        cls: Type[DailyM],
+    ):
+        window = self.window
+        quantile = self.quantile
+        assert quantile is not None, (cls, quantile)
+        if window is None:
+            params = "ex"
+        else:
+            params = str(window)
+        return f"{cls.SUFFIX}-" + params + f"-{quantile}"
+    
 @dataclass(frozen=True)
 class HandleNewDailyQile(HandleNewDailyM):
 
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyQile,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
         
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyQile,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         assert params.quantile is not None, obj
@@ -785,6 +1120,30 @@ class HandleNewDailyQile(HandleNewDailyM):
 
 @dataclass(frozen=True)
 class DailyRank(DailyM):
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyRank.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-rank-4' [f64]
+    [
+        3.0
+        null
+        null
+        2.0
+        2.0
+        1.0
+        1.0
+        1.0
+    ]
+    """
     version: int = 0
     type: Literal["DailyRank"] = "DailyRank"
 
@@ -804,23 +1163,20 @@ class HandleNewDailyRank(HandleNewDailyM):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         return(
@@ -833,6 +1189,30 @@ class HandleNewDailyRank(HandleNewDailyM):
     
 @dataclass(frozen=True)
 class DailyRms(DailyM):
+    """
+    >>> ord = FutDailyRx.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyRms.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-rx-rms-4' [f64]
+    [
+        0.007817
+        null
+        null
+        0.012045
+        0.0121
+        0.011903
+        0.010457
+        0.011816
+    ]
+    """
     version: int = 0
     type: Literal["DailyRms"] = "DailyRms"
 
@@ -853,23 +1233,20 @@ class HandleNewDailyRms(HandleNewDailyM):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         return(
@@ -881,6 +1258,30 @@ class HandleNewDailyRms(HandleNewDailyM):
 
 @dataclass(frozen=True)
 class DailyRng(DailyM):
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyRng.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-rng-4' [f64]
+    [
+        60.5
+        null
+        null
+        97.25
+        11.0
+        67.0
+        87.25
+        203.5
+    ]
+    """
 
     params: DailyRngParams
 
@@ -898,52 +1299,29 @@ class DailyRng(DailyM):
     ) -> HandleNewDailyRng:
         return HandleNewDailyRng()
     
-    @overload
     @classmethod
     def new(
         cls,
-        parent: EngineRoot | Object,
-        t: None = None,
+        parent: Daily,
         window: int | None = None,
         width: float | None = None,
-    ): ...
-    @overload
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ],
-        window: int | None = None,
-        width: float | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ): ...
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ] | None = None,
-        window: int | None = None,
-        width: float | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
+        project: Project | None = None,
     ):
-        if isinstance(parent, EngineRoot):
-            assert t is not None, t
-            parent = t(parent, *args, **kwargs)
+        params=DailyRngParams(
+            window=window,
+            width=width,
+        )
+        assert cls.SUFFIX != "M", cls
+        path = parent.extend_path(
+            params.build_path(cls)
+        )
+        if project is not None:
+            path = project.extend_path(path)
         return cls(
-            path=parent.extend_path(cls.params_suffix(
-                window=window,
-            )),
+            path=path,
             parent=parent,
-            params=DailyRngParams(
-                window=window,
-                width=width,
-            ),
+            params=params,
+            project=project,
         )
     
     
@@ -955,6 +1333,22 @@ class DailyRngParams(DailyMParams):
     window: int | None = None
     width: float | None = None
 
+    def build_path(
+        self,
+        cls: Type[DailyRng],
+    ):
+        window = self.window
+        width = self.width
+        if window is None:
+            params = "ex"
+        else:
+            params = str(window)
+        return f"{cls.SUFFIX}-" + params + (
+            ""
+            if width is None
+            else f"-{width}"
+        )
+
 
 @dataclass(frozen=True)
 class HandleNewDailyRng(HandleNewDailyM):
@@ -962,22 +1356,19 @@ class HandleNewDailyRng(HandleNewDailyM):
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyRng,
-        domain: Domain,
     ) -> pl.DataFrame:
         return self._calc_df(
             df,
             event,
             obj,
-            domain,
         )
     def _calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyRng,
-        domain: Domain,
     ) -> pl.DataFrame:
         params = obj.params
         e = pl.col(VALUE)
@@ -1017,6 +1408,30 @@ class HandleNewDailyRng(HandleNewDailyM):
 
 @dataclass(frozen=True)
 class DailySDev(DailyM):
+    """
+    >>> ord = FutDailyRx.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailySDev.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-rx-sdev-4' [f64]
+    [
+        0.009001
+        null
+        null
+        0.011345
+        0.010688
+        0.014262
+        0.012023
+        0.009659
+    ]
+    """
     version: int = 0
     type: Literal["DailySDev"] = "DailySDev"
 
@@ -1036,23 +1451,20 @@ class HandleNewDailySDev(HandleNewDailyM):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         return(
@@ -1063,6 +1475,30 @@ class HandleNewDailySDev(HandleNewDailyM):
         )
 @dataclass(frozen=True)
 class DailySkew(DailyM):
+    """
+    >>> ord = FutDailyRx.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailySkew.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-rx-skew-4' [f64]
+    [
+        0.15138
+        null
+        null
+        2.6070e-14
+        3.3046e-14
+        0.073938
+        0.464041
+        -0.228863
+    ]
+    """
     version: int = 0
     type: Literal["DailySkew"] = "DailySkew"
 
@@ -1084,23 +1520,20 @@ class HandleNewDailySkew(HandleNewDailyM):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         return(
@@ -1113,6 +1546,30 @@ class HandleNewDailySkew(HandleNewDailyM):
 
 @dataclass(frozen=True)
 class DailyVar(DailyM):
+    """
+    >>> ord = FutDailyRx.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyVar.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-rx-var-4' [f64]
+    [
+        0.000081
+        null
+        null
+        0.000129
+        0.000114
+        0.000203
+        0.000145
+        0.000093
+    ]
+    """
     version: int = 0
     type: Literal["DailyVar"] = "DailyVar"
 
@@ -1133,23 +1590,20 @@ class HandleNewDailyVar(HandleNewDailyM):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         return(
@@ -1161,6 +1615,30 @@ class HandleNewDailyVar(HandleNewDailyM):
 
 @dataclass(frozen=True)
 class DailyZ(DailyM):
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyZ.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-z-4' [f64]
+    [
+        0.406191
+        null
+        null
+        0.707107
+        0.707107
+        -1.141092
+        -1.083191
+        -1.346812
+    ]
+    """
     version: int = 0
     type: Literal["DailyZ"] = "DailyZ"
 
@@ -1181,23 +1659,20 @@ class HandleNewDailyZ(HandleNewDailyM):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         mu = pl.col(VALUE).rolling_mean(
@@ -1218,6 +1693,30 @@ class HandleNewDailyZ(HandleNewDailyM):
     
 @dataclass(frozen=True)
 class DailyZW(DailyM):
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyZW.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-zw-4' [f64]
+    [
+        0.406191
+        null
+        null
+        0.707107
+        0.707107
+        -1.141092
+        -1.083191
+        -1.346812
+    ]
+    """
     version: int = 0
     type: Literal["DailyZW"] = "DailyZW"
 
@@ -1238,23 +1737,20 @@ class HandleNewDailyZW(HandleNewDailyM):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyM,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         mu = pl.col(VALUE).rolling_mean(
@@ -1287,33 +1783,14 @@ class DailyRZParams(DailyMParams):
     symmetric: bool = True
     rescale: bool = False
 
-@dataclass(frozen=True)
-class DailyRZ(DailyM):
-
-    params: DailyRZParams
-
-    version: int = 0
-    type: Literal["DailyRZ"] = "DailyRZ"
-
-    SUFFIX: ClassVar[str] = "rz"
-
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyRZSnap"] = "DailyRZSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyRZ:
-        return HandleNewDailyRZ()
-    
-    @classmethod
-    def params_suffix(
-        cls,
-        window: int | None = None,
-        width: float = 0.25,
-        symmetric: bool = True,
-        rescale: bool = False,
+    def build_path(
+        self,
+        cls: Type[DailyRZ],
     ):
+        window = self.window
+        width = self.width
+        symmetric = self.symmetric
+        rescale = self.rescale
         if window is None:
             params = "ex"
         else:
@@ -1331,65 +1808,78 @@ class DailyRZ(DailyM):
             if rescale
             else ""
         )
+
+@dataclass(frozen=True)
+class DailyRZ(DailyM):
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyRZ.new(ord, window=4)
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd-rz-4-0.25-sym' [f64]
+    [
+        0.285714
+        null
+        null
+        2.0
+        2.0
+        -3.343284
+        -1.512243
+        -3.825922
+    ]
+    """
+
+    params: DailyRZParams
+
+    version: int = 0
+    type: Literal["DailyRZ"] = "DailyRZ"
+
+    SUFFIX: ClassVar[str] = "rz"
+
+    @dataclass(frozen=True)
+    class Snap(Daily.Snap):
+        type: Literal["DailyRZSnap"] = "DailyRZSnap"
+ 
+    def handler_object_new(
+        self
+    ) -> HandleNewDailyRZ:
+        return HandleNewDailyRZ()
     
-    @overload
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: None = None,
-        window: int | None = None,
-        width: float = 0.25,
-        symmetric: bool = True,
-        rescale: bool = False,
-    ): ...
     
-    @overload
     @classmethod
     def new(
         cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ],
+        parent: Daily,
         window: int | None = None,
         width: float = 0.25,
         symmetric: bool = True,
         rescale: bool = False,
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ): ...
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ] | None = None,
-        window: int | None = None,
-        width: float = 0.25,
-        symmetric: bool = True,
-        rescale: bool = False,
-        *args: P.args,
-        **kwargs: P.kwargs,
+        project: Project | None = None,
     ):
-        if isinstance(parent, EngineRoot):
-            assert t is not None, t
-            parent = t(parent, *args, **kwargs)
+        params=DailyRZParams(
+            window=window,
+            width=width,
+            symmetric=symmetric,
+            rescale=rescale,
+        )
+        assert cls.SUFFIX != "M", cls
+        path = parent.extend_path(
+            params.build_path(cls)
+        )
+        if project is not None:
+            path = project.extend_path(path)
         return cls(
-            path=parent.extend_path(cls.params_suffix(
-                window=window,
-                width=width,
-                symmetric=symmetric,
-                rescale=rescale,
-            )),
+            path=path,
             parent=parent,
-            params=DailyRZParams(
-                window=window,
-                width=width,
-                symmetric=symmetric,
-                rescale=rescale,
-            ),
+            params=params,
+            project=project,
         )
     
 @dataclass(frozen=True)
@@ -1398,23 +1888,20 @@ class HandleNewDailyRZ(HandleNewDailyM):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyRZ,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyRZ,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         assert params.width is not None, params
@@ -1464,6 +1951,18 @@ class HandleNewDailyRZ(HandleNewDailyM):
 
 @dataclass(frozen=True)
 class DailyRZW(DailyRZ):
+    """
+    >>> ord = FutDailyOrdinal.new(
+    ...     symbol="ES",
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd"
+    ... )
+    >>> obj = DailyRZW.new(ord, window=4)
+    >>> Graph().with_obj(obj)
+    """
+    # .sync()
 
     params: DailyRZParams
 
@@ -1487,23 +1986,20 @@ class HandleNewDailyRZW(HandleNewDailyM):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyRZ,
-        domain: Domain,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
             obj,
-            domain,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: DailyRZ,
-        domain: Domain,
     ) -> pl.Expr:
         params = obj.params
         raise NotImplementedError()
@@ -1542,7 +2038,6 @@ __all__ = [
     "DailyRngParams",
     "DailyRng",
     "HandleNewDailyRng",
-    "DailyRng",
     "HandleNewDailySDev",
     "DailySDev",
     "HandleNewDailySkew",
@@ -1557,4 +2052,5 @@ __all__ = [
     "DailyZW",
     "HandleNewDailyRZW",
     "DailyRZW",
+    "DailyOsc"
 ]

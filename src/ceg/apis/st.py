@@ -84,9 +84,18 @@ def _library(
 def library(mock: bool = False):
     return _library(_streamlit, mock=mock)
 
-def cache():
-    # TODO: move to shared utils lib
-    if os.environ.get("STREAMLIT") == "true":
+import warnings
+def in_streamlit():
+    if bool(os.environ.get("MOCK_STREAMLIT")):
+        return False
+    with warnings.catch_warnings():
+        import streamlit as st
+        warnings.simplefilter("ignore")
+        return st.context.timezone_offset is not None
+
+
+def cache(streamlit: bool | None = None):
+    if in_streamlit() and streamlit != False:
         def st_decorator(f):
             st = library()
             return st.cache_data(f)
@@ -96,4 +105,4 @@ def cache():
             return lru_cache(maxsize=512)(f)
         return lru_decorator
     
-__all__ = ["cache", "library"]
+__all__ = ["cache", "library", "in_streamlit"]

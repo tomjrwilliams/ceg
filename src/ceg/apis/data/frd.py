@@ -21,7 +21,10 @@ from .. import s3
 
 from .. import logs
 
-logger, log_kw = logs.prepare_logger(__file__)
+logger, log = logs.logger(
+    __file__,
+    streams=dict(formatter=True),
+)
 
 # TZ = US Eastern
 
@@ -242,7 +245,7 @@ def file_stem(
         suffix_file = suffixes.get(suffix)
 
     file_stem = f"{symbol}_{snap}_{freq}"
-    if suffix_file is not None:
+    if suffix_file is not None and len(suffix_file):
         file_stem = f"{file_stem}_{suffix_file}"
     
     return file_stem
@@ -484,6 +487,9 @@ def read_file(
     end: dt.date | None = None,
     fields: list[str] | None = None,
 ):
+    log("INFO")( read_data=f"{folder} {symbol}" + (
+        "" if suffix is None else f" {suffix}"
+    ))
     if freq == "1day":
         if os.environ.get("DATA_SOURCE_FRD") == "AWS":
             return read_file_s3(

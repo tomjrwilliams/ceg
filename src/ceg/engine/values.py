@@ -8,6 +8,7 @@ from typing import (
     Protocol,
     Callable,
     Any,
+    Sequence,
     overload,
     cast,
     final,
@@ -29,9 +30,9 @@ else:
 
 from frozendict import frozendict
 
-from ..apis import t
+from .. import apis
+from ..apis import t, kv, assert_is
 from ..apis.t import ndarray, pl as pl_types
-from ..apis import kv
 
 import os
 TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
@@ -130,7 +131,7 @@ class Value:
 
 @dataclass(frozen=True)
 class ValueKeyVal(
-    kv.KeyValStrKeyIO[int, t.ValI, Value]
+    kv.KeyValStrKeyIO[int, t.ValI, t.ValO]
 ):
     type_id: Type[int] = int
     type_key_i: Type[str] = str
@@ -146,7 +147,7 @@ V_KV = TypeVar("V_KV", bound=ValueKeyVal)
 
 # TODO: possibly suffix with asbytes
 @dataclass(frozen=True)
-class ValueKeyValJSON(ValueKeyVal[bytes]):
+class ValueKeyValJSON(ValueKeyVal[bytes, Value]):
 
     type_val_i: Type[bytes] = bytes
     
@@ -227,7 +228,8 @@ class ValueNumPy(Value):
 class ValueKeyChunkNumPyF64(
     kv.KeyChunk[
         int, str, bytes, str, ValueNumPy, float
-    ]
+    ],
+    ValueKeyVal[bytes, ValueNumPy],
 ):
     type_id: Type[int] = int
     type_key_i: Type[str] = str
@@ -305,7 +307,7 @@ class ValueKeyChunkNumPySQLite( # TODO: f64?
     ValueKeyChunkNumPyF64,
     kv.SQLiteKeyChunk[
         int, str, bytes, str, ValueNumPy, float
-    ]
+    ],
 ):
     def set_from_df(
         self,
@@ -315,7 +317,7 @@ class ValueKeyChunkNumPySQLite( # TODO: f64?
         chunk: int | None = None,
     ) -> ValueNumPy:
         # : F64_1D
-        v_np: np.ndarray = df.select(k).to_numpy().T[0]
+        v_np: np.ndarray = df.get_column(k).to_numpy()
         v = ValueNumPy(obj, t.ndarray.cast(v_np))
         return self.set(obj, v, chunk)
 
@@ -347,22 +349,13 @@ class ValuePlDataFrame(Value):
         repr: bool = False,
         round: int | None = None
     ):
-        r: dict = self.df.row(i, named=True)
-        if not len(keys):
-            keys = tuple(r.keys())
-        if round:
-            r = {
-                k: (
-                    v if not isinstance(v, float)
-                    else f_round(v, round)
-                )
-                for k, v in r.items()
-            }
-        if repr:
-            for k, v in r.items():
-                print(k, v)
-            return
-        return r
+        return apis.pl.get_row(
+            self.df,
+            i=i,
+            *keys,
+            repr=repr,
+            round=round
+        )
     
     def head(self, n: int) -> pl.DataFrame:
         return self.df.head(n)
@@ -387,7 +380,8 @@ class ValuePlDataFrame(Value):
     
 @dataclass(frozen=True)
 class ValueKeyValDfSQLite(
-    kv.SQLiteKeyVal[int, str, bytes, str, ValuePlDataFrame]
+    ValueKeyVal[bytes, ValuePlDataFrame],
+    kv.SQLiteKeyVal[int, str, bytes, str, ValuePlDataFrame],
 ):
     """
     >>> j, k, l, updated = ("j", "k", "l", [])
@@ -431,12 +425,16 @@ class ValueKeyValDfSQLite(
         return k
 
     def encode_val(self, k: str, v: ValuePlDataFrame) -> bytes:
-        return v.df.serialize()
+        b = io.BytesIO()
+        # return v.df.serialize()
+        v.df.write_ipc_stream(b)
+        return b.getvalue()
 
     def decode_val(
         self, k: str, v: bytes
     ) -> ValuePlDataFrame:
-        df = pl.DataFrame.deserialize(io.BytesIO(v))
+        # df = pl.DataFrame.deserialize(io.BytesIO(v))
+        df = pl.read_ipc_stream(v)
         return ValuePlDataFrame.new(k, df)
     
     @classmethod
@@ -460,11 +458,13 @@ class ValueKeyValDfSQLite(
         obj: str,
     ) -> ValuePlDataFrame:
         v = ValuePlDataFrame.new(obj, df)
-        return self.set(obj, v)
+        return assert_is(
+            self.set(obj, v), ValuePlDataFrame
+        )
     
 @dataclass(frozen=True)
 class ValuePlSeries(Value):
-    ser: pl_types.Series
+    _ser: pl_types.Series | pl_types.DataFrame
 
     start: Any | None = None
     end: Any | None = None
@@ -475,9 +475,62 @@ class ValuePlSeries(Value):
     def tail(self, n: int) -> pl.Series:
         return self.ser.tail(n)
 
+    @property
+    def ser(self) -> pl.Series:
+        ser = self._ser
+        if isinstance(ser, pl.Series):
+            return ser
+        return ser.get_column(self.obj)
+
+    @property
+    def df(self) -> pl.DataFrame:
+        ser = self._ser
+        if isinstance(ser, pl.Series):
+            return ser.alias(self.obj).to_frame()
+        return ser
+    
+    def to_df(
+        self,
+        pipe: Callable[
+            [pl.Series | pl.Expr],
+            pl.Series | pl.Expr
+        ] | None = None,
+        alias: str | None = None,
+        with_cols: Sequence[pl.Series | pl.Expr] | None = None,
+    ):
+        if with_cols is None:
+            with_cols = []
+        ser = self._ser
+        if isinstance(ser, pl.Series):
+            if pipe is not None:
+                ser = pipe(ser)
+            return assert_is(ser, pl.Series).alias(
+                alias or self.obj
+            ).to_frame().with_columns(*with_cols)
+        if pipe is not None:
+            e = pl.col(self.obj).pipe(pipe)
+            if alias is not None:
+                e = e.alias(alias)
+            return ser.select(e, *with_cols)
+        if alias is not None:
+            return ser.select(
+                pl.col(self.obj).alias(alias), *with_cols
+            )
+        return ser.with_columns(*with_cols)
+
     @classmethod
-    def new(cls, k: str, ser: pl.Series, **kwargs) -> ValuePlSeries:
-        return cls(k, t.pl.Series.cast(ser), **kwargs)
+    def new(
+        cls, 
+        k: str, 
+        ser: pl.Series | pl.DataFrame,
+        **kwargs
+    ) -> ValuePlSeries:
+        v = (
+            t.pl.Series.cast(ser)
+            if isinstance(ser, pl.Series)
+            else t.pl.DataFrame.cast(ser)
+        )
+        return cls(k, v, **kwargs)
     
     @classmethod
     def synthetic(cls, ser: pl.Series, **kwargs) -> ValuePlSeries:
@@ -495,7 +548,8 @@ class ValuePlSeries(Value):
 class ValueKeyChunkPlSeriesF64(
     kv.KeyChunk[
         int, str, bytes, str, ValuePlSeries, float
-    ]
+    ],
+    ValueKeyVal[bytes, ValuePlSeries],
 ):
     type_id: Type[int] = int
     type_key_i: Type[str] = str
@@ -517,13 +571,17 @@ class ValueKeyChunkPlSeriesF64(
         return k
 
     def encode_val(self, k: str, v: ValuePlSeries) -> bytes:
-        return pl.DataFrame({k: v.ser}).serialize()
+        # return pl.DataFrame({k: v.ser}).serialize()
+        b = io.BytesIO()
+        v.ser.alias(k).to_frame().write_ipc_stream(b)
+        return b.getvalue()
 
     def decode_val(
         self, k: str, v: bytes
     ) -> ValuePlSeries:
-        df = pl.DataFrame.deserialize(io.BytesIO(v))
-        return ValuePlSeries.new(k, df.get_column(k))
+        # df = pl.DataFrame.deserialize(io.BytesIO(v))
+        df = pl.read_ipc_stream(v)
+        return ValuePlSeries.new(k, df)
     
     def init_val(self) -> ValuePlSeries:
         return ValuePlSeries.new("", pl.Series("", [], dtype=pl.Float64))
@@ -569,9 +627,11 @@ class ValueKeyChunkPlSeriesF64(
     ) -> ValuePlSeries:
         return ValuePlSeries(
             acc.obj, 
-            acc.ser.extend(val.ser)
-            if tail
-            else val.ser.extend(acc.ser)
+            pl_types.Series.cast(
+                acc.ser.extend(val.ser)
+                if tail
+                else val.ser.extend(acc.ser)
+            )
         )
 
 @final
@@ -592,7 +652,7 @@ class ValueKeyChunkPlSeriesSQLite( # TODO: f64?
     ) -> ValuePlSeries:
         v_s = df.get_column(k)
         v = ValuePlSeries.new(obj, v_s)
-        return self.set(obj, v, chunk)
+        return assert_is(self.set(obj, v, chunk), ValuePlSeries)
     
     @classmethod
     def new(
@@ -600,10 +660,11 @@ class ValueKeyChunkPlSeriesSQLite( # TODO: f64?
         db: str,
         size: int = 32,
         table: str = "ChunksPlSeriesF64",
+        on_update: Callable[[str, ValuePlSeries, int], None] | None = None
     ) -> ValueKeyChunkPlSeriesSQLite:
         self = cls(config=kv.SQLiteKeyChunkConfig(
-            size=size, db=db,name=table
-        ))
+            size=size, db=db,name=table, 
+        ), on_update=on_update)
         return cast(ValueKeyChunkPlSeriesSQLite, self.prepare())
 
 

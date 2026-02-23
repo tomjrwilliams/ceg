@@ -3,6 +3,7 @@
 import os, sys, signal
 sys.path.append("./src")
 
+import json
 from typing import Callable
 from pathlib import Path
 
@@ -38,22 +39,46 @@ if __name__ == "__main__":
 
     import ceg
 
-    project = ceg.app.dev.PROJECTS[project_name]()
+    streamlit = ceg.apis.st.in_streamlit()
+
+    logger, log = ceg.apis.logs.logger(
+        __file__, streams=dict(formatter=True)
+    )
+    PROJECTS = {}
+    Project = ceg.app.dev.PROJECTS[project_name]
     
-    if len(args) > 1:
-        command = args[1]
-        command_args = args[2:]
-        if command == "reset":
-            project.reset()
-        if len(command_args):
-            if command_args[0] == "die":
-                os.kill(os.getpid(), signal.SIGINT)
+    os.environ["STREAMLIT"] = str(streamlit)
 
-    app = ceg.objs.vis.explorer.prepare_app(
-        app_name,
-        app_cache,
-        project.domains,
-        suffix_root = False,
-    ).run()
+    args_fp = Path("./src/ceg/app/dev/ARGS.json")
+    if args_fp.exists():
+        with args_fp.open('r') as f:
+            args = json.load(f)
+    else:
+        args = {}
 
-# py -m streamlit run ./src/ceg/app/dev/run.py p001 reset
+    command = args.get("command", None)
+
+    if command == "reset":
+        log("INFO")( command="reset")
+        ceg.vis.explorer.load_page(
+            None, Project, reset=True
+        )
+
+        if streamlit:
+            log("INFO")(clearing_cache="streamlit")
+            ceg.apis.st.library().cache_data.clear()
+        
+    if "die" in args:
+        log("INFO")( command="die")
+        os.kill(os.getpid(), signal.SIGINT)
+
+    if streamlit:
+        log("INFO")( running_app=app_name)
+        app = ceg.vis.explorer.prepare_app(
+            app_name,
+            app_cache,
+            Project,
+            suffix_root = False,
+        ).run()
+
+# py -m streamlit run ./src/ceg/app/dev/run.py p001

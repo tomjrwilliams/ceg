@@ -279,7 +279,7 @@ def lines(
     page = (
         app.model.Model.new(name, shared)
         .with_universe(data.bars.UNIVERSE)
-        .with_functions(cast(app.model.Universe, frozendict({
+        .with_functions(cast(app.model.Collection, frozendict({
             "date": func.dates.daily.loop,
             "spread": func.binary.subtract.bind,
             "spread_vec": func.binary.subtract_vec_i.bind,

@@ -26,7 +26,7 @@ from pydantic import (
 )
 from frozendict import frozendict
 
-from ..apis import kv
+from ..apis import kv, assert_is
 
 import os
 TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
@@ -37,9 +37,11 @@ TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
 class Dependency:
     obj: str
     depends: str
-    active: bool = True
-    parent: bool = False
-    ancestor: bool = False
+    direct: bool = True
+    # direct is used to indicate if triggers, or not
+    # as if not, then used to indicate who creates the value, for traversign event history when debugging
+
+    # TODO: so need to fill out dependenices for non directly created (ie. parent often)
     
     # NOTE: event types, used to filter without .handlers()
     events: tuple[str, ...] | None = None
@@ -81,9 +83,10 @@ class Dependency:
     def parse_json_as(
         cls,
         data: str | bytes | bytearray,
-        type: TDependency,
+        type: Type[TDependency],
     ) -> TDependency:
-        return type.parse_json(data, type.parser())
+        v = type.parse_json(data, type.parser())
+        return assert_is(v, type)
 
     @classmethod
     def parse_json_as_self(

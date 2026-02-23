@@ -3,7 +3,8 @@ from typing import TypeVar
 from dataclasses import dataclass, replace
 from functools import wraps
 import polars as pl
-import streamlit as st
+from ...apis.st import cache, library
+st = library()
 
 import plotly
 import plotly.express

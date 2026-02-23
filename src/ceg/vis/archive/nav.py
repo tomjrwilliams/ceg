@@ -1,6 +1,7 @@
 from typing import Callable, Any, NamedTuple
 from frozendict import frozendict
-import streamlit as st
+from ...apis.st import cache, library
+st = library()
 
 from streamlit.navigation.page import StreamlitPage
 

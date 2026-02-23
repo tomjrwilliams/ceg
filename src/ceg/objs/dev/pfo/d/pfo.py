@@ -30,23 +30,25 @@ import numpy as np
 import polars as pl
 
 from ..... import apis
-from .....apis import t
-from .....apis import kv
+from .....apis import assert_is, t, kv, logs
 from .....engine import *
 
 from ...calc import *
 
-from ..bt import *
 from .core import *
 from .bt import *
+
+logger, log = logs.logger(
+    __file__,
+    streams=dict(formatter=True),
+)
 
 #  ------------------
 
 
 @dataclass(frozen=True)
 class DailyPfolio(
-    UseRootConfigs,
-    DependsSelfNew,
+    UseRootStorage,
     DependsParent
 ):
     parent: DailyBtUvar | DailyBtMvar | str
@@ -59,17 +61,10 @@ class DailyPfolio(
         type: Literal["DailyPfolioSnap"] = "DailyPfolioSnap"
 
     def get_parent(
-        self, domain: Domain
+        self
     ) -> DailyBtUvar | DailyBtMvar:
-        return domain.get(self.parent, DailyBtUvar | DailyBtMvar)
-    
-    def get_snap(
-        self,
-        domain: Domain,
-        t: Type[Daily.Snap] | None = None,
-    ) -> DailyPfolio.Snap | None:
-        return self.snap_key_val(domain).get(self.path, DailyPfolio.Snap)
-    
+        return context.get().get(self.parent, DailyBtUvar | DailyBtMvar)
+
     @classmethod
     def new(
         cls,
@@ -80,14 +75,8 @@ class DailyPfolio(
             path=parent.extend_path("pf"),
         )
     
-    def depends(self, domain: Domain) -> list[Dependency]:
-        return (
-            self.depends_self(domain)
-            + self.depends_parent(domain)
-        )
-    
-    def depends_parent(self, domain: Domain) -> list[Dependency]:
-        parent = self.get_parent(domain)
+    def depends(self) -> list[Dependency]:
+        parent = self.get_parent()
         rx = DailyBtRx.new(parent)
         return [
             Dependency(
@@ -103,19 +92,13 @@ class DailyPfolio(
     ) -> HandleNewDailyPfolio:
         return HandleNewDailyPfolio()
 
-    def handlers(self, event: Event, domain: Domain) -> list[Handler]:
-        res: list[Handler] = []
+    def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ValueUpdate):
-            # assert self.get_parent(domain).path == event.obj, (self, event)
-            res.append(self.handler_object_new())
-        elif isinstance(event, ObjectChange):
-            # TODO: throw? unless only chunk change
-            # then just rechunk
-            # or backend type / loc, then move
-            raise ValueError((self, event))
-        return res
+            # assert self.get_parent().path == event.obj, (self, event)
+            return self.handler_object_new()
+        raise ValueError((self, event))
     
-    # def explorer_df(self, domain: Domain):
+    # def explorer_df(self):
 
     #     # TODO: return df with signal, scale, etc.
 
@@ -125,13 +108,11 @@ class DailyPfolio(
 
 def recurse_bt_pos(
     bt_pos: DailyBtPos,
-    domain: Domain,
     spec: Backtest,
     parent: str | None = None,
     acc: pl.DataFrame | None = None,
 ):
     df_pos = daily_pl_values(
-        domain,
         "df",
         bt_pos,
         alias=VALUE,
@@ -144,17 +125,26 @@ def recurse_bt_pos(
             coalesce=True,
         ).with_columns(
             pl.col(VALUE)
-            .mul(1 if parent is None else pl.col(parent))
+            .mul(
+                1 if parent is None 
+                else pl.col(parent)
+                .fill_nan(None)
+                .fill_null(1)
+            )
             .alias(VALUE)
         )
     else:
         acc = df_pos
 
-    univ = bt_pos.get_parent(domain).get_parent(domain)
+    univ = bt_pos.get_parent().get_parent()
+
+    # spec has to be from the comb?
+    # rx is then bt.parent().params().rx(coll).path
 
     if spec.key is not None:
-        assert spec.rx is not None, spec
-        obj_rx = univ.objects[spec.rx]
+        obj_rx = spec.rx(univ, Daily).path
+        # assert spec.rx is not None, spec
+        # obj_rx = univ.objects[spec.rx]
         assert isinstance(obj_rx, str), spec
 
         key = f"{spec.key}={obj_rx}"
@@ -167,6 +157,8 @@ def recurse_bt_pos(
                 0 
                 if key not in acc.columns
                 else pl.col(key)
+                .fill_nan(None)
+                .fill_null(0)
             ))
             .alias(key)
         ).drop(VALUE)
@@ -174,55 +166,56 @@ def recurse_bt_pos(
     parent = bt_pos.path
     acc = acc.rename({VALUE: bt_pos.path})
 
-    univ = bt_pos.get_parent(domain).get_parent(domain)
-
-    assert spec.rx is not None, spec
-    obj_rx = domain.get(
-        univ.objects[spec.rx],
-        DailyBtRx,
-    )
+    univ = bt_pos.get_parent().get_parent()
+    
+    # assert spec.rx is not None, spec
+    obj_rx = spec.rx(univ, DailyBtRx)
+    # obj_rx = context.get().get(
+    #     univ.objects[spec.rx],
+    #     DailyBtRx,
+    # )
     assert obj_rx.index is None, obj_rx
     # TODO: ie. no mvar individual bt, only total or uvar
 
     return acc_bt_pos(
-        obj_rx.get_parent(domain),
-        domain,
+        obj_rx.get_parent(),
         parent=parent,
         acc=acc,
     ).drop(parent)
 
 def acc_bt_pos_uvar(
     bt: DailyBtUvar,
-    domain: Domain,
     parent: str | None = None,
     acc: pl.DataFrame | None = None,
 ):
 
     bt_pos = DailyBtPos.new(bt)
 
-    univ = bt.get_parent(domain)
-    spec = univ.bt[univ.uvar[bt.index].bt]
+    assert len(bt.args) == 1, bt
+
+    univ = bt.get_parent()
+    # spec = univ.bt[univ.uvar[bt.index].bt]
+    spec = Backtest.cast(univ.comb[bt.args[0]])
 
     return recurse_bt_pos(
-        bt_pos, domain, spec, parent=parent, acc=acc
+        bt_pos, spec, parent=parent, acc=acc
     )
 
 def acc_bt_pos_mvar(
     bt: DailyBtMvar,
-    domain: Domain,
     parent: str | None = None,
     acc: pl.DataFrame | None = None,
 ):
-    univ = bt.get_parent(domain)
+    univ = bt.get_parent()
     specs = [
-        univ.bt[i] for i in univ.mvar[bt.index].bts
+        # univ.bt[i] for i in univ.mvar[bt.index].bts
+        Backtest.cast(univ.comb[i]) for i in bt.args[1:]
     ]
     for i, spec in enumerate(specs):
         bt_pos = DailyBtPos.new(bt, index=i)
         
         acc = recurse_bt_pos(
             bt_pos,
-            domain,
             spec,
             parent=parent,
             acc = acc
@@ -233,16 +226,104 @@ def acc_bt_pos_mvar(
 
 def acc_bt_pos(
     bt: DailyBtUvar | DailyBtMvar,
-    domain: Domain,
     parent: str | None = None,
     acc: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     if isinstance(bt, DailyBtUvar):
-        return acc_bt_pos_uvar(bt, domain, parent, acc)
+        return acc_bt_pos_uvar(bt,parent, acc)
     elif isinstance(bt, DailyBtMvar):
-        return acc_bt_pos_mvar(bt, domain, parent, acc)
+        return acc_bt_pos_mvar(bt,parent, acc)
     else:
         raise ValueError(bt)
+
+@dataclass(frozen=True)
+class DailyPfolioSeries:
+    key: str
+    rx_path: str
+    asset: t.pl.DataFrame # rx
+    rx: t.pl.DataFrame # scaled
+    pos: t.pl.DataFrame
+
+@dataclass(frozen=True)
+class DailyPfolioData:
+    bt: DailyBtUvar | DailyBtMvar
+    start: dt.date
+    end: dt.date
+    series: list[DailyPfolioSeries]
+
+def get_daily_pfolio_data(
+    obj: DailyPfolio,
+):        
+    bt = obj.get_parent()
+
+    df_pos = acc_bt_pos(bt).sort(by="date")
+
+    (first, last) = df_pos.pipe(
+        apis.pl.select_min_max, "date", dt.date
+    )
+    df_pos = (
+        pl.select(pl.date_range(first, last).alias("date"))
+        .join(df_pos, on="date", how="left", coalesce=True)
+    )
+
+    res = []
+
+    for k_rx in df_pos.columns:
+        if k_rx == "date":
+            continue
+
+        df_pos = df_pos.with_columns(
+            pl.col(k_rx).alias("pos")
+        )
+
+        # log(get_pfo_data=k_rx)
+            
+        k, rx_path = k_rx.split("=")
+        obj_rx = context.get().get(rx_path, Daily)
+
+        df_asset = daily_pl_df(
+            obj_rx,alias="rx"
+        )
+        
+        df_rx = df_asset.join(
+            df_pos.select("date", "pos"),
+            on="date",
+            how="full",
+            coalesce=True,
+        ).sort(by="date")
+
+        v_pos, v_pos_null = apis.pl.to_numpy_with_null(
+            df_rx.get_column("pos")
+        )
+        v_rx, v_rx_null = apis.pl.to_numpy_with_null(
+            df_rx.get_column("rx")
+        )
+
+        df_rx = df_rx.with_columns(
+            pl.Series(
+                apis.perf.backtest_rx_pos(
+                    v_rx,
+                    v_pos,
+                    v_rx_null,
+                    v_pos_null,
+                )
+            ).alias("rx").fill_nan(None)
+        ).drop("pos")
+
+        # TODO: check sum!
+
+        res.append(DailyPfolioSeries(
+            k,
+            rx_path,
+            # k_rx = {k}={rx_path}
+            t.pl.DataFrame.cast(df_asset),
+            t.pl.DataFrame.cast(df_rx),
+            t.pl.DataFrame.cast(df_pos),
+        ))
+
+    return DailyPfolioData(bt, first, last, res)
+
+
 
 @dataclass(frozen=True)
 class HandleNewDailyPfolio(
@@ -251,102 +332,67 @@ class HandleNewDailyPfolio(
 
     def handle(
         self,
-        event: ObjectNew,
+        event: ObjectChange,
+        snap: DailyPfolio.Snap,
         obj: DailyPfolio,
-        domain: Domain,
     ):
-
-        snap = obj.get_snap(domain)
-
-        if snap is not None:
-            # NOTE: should already be handled?
-            return None
-            
-        bt = obj.get_parent(domain)
-
-        df_pos = acc_bt_pos(bt, domain).sort(by="date")
-
-        (first, last) = df_pos.pipe(apis.pl.select_min_max, "date", dt.date)
+    
+        data = assert_is(get_daily_pfolio_data(obj))
 
         dfs_rx = []
 
-        for k_rx in df_pos.columns:
-            if k_rx == "date":
-                continue
+        res: frozendict[
+            str, tuple[Snap, Event]
+        ] = frozendict()
 
-            df_pos = df_pos.with_columns(
-                pl.col(k_rx).alias("pos")
-            )
-                
-            k, rx_path = k_rx.split("=")
-            obj_rx = domain.get(rx_path, Daily)
+        for ser in data.series:
+            k = ser.key
 
-            df_rx = daily_pl_df(
-                obj_rx, domain, alias="rx"
-            )
-            
             obj_pos = DailyPfolioPos.new(obj, k)
             obj_rx = DailyPfolioRx.new(obj, k)
 
-            e_pos, _ = self.set_value_from_df(
+            context.get().with_obj(obj_pos)
+            context.get().with_obj(obj_rx)
+            
+            # log(handle_pfo=k)
+
+            _ = self.set_value_from_df(
                 obj_pos,
-                domain,
-                df_pos.select("date", "pos"),
+                ser.pos.select("date", "pos"),
                 "pos",
-                t = self.key_value_type(obj, domain),
-                publish=True,
+                t = self.key_value_type(obj),
             )
 
-            df_rx = df_rx.join(
-                df_pos.select("date", "pos"),
-                on="date",
-                how="full",
-                coalesce=True,
-            ).sort(by="date")
-
-            v_pos = df_rx.get_column("pos").to_numpy()
-            v_rx = df_rx.get_column("rx").to_numpy()
-
-            df_rx = df_rx.with_columns(
-                pl.Series(
-                    apis.perf.backtest_rx_pos(v_rx, v_pos)
-                ).alias("rx").fill_nan(None)
-            ).drop("pos")
-
-            e_rx, _ = self.set_value_from_df(
+            _ = self.set_value_from_df(
                 obj_rx,
-                domain,
-                df_rx,
+                ser.rx,
                 "rx",
-                t = self.key_value_type(obj, domain),
-                publish=True,
+                t = self.key_value_type(obj),
             )
 
-            (
-                obj_pos.snap_key_val(domain)
-                .set(obj_pos.path, type(obj_pos).Snap(
-                    event,
-                    obj_pos.path,
-                    dt.datetime.now(),
-                    first,
-                    last,
-                ))
+            res = ValueUpdate.from_snap(
+                replace(
+                    obj_rx.get_snap(DailyPfolioRx.Snap),
+                    first=data.start,
+                    last=data.end,
+                ),
+                into=res,
             )
-            (
-                obj_rx.snap_key_val(domain)
-                .set(obj_rx.path, type(obj_rx).Snap(
-                    event,
-                    obj_rx.path,
-                    dt.datetime.now(),
-                    first,
-                    last,
-                ))
+            res = ValueUpdate.from_snap(
+                replace(
+                    obj_pos.get_snap(DailyPfolioPos.Snap),
+                    first=data.start,
+                    last=data.end,
+                ),
+                into=res,
             )
 
-            dfs_rx.append(df_rx.rename({"rx": k_rx}))
+            dfs_rx.append(ser.rx.rename(
+                {"rx": f"{ser.key}={ser.rx_path}"}
+            ))
 
         df_rx = apis.pl.join_dfs(
-            *dfs_rx,
+            dfs_rx,
             on="date",
             how="full",
             coalesce=True,
@@ -368,38 +414,32 @@ class HandleNewDailyPfolio(
             .alias("rx")
         )
 
-        (
-            obj.snap_key_val(domain)
-            .set(obj.path, type(obj).Snap(
-                event,
-                obj.path,
-                dt.datetime.now(),
-                first,
-                last,
-            ), DailyPfolio.Snap)
+        res = ValueUpdate.from_snap(
+            replace(
+                snap,
+                first=data.start,
+                last=data.end,
+            ), into=res
         )
 
         pfo_rx = DailyPfolioRx.new(obj)
-        e_rx, _ = self.set_value_from_df(
+        context.get().with_obj(pfo_rx)
+        
+        _ = self.set_value_from_df(
             pfo_rx,
-            domain,
             df_rx,
             "rx",
-            t = self.key_value_type(obj, domain),
-            publish=True,
+            t = self.key_value_type(obj),
         )
-        (
-            pfo_rx.snap_key_val(domain)
-            .set(pfo_rx.path, type(pfo_rx).Snap(
-                event,
-                pfo_rx.path,
-                dt.datetime.now(),
-                first,
-                last,
-            ), DailyPfolioRx.Snap)
+        
+        res = ValueUpdate.from_snap(
+            replace(
+                pfo_rx.get_snap(DailyPfolioRx.Snap),
+                first=data.start,
+                last=data.end,
+            ), into=res
         )
-
-        return e_pos, e_rx
+        return res
     
 #  ------------------
 
@@ -419,8 +459,8 @@ class DailyPfolioPos(
     class Snap(Daily.Snap):
         type: Literal["DailyPfolioPosSnap"] = "DailyPfolioPosSnap"
 
-    def get_parent(self, domain: Domain) -> DailyPfolio:
-        return domain.get(
+    def get_parent(self) -> DailyPfolio:
+        return context.get().get(
             self.parent, DailyPfolio
         )
 
@@ -436,7 +476,7 @@ class DailyPfolioPos(
             key=key,
         )
     
-    def depends(self, domain: Domain) -> list[Dependency]:
+    def depends(self) -> list[Dependency]:
         return []
     
 @dataclass(frozen=True)
@@ -454,8 +494,8 @@ class DailyPfolioRx(
     class Snap(Daily.Snap):
         type: Literal["DailyPfolioRxSnap"] = "DailyPfolioRxSnap"
 
-    def get_parent(self, domain: Domain) -> DailyPfolio:
-        return domain.get(
+    def get_parent(self) -> DailyPfolio:
+        return context.get().get(
             self.parent, DailyPfolio
         )
 
@@ -472,7 +512,7 @@ class DailyPfolioRx(
             key=key,
         )
     
-    def depends(self, domain: Domain) -> list[Dependency]:
+    def depends(self) -> list[Dependency]:
         return []
     
 #  ------------------
@@ -482,6 +522,8 @@ __all__ = [
     "DailyPfolioPos",
     "DailyPfolioRx",
     "HandleNewDailyPfolio",
+    "DailyPfolioData",
+    "get_daily_pfolio_data",
 ]
 
 # TODO:

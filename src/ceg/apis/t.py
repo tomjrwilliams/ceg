@@ -118,6 +118,12 @@ class pl:
         @classmethod
         def cast(cls, v: polars.DataFrame) -> pl.DataFrame:
             return cls(v)
+        
+        @classmethod
+        def cast_opt(cls, v: polars.DataFrame | None) -> pl.DataFrame | None:
+            if v is None:
+                return v
+            return cls(v)
 
         @classmethod
         def validate(cls, v: Any, info: core_schema.ValidationInfo):
@@ -139,3 +145,36 @@ class pl:
                     ),
                 ]
             )
+        
+class frozen:
+    
+    class dict(frozendict[KeyO, ValO]):
+        """
+        pydantic enhanced frozendict
+        """
+
+        @classmethod
+        def cast(cls, v: frozendict[KeyO, ValO]) -> frozen.dict[KeyO, ValO]:
+            return cls(v)
+
+        @classmethod
+        def validate(cls, v: Any, info: core_schema.ValidationInfo):
+            if isinstance(v, frozendict):
+                return v
+            elif isinstance(v, dict):
+                return frozendict(v)
+            else:
+                raise ValueError((v, type(v)))
+
+        @classmethod
+        def __get_pydantic_core_schema__(
+            cls, source_type: Any, handler: GetCoreSchemaHandler
+        ) -> CoreSchema:
+            return core_schema.chain_schema(
+                [
+                    core_schema.with_info_plain_validator_function(
+                        cls.validate,
+                    ),
+                ]
+            )
+      

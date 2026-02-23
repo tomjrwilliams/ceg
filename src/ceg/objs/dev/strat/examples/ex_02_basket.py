@@ -8,21 +8,20 @@ from ...agg import *
 from ...pfo import *
 
 from ..assets import *
-from ..scales import *
+from ..calcs import *
 from ..signals import *
-from ..uvar import *
-from ..mvar import *
+from ..params import *
 from ..domain import *
 
 def ex_02_basket():
     """
-    >>> spec_es = StratParams(
+    >>> spec_es = Strategy(
     ...     asset=AssetConcrete("FUT", "ES"),
     ...     signal=SignalOsc(32, 96, 48),
     ...     scale=ScaleVol(span=48, ann=True),
     ...     rescale=ScaleVol(span=256, ann=True)
     ... )
-    >>> spec_tn = StratParams(
+    >>> spec_tn = Strategy(
     ...     asset=AssetConcrete("FUT", "TN"),
     ...     signal=SignalOsc(32, 96, 48),
     ...     scale=ScaleVol(span=48, ann=True),
@@ -34,9 +33,9 @@ def ex_02_basket():
     >>> dom, _, agg = dom.with_rx_agg(
     ...     Collection.new(univ.get_parent(dom), "rx"), bts
     ... )
-    >>> spec_b = BasketParams(
+    >>> spec_b = Basket(
     ...     asset=tuple([
-    ...         StratParams(asset=bt)
+    ...         Strategy(asset=bt)
     ...         for bt in bts
     ...     ]),
     ...     name="ES-TN",

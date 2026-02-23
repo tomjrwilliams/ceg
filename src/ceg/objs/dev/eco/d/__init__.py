@@ -1,4 +1,2 @@
-from .root import *
-from .fred import *
-
-from . import fred
+from .obs import *
+from . import obs

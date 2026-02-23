@@ -3,10 +3,16 @@ from . import core
 
 from . import p001
 from . import p002
-from . import p003
-from . import p004
+# from . import p003
+# from . import p004
+# from . import p005
+from . import p006
 
-# etc.
+# from . import p101
+
+# from . import p201
+# from . import p202
+
 
 from .core import PROJECTS
 

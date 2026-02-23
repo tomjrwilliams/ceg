@@ -43,19 +43,14 @@ class DailyEMEPParams(DailyEMParams):
     pspan: float | None = None
     palpha: float | None = None
 
-@dataclass(frozen=True)
-class DailyEMEP(DailyEM):
-
-    params: DailyEMEPParams
-
-    @classmethod
-    def params_suffix(
-        cls,
-        span: float | None = None,
-        alpha: float | None = None,
-        palpha: float | None = None,
-        pspan: float | None = None,
+    def build_path(
+        self,
+        cls: Type[DailyEM],
     ):
+        span= self.span
+        alpha= self.alpha
+        palpha= self.palpha
+        pspan= self.pspan
         i = apis.t.only_index_not_none(
             span, alpha, strict=True
         )
@@ -78,61 +73,39 @@ class DailyEMEP(DailyEM):
             raise ValueError(cls)
         return params
 
-    @overload
+@dataclass(frozen=True)
+class DailyEMEP(DailyEM):
+
+    params: DailyEMEPParams
+
+
     @classmethod
     def new(
         cls,
-        parent: EngineRoot | Object,
-        t: None = None,
+        parent: Daily,
         span: float | None = None,
         alpha: float | None = None,
         palpha: float | None = None,
         pspan: float | None = None,
-    ): ...
-    @overload
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ],
-        span: float | None = None,
-        alpha: float | None = None,
-        palpha: float | None = None,
-        pspan: float | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ): ...
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ] | None = None,
-        span: float | None = None,
-        alpha: float | None = None,
-        palpha: float | None = None,
-        pspan: float | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
+        project: Project | None = None,
     ):
-        if isinstance(parent, EngineRoot):
-            assert t is not None, t
-            parent = t(parent, *args, **kwargs)
+        params=DailyEMEPParams(
+            span=span,
+            alpha=alpha,
+            palpha=palpha,
+            pspan=pspan,
+        )
+        assert cls.SUFFIX != "M", cls
+        path = parent.extend_path(
+            params.build_path(cls)
+        )
+        if project is not None:
+            path = project.extend_path(path)
         return cls(
-            path=parent.extend_path(cls.params_suffix(
-                span=span,
-                alpha=alpha,
-            )),
+            path=path,
             parent=parent,
-            params=DailyEMEPParams(
-                span=span,
-                alpha=alpha,
-                palpha=palpha,
-                pspan=pspan,
-            ),
+            params=params,
+            project=project,
         )
     
 __all__ = [

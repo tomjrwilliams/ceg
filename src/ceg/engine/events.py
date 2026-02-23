@@ -6,6 +6,8 @@ from typing import (
     ClassVar,
     Literal,
     Protocol,
+    Callable,
+    SupportsIndex,
     overload,
     cast,
     final,
@@ -19,6 +21,9 @@ from pydantic import (
     Field,
 )
 
+import io
+from functools import partial
+
 if TYPE_CHECKING:
     from dataclasses import dataclass
 else:
@@ -27,7 +32,7 @@ from dataclasses import replace
 
 from frozendict import frozendict
 
-from ..apis import kv
+from ..apis import t, kv, assert_is
 
 import os
 TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
@@ -163,6 +168,26 @@ class EventQueue(
             replace(e, i=i) for e, i in zip(e_s, i_s)
         ]
 
+class EventList(list[Event]):
+    
+    @overload
+    def __getitem__(
+        self, i: SupportsIndex, /
+    ) -> Event: ...
+
+    @overload
+    def __getitem__(self, s: slice, /) -> EventList: ...
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            return EventList(list.__getitem__(self, key))
+        return assert_is(
+            list.__getitem__(self, key), Event
+        )
+    
+    def __add__(self, value: list[Event], /) -> EventList:
+        return EventList(list.__add__(self, value))
+
 @dataclass(frozen=True)
 class EventQueueSQLite(
     EventQueue,
@@ -206,10 +231,205 @@ class EventQueueSQLite(
         ), parser=parser)
         return cast(EventQueueSQLite, self.prepare())
 
+@dataclass(frozen=True)
+class EventKeyVal(
+    kv.KeyValStrKeyIO[int, t.ValI, EventList]
+):
+    type_id: Type[int] = int
+    type_key_i: Type[str] = str
+    type_val_i: Type[bytes]= bytes
+    type_key_o: Type[str] = str
+    type_val_o: Type[EventList] = EventList
+    type_val_t: Type[Event] = Event
+
+    parser: Type[EventParser] | None = None
+
+@dataclass(frozen=True)
+class EventKeyValBytes(EventKeyVal[bytes]):
+
+    def encode_val_type(self, t: Type[EventList]) -> Type[bytes]:
+        return bytes
+
+    def encode_val(self, k: str, v: EventList) -> bytes:
+        b =  bytearray()
+        sep = b'|||'
+        for e in v:
+            b.extend(e.dump_bytes() + sep)
+        return bytes(b)
+
+    def decode_val(
+        self, k: str, v: bytes
+    ) -> EventList:
+        bs = v.split(b'|||')
+        return EventList(map(
+            partial(
+                Event.parse_json, 
+                into=assert_is(self.parser),
+            ),
+            filter(lambda b: b != b'', bs),
+        ))
+
+@dataclass(frozen=True)
+class EventKeyValSQLite(
+    EventKeyValBytes,
+    kv.SQLiteKeyVal[int, str, bytes, str, EventList]
+):
+    """
+    >>> j, k, l, updated = ("j", "k", "l", [])
+    >>> @dataclass(frozen=True)
+    ... class ValueEx(Value):
+    ...     a: int
+    ...     type: Literal['Ex'] = Value.type_field("Ex")
+    >>> kv = ValueKeyValJSONSQLite.new(
+    ...     TEST_DB, 
+    ...     parser = ValueEx.parser(),
+    ...     on_update = lambda k, v: updated.append((k, v))
+    ... )
+    >>> kv.get(k)
+    >>> v = kv.set(k, ValueEx(k, 0.0))
+    >>> assert v == ValueEx(k, 0.0) == kv.get(k), kv.get(k)
+    >>> assert (1, ValueEx(k, 0.0)) == kv.iget(k), kv.iget(k)
+    >>> v = kv.set(j, ValueEx(j, 1.0))
+    >>> v = kv.set(k, ValueEx(k, 2.0))
+    >>> assert (2, ValueEx(j, 1.0)) == kv.iget(j)
+    >>> assert (1, ValueEx(k, 2.0)) == kv.iget(k)
+    >>> assert updated == [(k, ValueEx(k, 2.0))]
+    """
+
+    @classmethod
+    def new(
+        cls,
+        db: str, 
+        parser: Type[EventParser],
+        table: str = "EventsBytes",
+        on_update: Callable[
+            [str, EventList], None
+        ] | None = lambda k, es: None
+    ) -> EventKeyValSQLite:
+        self = cls(config=kv.SQLiteKeyValConfig(
+            db=db, name=table
+        ), on_update=on_update, parser=parser)
+        return cast(EventKeyValSQLite, self.prepare())
+
+
+@dataclass(frozen=True)
+class EventKeyChunk(
+    EventKeyValBytes,
+    kv.KeyChunk[
+        int, str, bytes, str, EventList, float
+    ]
+):
+    type_id: Type[int] = int
+    type_key_i: Type[str] = str
+    type_val_i: Type[bytes]= bytes
+    type_key_o: Type[str] = str
+    type_val_o: Type[EventList] = EventList
+    type_val_t: Type[Event] = Event
+
+    parser: Type[EventParser] | None = None
+
+    def encode_key_type(self, t: Type[str]) -> Type[str]:
+        return t
+
+    def encode_key(self, k: str) -> str:
+        return k
+
+    def decode_key(self, k: str) -> str:
+        return k
+    
+    def init_val(self) -> list[Event]:
+        return []
+
+    def chunk_val(self, acc: EventList, tail: bool = True) -> tuple[EventList, EventList | None]:
+        size = self.config.size
+        if len(acc) >= size * 2:
+            if tail:
+                # tail, body
+                return acc[-size:], acc[:-size]
+            else:
+                # head, body
+                return acc[:size], acc[size:]
+        return acc, None
+
+    def append_val(
+        self, val: Event, acc: EventList, tail: bool = True
+    ) -> tuple[EventList, EventList | None]:
+        acc = EventList(
+            acc + [val] if tail else [val] + acc
+        )
+        return self.chunk_val(acc, tail=tail)
+
+    def extend_val(
+        self, val: EventList, acc: EventList, tail: bool = True
+    ) -> tuple[EventList, EventList | None]:
+        
+        acc = (
+            acc + val if tail else val + acc
+        )
+        return self.chunk_val(acc, tail=tail)
+
+    def concat_val(
+        self, val: EventList, acc: EventList, tail: bool = True
+    ) -> EventList:
+        return (
+            acc + val if tail else val + acc
+        )
+
+@dataclass(frozen=True)
+class EventKeyChunkSQLite(
+    EventKeyChunk,
+    kv.SQLiteKeyChunk[
+        int, str, bytes, str, EventList, float
+    ]
+):
+    # TODO: changed
+    """
+    >>> import time
+    >>> j, k, l = ("j", "k", "l")
+    >>> @dataclass(frozen=True)
+    ... class EventI(Event):
+    ...     i: int | None = Event.i_field()
+    ...     type: Literal['A'] = Event.type_field("A")
+    >>> q = EventKeyChunkSQLite.new(TEST_DB, EventI.parser())
+    >>> q.head(1)
+    []
+    >>> q.tail(1)
+    []
+    >>> v = q.append(EventI(k))
+    >>> assert v == EventI(k) == q.head(1)[0]
+    >>> assert ([1], [EventI(k)]) == q.ihead(1)[:2]
+    >>> time.sleep(0.1)
+    >>> dt = datetime.datetime.now()
+    >>> time.sleep(0.1)
+    >>> _ = q.append(EventI(j))
+    >>> _ = q.append(EventI(l))
+    >>> q.tail(n=3, where_dt=[("gt", dt)])
+    [EventI(obj='l'), EventI(obj='j')]
+    >>> q.head(n=3, where_dt=[("gt", dt)])
+    [EventI(obj='j'), EventI(obj='l')]
+    """
+
+    @classmethod
+    def new(
+        cls,
+        db: str,
+        parser: Type[EventParser],
+        size: int = 32,
+        table: str = "EventsKV",
+    ) -> EventKeyChunkSQLite:
+        self = cls(config=kv.SQLiteKeyChunkConfig(
+            db=db, size=size, name=table
+        ), parser=parser)
+        return cast(EventKeyChunkSQLite, self.prepare())
 
 __all__ = [
     "EventParser",
     "Event",
+    "EventList",
     "EventQueue",
     "EventQueueSQLite",
+    "EventKeyVal",
+    "EventKeyValSQLite",
+    "EventKeyChunk",
+    "EventKeyChunkSQLite",
 ]

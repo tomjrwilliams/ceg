@@ -25,7 +25,7 @@ else:
 
 from frozendict import frozendict
 
-from ..apis import kv
+from ..apis import kv, t, assert_is
 from .events import *
 
 import os
@@ -78,8 +78,19 @@ class Snap:
     >>> Snap.parse_json(b.dump_bytes(), SnapParserAB) 
     SnapB(event=Event(obj='b'), obj='b', b=1.0)
     """
-    event: Event
     obj: str # NOTE: object path
+    latest: int = -1
+    handled: t.frozen.dict[str, int] = t.frozen.dict()
+
+    @classmethod
+    def new(
+        cls,
+        obj: str,
+        latest: int = -1,
+        handled: t.frozen.dict[str, int] = t.frozen.dict(),
+        **kwargs
+    ):
+        return cls(obj, latest, handled, **kwargs)
 
     @property
     def type(self) -> str: ...

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -30,7 +29,7 @@ import numpy as np
 import polars as pl
 
 from .. import apis
-from ..apis import kv
+from ..apis import t, kv, logs, assert_is
 
 from .objects import *
 from .depends import *
@@ -38,13 +37,15 @@ from .values import *
 from .events import *
 from .snaps import *
 
-from .d import *
+from .daily import *
 
 VALUE = "VALUE"
 
-from ..apis import logs
+logger, log = logs.logger(
+    __file__,
+    streams=dict(formatter=True),
+)
 
-logger, log_kw = logs.prepare_logger(__file__)
 
 class HasSetFromDf(Protocol):
     def set_from_df(
@@ -62,134 +63,84 @@ class HandleNewValueFromPl(Handler):
     def set_value_from_df(
         self,
         obj: Object,
-        domain: Domain,
         df: pl.DataFrame,
         col: str,
         t: Type[HasSetFromDf],
-        publish: bool = True,
     ):
-        key_val = obj.value_key_val(domain, t = t)
-
-        # TODO: assert df has length
-
-        # if isinstance(key_val, ValueKeyChunkPlSeriesSQLite):
-        #     v = key_val.set_from_df(
-        #         df, col, obj.path,
-        #     )
-        # elif isinstance(key_val, ValueKeyChunkNumPySQLite):
-
-        v = key_val.set_from_df(
-            df, col, obj.path,
+        key_val = obj.value_key_val(t=t)
+        return key_val.set_from_df(
+            df,
+            col,
+            obj.path,
         )
-        
-        if publish:
-            e = cast(
-                ValueUpdate,
-                obj.publish(ValueUpdate(obj.path), domain)
-            )
-        
-        return e, v
 
-    def key_value_type(
-        self, obj: Object, domain: Domain
-    ) -> Type[HasSetFromDf]:
+    def key_value_type(self, obj: Object) -> Type[HasSetFromDf]:
         # TODO: given parametrisation of object
         return ValueKeyChunkPlSeriesSQLite
 
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: Object,
-        domain: Domain,
     ) -> pl.Expr:
         raise ValueError(self)
 
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: Object,
-        domain: Domain,
     ) -> pl.DataFrame:
         # df = pl.DataFrame({VALUE: v.ser.fill_nan(None)})
         e = self.calc_expr(
             df,
             event,
             obj,
-            domain,
         )
         df = df.with_columns(
-            pl.when(pl.col(VALUE).is_null())
-            .then(None)
-            .otherwise(e)
-            .alias(VALUE)
+            pl.when(pl.col(VALUE).is_null()).then(None).otherwise(e).alias(VALUE)
         )
         return df
-    
-    
+
+
 @dataclass(frozen=True)
 class DailyWithDailyParent(
     DependsParentValue,
     Daily,
 ):
-    def get_parent(
-        self, domain: Domain
-    ) -> Daily:
-        return domain.get(self.parent, Daily)
-    
-    def depends(self, domain: Domain) -> list[Dependency]:
-        return (
-            self.depends_self(domain)
-            + self.depends_parent(domain)
-        )
-    
-    def handler_object_new(self) -> Handler: ...
+    def get_parent(self) -> Daily:
+        return context.get().get(self.parent, Daily)
 
-    def handlers(self, event: Event, domain: Domain) -> list[Handler]:
-        res: list[Handler] = []
 
-        if isinstance(event, ValueUpdate):
-            assert self.get_parent(domain).path == event.obj, (self, event)
-            res.append(self.handler_object_new())
-
-        elif isinstance(event, ObjectChange):
-            # TODO: throw? unless only chunk change
-            # then just rechunk
-            # or backend type / loc, then move
-            raise ValueError((self, event))
-        return res
 
 @dataclass(frozen=True)
 class HandleFromParent(Handler):
     pass
 
+
 @dataclass(frozen=True)
-class HandleFromParentPl(
-    HandleFromParent
-):
+class HandleFromParentPl(HandleFromParent):
 
     def get_parent_pl(
         self,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: Object,
-        domain: Domain,
+        parent: Object | None = None,
+        parent_snap: Snap | None = None,
     ):
-        
-        parent = obj.get_parent(domain)
-        assert parent is not None, obj
+        if parent is None:
+            parent = assert_is(obj.get_parent())
 
-        parent_snap = parent.get_snap(domain)
-        assert parent_snap is not None, parent_snap
+        if parent_snap is None:
+            parent_snap = assert_is(parent.get_snap())
 
-        v = (
-            parent.value_key_val(domain)
-            .get(parent.path)
-        )
+        v = parent.value_key_val().get(parent.path)
         assert isinstance(v, ValuePlSeries), v
 
         return v
-    
+
+
 @dataclass(frozen=True)
 class HandleNewValueFromParentPl(
     HandleNewValueFromPl,
@@ -197,109 +148,121 @@ class HandleNewValueFromParentPl(
 ):
     pass
 
-@dataclass(frozen=True)
-class HandleNewDailyFromDf(
-    Handler
-):
 
-    def set_snap_from_df(
+@dataclass(frozen=True)
+class HandleNewDailyFromDf(Handler):
+
+    def update_snap_from_df(
         self,
+        snap: Daily.Snap,
         df: pl.DataFrame,
-        event: ObjectNew,
-        obj: Daily,
-        domain: Domain,        
+        d_min: dt.date | None = None,
+        d_max: dt.date | None = None,
     ):
-        
-        d_min, d_max = df.pipe(
-            apis.pl.select_items,
-            (
-                pl.col("date").min(),
-                pl.col("date").max(),
-            ),
-            t=dt.date
+
+        if d_min is None or d_max is None:
+            d_min, d_max = df.pipe(
+                apis.pl.select_items,
+                (
+                    pl.col("date").min(),
+                    pl.col("date").max(),
+                ),
+                t=dt.date,
+            )
+
+        return replace(
+            snap,
+            first=d_min,
+            last=d_max,
         )
 
-        return (
-            obj.snap_key_val(domain)
-            .set(obj.path, type(obj).Snap(
-                event,
-                obj.path,
-                dt.datetime.now(),
-                d_min,
-                d_max,
-            ))
-        )
-    
+
 @dataclass(frozen=True)
-class HandleNewDailyFromDailyParent(
-    Handler
-):
+class HandleNewDailyFromDailyParent(Handler):
 
-    def set_snap_from_parent(
+    def update_snap_from_parent(
         self,
-        event: ObjectNew,
+        snap: Daily.Snap,
         obj: DailyWithDailyParent,
-        domain: Domain,        
+        parent: Daily | None = None,
+        parent_snap: Daily.Snap | None = None,
     ):
-        
-        parent = obj.get_parent(domain)
+        if parent_snap is None:
+            if parent is None:
+                parent = obj.get_parent()
 
-        parent_snap = parent.get_snap(domain)
-        assert parent_snap is not None, parent_snap
+            parent_snap = parent.get_snap()
+            assert parent_snap is not None, parent_snap
 
-        return (
-            obj.snap_key_val(domain)
-            .set(obj.path, type(obj).Snap(
-                event=event,
-                obj=obj.path,
-                updated=dt.datetime.now(),
-                first=parent_snap.first,
-                last=parent_snap.last,
-            ))
+        return replace(
+            snap,
+            first=parent_snap.first,
+            last=parent_snap.last,
         )
+
 
 @dataclass(frozen=True)
 class HandleNewDailyFromDailyParentPl(
     HandleNewValueFromParentPl,
     HandleNewDailyFromDailyParent,
 ):
-    
+
     def handle(
         self,
-        event: ObjectNew,
+        event: ObjectChange,
+        snap: Daily.Snap,
         obj: DailyWithDailyParent,
-        domain: Domain,
     ):
-        snap = obj.get_snap(domain)
+        # log("INFO")( handle_daily=obj.path)
 
-        if snap is not None:
-            return None
-            # # NOTE: should already be handled?
-            # raise ValueError((self, event))
+        parent = obj.get_parent()
+        parent_snap = parent.get_snap(Daily.Snap)
+
+        if snap.first and snap.last:
+            if (
+                snap.first == parent_snap.first
+                and snap.last == parent_snap.last
+            ):
+                return frozendict().set(
+                    obj.path, (snap, [])
+                )
 
         v = self.get_parent_pl(
-            event, obj, domain
-        )
-
-        df = (
-            pl.DataFrame({VALUE: v.ser.fill_nan(None)})
-            .pipe(self.calc_df, event, obj, domain)
-        )
-
-        e, v = self.set_value_from_df(
+            event,
             obj,
-            domain,
+            parent=parent,
+            parent_snap=parent_snap
+        )
+
+        first = v.start or parent_snap.first
+        last = v.end or parent_snap.last
+
+        date_cols = (
+            []
+            if first is None or last is None
+            else [pl.date_range(first, last).alias("date")]
+        )
+
+        df = v.to_df(alias=VALUE, pipe=lambda e: e.fill_nan(None), with_cols=date_cols)
+        assert "date" in df.schema, (df.schema, parent_snap, v)
+
+        df = df.pipe(self.calc_df, event, obj)
+
+        v = self.set_value_from_df(
+            obj,
             df,
             VALUE,
-            publish=True,
-            t = self.key_value_type(obj, domain),
+            t=self.key_value_type(obj),
         )
 
-        snap = self.set_snap_from_parent(
-            event, obj, domain
+        snap = self.update_snap_from_parent(
+            snap, obj, parent_snap=parent_snap
         )
 
-        return e
+        return ValueUpdate.from_snap(
+            snap, into=frozendict()
+        )
+
 
 @dataclass(frozen=True)
 class TracksLatestUpstream(Object):
@@ -308,11 +271,11 @@ class TracksLatestUpstream(Object):
 
     @dataclass(frozen=True)
     class Snap(Snap):
-        latest: int
-        n_upstream: int
-        upstream: dict[str, int]
+        n_upstream: int | None = None
+        upstream: t.frozen.dict[str, int] = frozendict()
 
         type: Literal["TracksLatestUpstreamSnap"] = "TracksLatestUpstreamSnap"
+
 
 @dataclass(frozen=True)
 class HandleUpdateLatestUpstream(Handler):
@@ -320,58 +283,58 @@ class HandleUpdateLatestUpstream(Handler):
     def handle(
         self,
         event: ValueUpdate,
+        snap: TracksLatestUpstream.Snap,
         obj: TracksLatestUpstream,
-        domain: Domain,
     ):
-        i = event.i
-        assert i is not None, event
+        i = assert_is(event.i)
 
-        snap = obj.get_snap(domain)
-
-        if snap is None:
-            upstream = {}
-            latest = -1 # to ensure changed_i > latest
-            snap = type(obj).Snap(
-                event,
-                obj.path,
-                n_upstream=len(obj.upstream_paths()),
-                latest=latest,
-                upstream=upstream,
-            )
-        else:
-            assert isinstance(snap, TracksLatestUpstream.Snap), snap
-            upstream = snap.upstream
-            latest = snap.latest
-
-        n_upstream = len(upstream)
-
-        if i > upstream.get(event.obj, -1):
-            upstream = {
-                **upstream,
-                **{event.obj: i}
-            }
+        if snap.n_upstream is None:
             snap = replace(
-                snap, 
-                event=event,
-                upstream=upstream,
+                snap,
+                n_upstream=len(obj.upstream_paths()),
             )
-
-        log_kw(event=event, snap=snap, paths = obj.upstream_paths())
-
-        e = None
-        if len(upstream) == snap.n_upstream and (
-            i > latest or len(upstream) > n_upstream
-         ):
-            snap = replace(snap, latest=i)
-            e = cast(
-                ValueUpdate,
-                obj.publish(ValueUpdate(obj.path), domain)
-            )
-
-        obj.snap_key_val(domain).set(obj.path, snap)
+            
+        upstream = snap.upstream
+        if obj.path in upstream:
+            raise ValueError(obj)
         
-        return e
-    
+        if event.obj == obj.path:
+            raise ValueError(obj)
+
+        if (
+            event.obj not in snap.upstream
+            and len(upstream) == assert_is(
+                snap.n_upstream
+            ) - 1
+        ):
+            upstream = upstream.set(event.obj, i)
+            snap = replace(snap, upstream=upstream)
+            # first time we have all upstream, fire
+            es = [ValueUpdate(obj.path)]
+        elif (
+            len(upstream) == snap.n_upstream
+            and i > upstream.get(event.obj, -1)
+        ):
+            upstream = upstream.set(event.obj, i)
+            snap = replace(snap, upstream=upstream)
+            # already have all, one newly updated, fire
+            es = [ValueUpdate(obj.path)]
+            
+            # TODO: only if snap has changed and not just event?
+        elif i > upstream.get(event.obj, -1):
+            upstream = upstream.set(event.obj, i)
+            snap = replace(snap, upstream=upstream)
+            es = []
+
+        else:
+            # only update snap
+            es = []
+
+        return frozendict().set(
+            obj.path, (snap, es)
+        )
+
+
 __all__ = [
     "VALUE",
     "DailyWithDailyParent",

@@ -1,7 +1,5 @@
 from typing import cast, Iterable, Callable
 
-import streamlit as st
-
 import math
 import numpy as np
 import polars as pl

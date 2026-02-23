@@ -8,16 +8,15 @@ from ...agg import *
 from ...pfo import *
 
 from ..assets import *
-from ..scales import *
+from ..calcs import *
 from ..signals import *
-from ..uvar import *
-from ..mvar import *
+from ..params import *
 from ..domain import *
 
 
 def ex_00_strat():
     """
-    >>> spec = StratParams(
+    >>> spec = Strategy(
     ...     asset=AssetConcrete("FUT", "ES"),
     ...     signal=SignalOsc(32, 96, 48),
     ...     scale=ScaleVol(span=48, ann=False)

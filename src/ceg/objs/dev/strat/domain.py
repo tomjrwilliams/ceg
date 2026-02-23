@@ -8,10 +8,12 @@ from typing import (
     ClassVar,
     Literal,
     Protocol,
+    Callable,
     overload,
     cast,
     final,
 )
+import itertools
 import datetime
 import datetime as dt
 
@@ -28,10 +30,19 @@ from frozendict import frozendict
 import numpy as np
 import polars as pl
 
+from ....engine import (
+    Graph,
+    Object, # needed bc weird pydantic subclassing
+    Dependency, # needed bc weird pydantic subclassing
+    Project,
+    Config,
+    ObjectParser,
+    SnapParser,
+    StorageConfig,
+)
+
 from .... import apis
-from ....apis import t
-from ....apis import kv
-from ....engine import *
+from ....apis import t, kv, assert_is
 
 from ..bars.d import *
 from ..calc.d import *
@@ -41,62 +52,34 @@ from ..agg import *
 from ..pfo import *
 
 from .assets import *
-from .scales import *
-from .signals import *
-from .uvar import *
-from .mvar import *
+from .calcs import *
+from .params import *
+
+K = TypeVar("K")
 
 #  ------------------
 
+
 @dataclass(frozen=True)
-class StratDomain(Domain):
-
-    @classmethod
-    def empty(cls, engine: EngineRoot):
-        root = cls.Root.new(engine)
-        return cls(root)
-
-    @dataclass(frozen=True)
-    class Root(UseRootConfigs):
-
-        version: int = 0
-        type: Literal["StratDomain"] = "StratDomain"
-
-        @dataclass(frozen=True)
-        class Snap(Snap):
-            event: (
-                DomainSync
-                | ObjectNew
-                | ObjectChange
-                | ValueUpdate
-            )
-            type: Literal["StratDomainSnap"] = "StratDomainSnap"
-
-        @classmethod
-        def new(
-            cls,
-            parent: EngineRoot,
-            name: str = "strat",
-        ):
-            return cls(
-                path = parent.extend_path(name),
-                parent=parent
-            )
+class StrategyGraph(Graph):
 
     @dataclass(frozen=True)
     class object_parser(ObjectParser):
         obj: (
-            EngineRoot
+            Project
+            | StorageConfig
             | FutDailyOrdinal
             | FutDailyRx
             | EqDailyEtf
             | EqDailyRx
-            | BarDailyEOsc
+            | FxDailyRx
+            | FxDailyPx
+            | DailyEOsc
             | DailyERms
-            | DailyBtUvar
             | DailyBtPos
             | DailyBtRx
             | DailyAggregate
+            | DailyEMA
             | DailyZ | DailyEZ
             | DailyRZ | DailyERZ
             | DailyZW | DailyEZW
@@ -105,11 +88,28 @@ class StratDomain(Domain):
             | DailyDEMin
             | DailyDEMA
             | EcoDailyObservation
-            | Universe
-            | DailyAggregate
-            | Collection
-            | DailyBtBench
+            | DailyBtPerf
             | DailyTF
+            | DailyPfolioPos
+            | DailyPfolioRx
+            | DailyBtMvar
+            | DailyBtUvar
+            | DailyPfolio
+            | DailyPfolioNotional
+            | DailyPfolioNotionalVal
+            | DailyPfolioNotionalCap
+            | DailyDDRegime
+            | DailyEWmThold
+            | Collection
+            | DailyAggregateDeriv
+            | Strategies
+            | DailyBtWeights
+            | DailyBtPx
+            | DailyBtGross
+            | DailyBtWeight
+            # | Combination
+            # | Ref
+            # | Aggregate
         )
 
     @dataclass(frozen=True)
@@ -119,12 +119,15 @@ class StratDomain(Domain):
             | FutDailyRx.Snap
             | EqDailyEtf.Snap
             | EqDailyRx.Snap
-            | BarDailyEOsc.Snap
+            | FxDailyRx.Snap
+            | FxDailyPx.Snap
+            | DailyEOsc.Snap
             | DailyERms.Snap
-            | DailyBtUvar.Snap
             | DailyBtPos.Snap
             | DailyBtRx.Snap
             | DailyAggregate.Snap
+            | DailyAggregateDeriv.Snap
+            | DailyEMA.Snap
             | DailyZ.Snap | DailyEZ.Snap
             | DailyRZ.Snap | DailyERZ.Snap
             | DailyZW.Snap | DailyEZW.Snap
@@ -133,197 +136,28 @@ class StratDomain(Domain):
             | DailyDEMax.Snap
             | DailyDEMA.Snap
             | EcoDailyObservation.Snap
-            | Universe.Snap
+            | Collection.Snap
             | DailyAggregate.Snap
             | Collection.Snap
-            | StratDomain.Root.Snap
-            | DailyBtBench.Snap
+            | DailyBtPerf.Snap
             | DailyTF.Snap
+            | DailyPfolioPos.Snap
+            | DailyPfolioRx.Snap
+            | DailyBtMvar.Snap
+            | DailyBtUvar.Snap
+            | DailyPfolio.Snap
+            | DailyPfolioNotional.Snap
+            | DailyPfolioNotionalVal.Snap
+            | DailyPfolioNotionalCap.Snap
+            | DailyDDRegime.Snap
+            | DailyEWmThold.Snap
+            | DailyBtWeights.Snap
+            | DailyBtPx.Snap
+            | DailyBtGross.Snap
+            | DailyBtWeight.Snap
         )
 
-    @classmethod
-    def new(
-        cls,
-        eng: EngineRoot | None = None,
-    ):
-        if eng is None:
-            eng = EngineRoot.new(ROOT)
-        
-        self = cls.empty(eng)
 
-        return self
-    
-    def with_univ(
-        self,
-        name: str,
-        depth: int = 0,
-        eng: EngineRoot | None = None,
-    ):
-        if eng is None:
-            eng = EngineRoot.new(ROOT)
-
-        univ = UniverseDaily.new(
-            eng, f"{name}-{depth}",
-        )
-        return self, univ
-
-    def with_univ_fork(
-        self, univ: UniverseDaily, depth: int = 0
-    ):
-        univ = univ.fork(self, depth=depth)
-        return self, univ
-
-    def with_strat(
-        self,
-        params: StratParams,
-        univ: UniverseDaily,
-        eng: EngineRoot
-    ):
-        result = StratResult(
-            params=params,
-            domain=self,
-        )
-        cast_self = result.cast_self
-
-        univ, result = result.with_bt(univ, eng)
-        
-        univ, result = cast_self(result.into_uvar(univ))
-
-        if params.rescale is None:
-            return univ, result.done()
-            
-        univ, result = cast_self(params.rescale.with_rescale(
-            params,
-            result,
-            univ,
-            eng,
-        ))
-        
-        return univ, result.done()
-
-    def with_basket(
-        self,
-        params: BasketParams,
-        univ: UniverseDaily,
-        eng: EngineRoot,
-        with_i_perf: bool = False,
-        with_i_signal: bool = False,
-        with_i_scale: bool = False,
-    ):
-        result = BasketResult(
-            params=params,
-            domain=self,
-        )
-        cast_self = result.cast_self
-
-        bts = []
-        
-        for strat in params.asset:
-                
-            strat_result = StratResult(
-                params=strat,
-                domain=self,
-            )
-            univ, strat_result = strat_result.with_bt(
-                univ, eng, assert_scale=False
-            )
-
-            strat_result, self = strat_result.done()
-
-            assert strat_result.i is not None, strat_result
-            bts.append(strat_result.i)
-            
-        result = BasketResult(
-            params=params,
-            domain=self,
-        )
-        univ, result = result.with_bt(
-            univ, eng
-        )
-        
-        univ, result = cast_self(result.into_mvar(
-            univ, bts,
-            with_i_perf=with_i_perf,
-            with_i_signal=with_i_signal,
-            with_i_scale=with_i_scale,
-        ))
-
-        if params.rescale is None:
-            return univ, result.done()
-            
-        univ, result = cast_self(params.rescale.with_rescale(
-            params,
-            result,
-            univ,
-            eng,
-        ))
-        
-        return univ, result.done()
-
-    def with_backtest(
-        self,
-        univ: UniverseDaily,
-        params: StratParams | BasketParams,
-        into: list[StratResult | BasketResult],
-        with_i_perf: bool = False,
-        with_i_signal: bool = False,
-        with_i_scale: bool = False,
-        # TODO: into as overload
-        # if given append, else return result directly
-    ):
-        eng = univ.get_parent(self)
-
-        if isinstance(params, StratParams):
-            univ, (result, self) = self.with_strat(
-                params, univ, eng
-            )
-            result = cast(StratResult, result)
-        elif isinstance(params, BasketParams):
-            univ, (result, self) = self.with_basket(
-                params, univ, eng,
-                with_i_perf=with_i_perf,
-                with_i_signal=with_i_signal,
-                with_i_scale=with_i_scale,
-            )
-            result = cast(BasketResult, result)
-        else:
-            raise ValueError(params)
-
-        into.append(result)
-        assert isinstance(self, StratDomain), self
-
-        self = self.with_objs(
-            univ,
-            force=True,
-            t=StratDomain
-        )
-
-        # TODO: return on notional is relevant when vol scaling
-
-        return self, univ, into
-
-    # TODO: deprecated?
-    def with_rx_agg(
-        self,
-        coll: Collection,
-        res: list[StratResult]
-    ):
-                
-        agg = []
-        for r in res:
-            assert r.res is not None, (r)
-            coll, i = coll.with_object(r.res.rx)
-            agg.append(i)
-        
-        coll, i_agg = coll.with_agg(tuple(agg))
-
-        rx_sum = DailyAggregate.new(coll, "hsum", i_agg)
-        
-        return self.with_objs(
-            coll,
-            rx_sum,
-            force=True,
-            t=StratDomain
-        ), coll, rx_sum
-    
-__all__ = ["StratDomain"]
+__all__ = [
+    "StrategyGraph"
+]

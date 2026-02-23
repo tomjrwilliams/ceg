@@ -33,19 +33,48 @@ from ......apis import t
 from ......apis import kv
 from ......engine import *
 
-from ..root import *
-from .root import *
+from ..ident import *
 
 #  ------------------
+
+@dataclass(frozen=True)
+class FxDailyTags(BarDailyTags):
+    symbol: str
+    ident: None
+    field: str
+    adjust: str
+    source: str
+    fx: str | None = None  # ccy to convert to
 
 
 @dataclass(frozen=True)
 class FxDailyPx(
-    DependsDomainSync,
-    HasFxDailyParent,
+    DependsGraphSync,
     BarDaily,
 ):
-    parent: FxDaily | str
+    """
+    >>> obj = FxDailyPx.new(
+    ...     symbol="EURUSD",
+    ...     field="close",
+    ...     adjust="raw",
+    ...     source="frd",
+    ... )
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fx-d-EURUSD-close-raw-frd' [f64]
+    [
+        1.08118
+        null
+        null
+        1.08006
+        1.07905
+        1.07531
+        1.08009
+        1.08281
+    ]
+    """
+    parent: Project | str | None
 
     tags: FxDailyTags
 
@@ -53,29 +82,22 @@ class FxDailyPx(
     type: Literal["FxDailyPx"] = "FxDailyPx"
 
     @dataclass(frozen=True)
-    class Snap(FxDaily.Snap):
+    class Snap(Daily.Snap):
         type: Literal["FxDailyPxSnap"] = "FxDailyPxSnap"
  
-    def get_snap(
-        self,
-        domain: Domain,
-        t: Type[DailySnap] | None = None,
-    ) -> FxDailyPx.Snap | None:
-        return self.snap_key_val(domain).get(self.path, FxDailyPx.Snap)
-    
     @classmethod
     def new(
         cls,
-        parent: FxDaily | EngineRoot,
         symbol: str,
         ident: int | str | None = None,
         field: str | None = None,
         adjust: str = "raw",
         source: str | None = None,
         fx: str | None = None,
+        parent: Project | str | None = None,
     ):
-        if isinstance(parent, EngineRoot):
-            parent = FxDaily.new(parent)
+        # assert "USD" == symbol[3:], symbol
+        # jpyusd = small, ie. the price in usd of jpy
         (
             ident,
             symbol,
@@ -95,7 +117,12 @@ class FxDailyPx(
         )
         assert adjust in FX_ADJUSTMENTS, adjust
         return cls(
-            path=parent.extend_path(ident),
+            path=cls.build_path(
+                parent,
+                "fx-d",
+                ident,
+                strict=False,
+            ),
             parent=parent,
             tags=FxDailyTags(
                 symbol=symbol,
@@ -106,34 +133,18 @@ class FxDailyPx(
                 source=source,
             ),
         )
-
-    def depends(self, domain: Domain) -> list[Dependency]:
-        return (
-            self.depends_self(domain)
-            + self.depends_domain(domain)
-        )
-
-    def handlers(self, event: Event, domain: Domain) -> list[Handler]:
-        res: list[Handler] = []
-        if isinstance(event, DomainSync):
-            res.append(HandleUpdateFxDailyPx())
-        elif isinstance(event, ObjectNew):
-            assert self.path == event.obj, (self, event)
-            res.append(HandleNewFxDailyPx())
-        elif isinstance(event, ObjectChange):
-            # TODO: throw? unless only chunk change
-            # then just rechunk
-            # or backend type / loc, then move
-            raise ValueError((self, event))
-        return res
+    
+    def handler(self, event: Event, snap: Snap) -> Handler:
+        if isinstance(event, GraphSync):
+            return HandleNewFxDailyPx()
+        raise ValueError((self, event))
 
 @dataclass(frozen=True)
 class HandleUpdateFxDailyPx(Handler):
     def handle(
         self,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: FxDailyPx,
-        domain: Domain,
     ):
         # TODO:
         # check latest update, if today, skip
@@ -148,17 +159,11 @@ class HandleNewFxDailyPx(
 ):
     def handle(
         self,
-        event: ObjectNew,
+        event: ObjectChange,
+        snap: FxDailyPx.Snap,
         obj: FxDailyPx,
-        domain: Domain,
     ):
         tags = obj.tags
-        snap = obj.get_snap(domain)
-
-        if snap is not None:
-            return None
-            # # NOTE: should already be handled?
-            # raise ValueError((self, event))
 
         if tags.source == "frd":
             df = apis.data.frd.read_file(
@@ -175,120 +180,52 @@ class HandleNewFxDailyPx(
         else:
             raise ValueError(obj)
 
-        e, v = self.set_value_from_df(
+        if "USD" == tags.symbol[3:]:
+            pass
+        else:
+            df = df.with_columns(
+                (1 / pl.col(tags.field))
+                .alias(tags.field)
+            )
+
+        v = self.set_value_from_df(
             obj,
-            domain,
             df,
             tags.field,
-            publish=True,
-            t = self.key_value_type(obj, domain),
+            t = self.key_value_type(obj),
         )
-
-        snap = self.set_snap_from_df(
-            df, event, obj, domain
-        )
-
-        return e
+        
+        new_snap = self.update_snap_from_df(snap, df)
+        if (
+            new_snap.first != snap.first
+            and new_snap.last != snap.last
+        ):
+            return ValueUpdate.from_snap(
+                self.update_snap_from_df(snap, df),
+                into=frozendict()
+            )
+        return frozendict().set(obj.path, (snap, []))
+    
 
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
 # if backend type / loc change, copy
 # else, throw
 
-#  ------------------
 
-@dataclass(frozen=True)
-class FxDailyDomainOnlyPx(FxDailyDomainBase):
-
-    @dataclass(frozen=True)
-    class object_parser(ObjectParser):
-        obj: (
-            EngineRoot
-            | FxDaily
-            | FxDailyPx
-        )
-
-    @dataclass(frozen=True)
-    class snap_parser(SnapParser):
-        snap: FxDailyPx.Snap
-
-@dataclass(frozen=True)
-class FxDailyPxDomain(FxDailyDomainOnlyPx):
-    """
-    >>> eng = EngineRoot.new(ROOT)
-    >>> obj = FxDailyPx.new(
-    ...     eng,
-    ...     symbol="EURUSD",
-    ...     field="close",
-    ...     adjust="raw",
-    ...     source="frd",
-    ... )
-    >>> domain = (
-    ...    FxDailyPxDomain.empty(eng)
-    ...     .with_obj(obj)
-    ...     .sync()
-    ... )
-    >>> obj.value_key_val(domain).get(obj.path).tail(8)
-    shape: (8,)
-    Series: 'test-fx-d-EURUSD-close-raw-frd' [f64]
-    [
-        1.08118
-        null
-        null
-        1.08006
-        1.07905
-        1.07531
-        1.08009
-        1.08281
-    ]
-    """
-    @dataclass(frozen=True)
-    class Root(FxDailyDomainBase.Root):
-        parent: FxDaily | str
-        version: int = 0
-        type: Literal["FxDailyPxDomain"] = "FxDailyPxDomain"
-
-        SUFFIX: ClassVar[str] = "fx"
-
-    @classmethod
-    def empty(cls, engine: EngineRoot):
-        root = FxDailyPxDomain.Root.new(engine)
-        return FxDailyPxDomain(root)
-
-    @classmethod
-    def new(
-        cls, symbol: str = "EURUSD"
-    ) -> FxDailyPxDomain:
-        eng = EngineRoot.new(ROOT)
-        self = FxDailyPxDomain.empty(eng)
-        for adj in IDX_ADJUSTMENTS:
-            obj = FxDailyPx.new(
-                eng,
-                symbol=symbol, 
-                field="close",
-                adjust=adj,
-                source="frd",
-            )
-            self = self.with_obj(obj)
-        return cast(FxDailyPxDomain, self)
-    
 @dataclass(frozen=True)
 class DependsFxDailyPxParent(DependsParentValue):
     parent: FxDailyPx | str
 
-    def get_parent(self, domain: Domain) -> FxDailyPx:
-        return domain.get(self.parent, FxDailyPx)
-
-IDX_ADJUSTMENTS = ["raw"]
-
+    def get_parent(self) -> FxDailyPx:
+        return context.get().get(self.parent, FxDailyPx)
+    
 #  ------------------
 
 __all__ = [
     "FxDailyPx",
     "HandleUpdateFxDailyPx",
     "HandleNewFxDailyPx",
-    "FxDailyDomainOnlyPx",
-    "FxDailyPxDomain",
     "DependsFxDailyPxParent",
 ]
 # TODO: if __name__ == __main__:

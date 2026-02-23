@@ -1,11 +1,12 @@
 from typing import cast, TYPE_CHECKING, ClassVar
 
+import itertools
 if TYPE_CHECKING:
     from dataclasses import dataclass
 else:
     from pydantic.dataclasses import dataclass
 
-from ...objs.vis import explorer
+from ...vis import explorer
 from ...objs.dev import calc
 from ...objs.dev import bars
 from ...objs.dev import pfo
@@ -19,10 +20,6 @@ from .p003 import eco
 
 PROJECT = "p004"
 
-@dataclass(frozen=True)
-class Project_004(strat.StratProject):
-    pass
-    
 ECO_SPEEDS: list[float] = [
     16,
     # 8, 
@@ -76,100 +73,106 @@ def f_cmom(
     ]
 
 
-# SPY:
-# NOTE: fast (16) 16 mom, slow credit signals condition does well in crisis, flat elsewhere (so little contribution to total notional budget when not active)
+@dataclass(frozen=True)
+class Project_004(strat.StratExplorer):
+    
+    def product_symbol_conds(self):
 
-# TODO: try average z scores, vs average positions?
-# TODO: compare ES?
+        spread_acts: dict[str, str | None] = {
+            "ez": "unit_tanh"
+            # unit_tanh = a=1,f=tanh,m=0.5
+        }
 
-# TODO: try replace TLT with TN (so only excess return)?
+        SPY_CMOM = f_cmom(
+            {
+                "SPY": 1.,
+            },
+            {
+                "VIX": 1.,
+                "D_US_BAA": 1.,
+                "D_US_BAA_FF": 1.,
+                "US_IG_OAS": 1.,
+                "US_HY_OAS": 1.,
+            },
+            spread_acts
+        )
 
-# TODO: eur eq vol?
-# TODO: jp? 
+        TLT_CMOM = f_cmom(
+            {
+                "TLT": 1.,
+            },
+            {
+                "VIX": 1.,
+                "D_US_BAA": 1.,
+                "D_US_BAA_FF": 1.,
+                "US_IG_OAS": 1.,
+                "US_HY_OAS": 1.,
+            },
+            spread_acts
+        )
 
-def load_p004(
-    root: str = "./__local__/apps", test: bool = False
-):
-    """
-    >>> root = "./__local__/test"
-    >>> proj = load_p004(root=root, test=True).reset()
-    >>> nav = explorer.prepare_app(PROJECT, root, proj.domains)
-    >>> nav[0]()
-    >>> nav[1]()
-    """
-    project = (
-        Project_004(root=root)
-        .with_config(explorer.ExplorerConfig(PROJECT))
-    )
+        EUR_CMOM = f_cmom(
+            {
+                "VGK": 1.,
+                "EZU": 1.,
+            },
+            {
+                "EUR_HY_OAS": 1.,
+            },
+            spread_acts
+        )
+        return [
+            ("spy", SPY_CMOM),
+            ("tlt", TLT_CMOM),
+            ("eur", EUR_CMOM),
+        ]
+        
+    # SPY:
+    # NOTE: fast (16) 16 mom, slow credit signals condition does well in crisis, flat elsewhere (so little contribution to total notional budget when not active)
 
-    spread_acts: dict[str, str | None] = {
-        "ez": "unit_tanh"
-        # unit_tanh = a=1,f=tanh,m=0.5
-    }
+    # TODO: try average z scores, vs average positions?
+    # TODO: compare ES?
 
-    SPY_CMOM = f_cmom(
-        {
-            "SPY": 1.,
-        },
-        {
-            "VIX": 1.,
-            "D_US_BAA": 1.,
-            "D_US_BAA_FF": 1.,
-            "US_IG_OAS": 1.,
-            "US_HY_OAS": 1.,
-        },
-        spread_acts
-    )
+    # TODO: try replace TLT with TN (so only excess return)?
 
-    TLT_CMOM = f_cmom(
-        {
-            "TLT": 1.,
-        },
-        {
-            "VIX": 1.,
-            "D_US_BAA": 1.,
-            "D_US_BAA_FF": 1.,
-            "US_IG_OAS": 1.,
-            "US_HY_OAS": 1.,
-        },
-        spread_acts
-    )
+    # TODO: eur eq vol?
+    # TODO: jp? 
 
-    EUR_CMOM = f_cmom(
-        {
-            "VGK": 1.,
-            "EZU": 1.,
-        },
-        {
-            "EUR_HY_OAS": 1.,
-        },
-        spread_acts
-    )
+    @classmethod
+    def load(
+        cls, root: str = "./__local__/apps", test: bool = False
+    ):
+        """
+        >>> root = "./__local__/test"
+        >>> proj = Project_004.load(root, test=True).reset()
+        >>> nav = proj.prepare_app()
+        >>> nav[0]()
+        >>> nav[1]()
+        """
+        self = (
+            Project_004(root=root)
+            .with_config(explorer.ExplorerConfig(PROJECT))
+        )
 
-    i = 0
-    for name, product_symbol_signal_cond_aliases in [
-        ("spy", SPY_CMOM),
-        ("tlt", TLT_CMOM),
-        ("eur", EUR_CMOM),
-    ]:
-        for suff, rebal in [
-            ("", None),
-            ("-w", "3D"),
-            # ("-m", "3D1W"),
-        ]:
-            i_str = str(i).rjust(3, "0") + "-"
+        i = 0
+        for (
+            (name, product_symbol_signal_cond_aliases),
+            (suff, rebal)
+        ) in itertools.product(
+            self.product_symbol_conds(),
+            self.rebal_variants(),
+        ):
             configs_w_cond = [
                 (product, symbol, signal, cond, alias)
                 for product, symbol, signal, cond, alias
                 in product_symbol_signal_cond_aliases
                 if cond is not None
-            ]
-            domain, univ = strat.StratDomain.new().with_univ(
-                PROJECT + "-" + name + "-raw",
+            ] univ = strat.StratDomain.new().with_univ(
+                self.univ_name(name + "-raw")
             )
             res_raw = []
             for params in [
-                strat.StratParams(
+                strat.Strategy(
                     asset = strat.AssetConcrete(
                         product,
                         symbol,
@@ -186,16 +189,15 @@ def load_p004(
                 for product, symbol, signal, cond, alias
                 in configs_w_cond
             ]:
-                domain, univ, res_raw = domain.with_backtest(
+                univ, res_raw = domain.with_backtest(
                     univ, params, into = res_raw
                 )
-
-            domain, univ = domain.with_univ(
-                PROJECT + "-" + name,
+ univ = domain.with_univ(
+                self.univ_name(name)
             )
             res = []
             for params in [
-                strat.StratParams(
+                strat.Strategy(
                     asset = strat.AssetConcrete(
                         product,
                         symbol,
@@ -213,7 +215,7 @@ def load_p004(
                 in product_symbol_signal_cond_aliases
                 if cond is None
             ] + [
-                strat.StratParams(
+                strat.Strategy(
                     asset = strat.AssetSynthetic(
                         bt.assume_res().rx,
                         alias=alias,
@@ -234,32 +236,24 @@ def load_p004(
                 )
                 in zip(res_raw, configs_w_cond)
             ]:
-                domain, univ, res = domain.with_backtest(
+                univ, res = domain.with_backtest(
                     univ, params, into = res
                 )
-            project = project.with_page_from_domain(
-                i_str + name + "-v" + suff,
-                domain,
-                {
-                    "perf:perf_table": [
-                        bt.vis_spec_perf()
-                        for bt in res
-                    ],
-                    "rx:line_cum": [
-                        bt.vis_spec_rx()
-                        for bt in res
-                    ],
-                    "signal:line": [
-                        bt.vis_spec_signal()
-                        for bt in res
-                        if bt.signal is not None
-                    ],
-                },
+            self = self.with_page(
+                self.page_name(i, name, suffix=suff),
+                type="daily",
+                graph=True,
                 t=Project_004
-            )
+            ).with_perf_table(
+                res, t=Project_004
+            ).with_rx_graph(
+                res, t=Project_004
+            ).with_signal_graph(
+                res, t=Project_004
+            ).with_graph(t=Project_004)
             if test:
-                return project
-        i += 1
-    return project
+                return self
+            i += 1
+        return self
 
-PROJECTS[PROJECT] = load_p004
+PROJECTS[PROJECT] = Project_004.load

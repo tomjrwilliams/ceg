@@ -38,6 +38,12 @@ class Table(Component):
         st.table(self.df)
         return self
 
+from ....apis.st import cache
+
+@cache()
+def read_df(fp: str):
+    return pl.read_parquet(fp)
+
 @dataclass(frozen=True)
 class CachedDataFrame(Component):
     key: str
@@ -55,23 +61,22 @@ class CachedDataFrame(Component):
     def data(self) -> StateVariable:
         return StateVariable(f"{self.key}_data")
 
-    def render(self) -> CachedDataFrame:
-
-        # def on_change_df():
-        #     self.dirty.set(True)
-    
+    def load(self, cached: bool = True):
         df_init = None
 
-        if not self.data.exists():
-            fp = Path(self.fp)
-            fp.parent.mkdir(exist_ok=True, parents=True)
-            if fp.exists():
-                df_init = pl.read_parquet(self.fp)
-                # TODO: cast to schema?
+        fp = Path(self.fp)
+        fp.parent.mkdir(exist_ok=True, parents=True)
+        if fp.exists():
+            if cached:
+                df_init = read_df(self.fp)
             else:
-                df_init = None
+                df_init = pl.read_parquet(self.fp)
         else:
-            df_init = self.data.get(t=pl.DataFrame)
+            df_init = None
+
+        return df_init
+
+    def merge_schema(self, df_init: pl.DataFrame | None):
 
         if df_init is None:
             df_init = pl.DataFrame(schema=self.schema)
@@ -83,6 +88,22 @@ class CachedDataFrame(Component):
                     .alias(k)
                     .cast(dtype)
                 )
+
+        return df_init
+
+    def render(self) -> CachedDataFrame:
+
+        # def on_change_df():
+        #     self.dirty.set(True)
+    
+        df_init = None
+
+        if not self.data.exists():
+            df_init = self.load(cached=False)
+        else:
+            df_init = self.data.get(t=pl.DataFrame)
+
+        df_init = self.merge_schema(df_init)
 
         column_configs = None
         if self.widths is not None:

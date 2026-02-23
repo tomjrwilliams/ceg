@@ -85,8 +85,8 @@ class SQLiteKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
                 # TODO: dict, col names
                 unique=("key",),
             ).create(self.config.db)
-        except:
-            raise ValueError(self)
+        except Exception as e:
+            raise ValueError((e, self))
 
         # TODO: composite pkey?
         # if the type_key_i is a tuple?

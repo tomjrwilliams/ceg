@@ -33,10 +33,18 @@ from ......apis import t
 from ......apis import kv
 from ......engine import *
 
-from ..root import *
-from .root import *
+from ..ident import *
 
 #  ------------------
+
+@dataclass(frozen=True)
+class IndexDailyTags(BarDailyTags):
+    symbol: str
+    ident: None
+    field: str
+    adjust: str
+    source: str
+    idx: str | None = None  # ccy to convert to
 
 # VXTLT = tlt bond vol (from 2020 only)
 # GVZ = gold
@@ -46,11 +54,32 @@ from .root import *
 
 @dataclass(frozen=True)
 class IndexDailyPx(
-    DependsDomainSync,
-    HasIndexDailyParent,
+    DependsGraphSync,
     BarDaily,
 ):
-    parent: IndexDaily | str
+    """
+    >>> obj = IndexDailyPx.new(
+    ...     symbol="VIX",
+    ...     field="close",
+    ...     adjust="raw",
+    ...     source="frd",
+    ... )
+    >>> Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-idx-d-VIX-close-raw-frd' [f64]
+    [
+        19.28
+        null
+        null
+        17.48
+        17.15
+        18.33
+        18.69
+        21.65
+    ]
+    """
+    parent: Project | str | None
 
     tags: IndexDailyTags
 
@@ -58,29 +87,20 @@ class IndexDailyPx(
     type: Literal["IndexDailyPx"] = "IndexDailyPx"
 
     @dataclass(frozen=True)
-    class Snap(IndexDaily.Snap):
+    class Snap(Daily.Snap):
         type: Literal["IndexDailyPxSnap"] = "IndexDailyPxSnap"
  
-    def get_snap(
-        self,
-        domain: Domain,
-        t: Type[DailySnap] | None = None,
-    ) -> IndexDailyPx.Snap | None:
-        return self.snap_key_val(domain).get(self.path, IndexDailyPx.Snap)
-    
     @classmethod
     def new(
         cls,
-        parent: IndexDaily | EngineRoot,
         symbol: str,
         ident: int | str | None = None,
         field: str | None = None,
         adjust: str = "raw",
         source: str | None = None,
         fx: str | None = None,
+        parent: Project | str | None = None,
     ):
-        if isinstance(parent, EngineRoot):
-            parent = IndexDaily.new(parent)
         (
             ident,
             symbol,
@@ -100,7 +120,12 @@ class IndexDailyPx(
         )
         assert adjust in IDX_ADJUSTMENTS, adjust
         return cls(
-            path=parent.extend_path(ident),
+            path=cls.build_path(
+                parent,
+                "idx-d",
+                ident,
+                strict=False,
+            ),
             parent=parent,
             tags=IndexDailyTags(
                 symbol=symbol,
@@ -110,35 +135,19 @@ class IndexDailyPx(
                 fx=fx,
                 source=source,
             ),
-        )
+        )    
 
-    def depends(self, domain: Domain) -> list[Dependency]:
-        return (
-            self.depends_self(domain)
-            + self.depends_domain(domain)
-        )
-
-    def handlers(self, event: Event, domain: Domain) -> list[Handler]:
-        res: list[Handler] = []
-        if isinstance(event, DomainSync):
-            res.append(HandleUpdateIndexDailyPx())
-        elif isinstance(event, ObjectNew):
-            assert self.path == event.obj, (self, event)
-            res.append(HandleNewIndexDailyPx())
-        elif isinstance(event, ObjectChange):
-            # TODO: throw? unless only chunk change
-            # then just rechunk
-            # or backend type / loc, then move
-            raise ValueError((self, event))
-        return res
+    def handler(self, event: Event, snap: Snap) -> Handler:
+        if isinstance(event, GraphSync):
+            return HandleNewIndexDailyPx()
+        raise ValueError((self, event))
 
 @dataclass(frozen=True)
 class HandleUpdateIndexDailyPx(Handler):
     def handle(
         self,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: IndexDailyPx,
-        domain: Domain,
     ):
         # TODO:
         # check latest update, if today, skip
@@ -153,17 +162,11 @@ class HandleNewIndexDailyPx(
 ):
     def handle(
         self,
-        event: ObjectNew,
+        event: ObjectChange,
+        snap: IndexDailyPx.Snap,
         obj: IndexDailyPx,
-        domain: Domain,
     ):
         tags = obj.tags
-        snap = obj.get_snap(domain)
-
-        if snap is not None:
-            return None
-            # # NOTE: should already be handled?
-            # raise ValueError((self, event))
 
         if tags.source == "frd":
             df = apis.data.frd.read_file(
@@ -180,20 +183,23 @@ class HandleNewIndexDailyPx(
         else:
             raise ValueError(obj)
 
-        e, v = self.set_value_from_df(
+        v = self.set_value_from_df(
             obj,
-            domain,
             df,
             tags.field,
-            publish=True,
-            t = self.key_value_type(obj, domain),
+            t = self.key_value_type(obj),
         )
 
-        snap = self.set_snap_from_df(
-            df, event, obj, domain
-        )
-
-        return e
+        new_snap = self.update_snap_from_df(snap, df)
+        if (
+            new_snap.first != snap.first
+            and new_snap.last != snap.last
+        ):
+            return ValueUpdate.from_snap(
+                self.update_snap_from_df(snap, df),
+                into=frozendict()
+            )
+        return frozendict().set(obj.path, (snap, []))
 
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
@@ -203,86 +209,11 @@ class HandleNewIndexDailyPx(
 #  ------------------
 
 @dataclass(frozen=True)
-class IndexDailyDomainOnlyPx(IndexDailyDomainBase):
-
-    @dataclass(frozen=True)
-    class object_parser(ObjectParser):
-        obj: (
-            EngineRoot
-            | IndexDaily
-            | IndexDailyPx
-        )
-
-    @dataclass(frozen=True)
-    class snap_parser(SnapParser):
-        snap: IndexDailyPx.Snap
-
-@dataclass(frozen=True)
-class IndexDailyPxDomain(IndexDailyDomainOnlyPx):
-    """
-    >>> eng = EngineRoot.new(ROOT)
-    >>> obj = IndexDailyPx.new(
-    ...     eng,
-    ...     symbol="VIX",
-    ...     field="close",
-    ...     adjust="raw",
-    ...     source="frd",
-    ... )
-    >>> domain = (
-    ...    IndexDailyPxDomain.empty(eng)
-    ...     .with_obj(obj)
-    ...     .sync()
-    ... )
-    >>> obj.value_key_val(domain).get(obj.path).tail(8)
-    shape: (8,)
-    Series: 'test-idx-d-VIX-close-raw-frd' [f64]
-    [
-        19.28
-        null
-        null
-        17.48
-        17.15
-        18.33
-        18.69
-        21.65
-    ]
-    """
-    @dataclass(frozen=True)
-    class Root(IndexDailyDomainBase.Root):
-        parent: IndexDaily | str
-        version: int = 0
-        type: Literal["IndexDailyPxDomain"] = "IndexDailyPxDomain"
-
-        SUFFIX: ClassVar[str] = "idx"
-
-    @classmethod
-    def empty(cls, engine: EngineRoot):
-        root = IndexDailyPxDomain.Root.new(engine)
-        return IndexDailyPxDomain(root)
-
-    @classmethod
-    def new(
-        cls, symbol: str = "VIX"
-    ) -> IndexDailyPxDomain:
-        eng = EngineRoot.new(ROOT)
-        self = IndexDailyPxDomain.empty(eng)
-        for adj in IDX_ADJUSTMENTS:
-            obj = IndexDailyPx.new(
-                eng,
-                symbol=symbol, 
-                field="close",
-                adjust=adj,
-                source="frd",
-            )
-            self = self.with_obj(obj)
-        return cast(IndexDailyPxDomain, self)
-    
-@dataclass(frozen=True)
 class DependsIndexDailyPxParent(DependsParentValue):
     parent: IndexDailyPx | str
 
-    def get_parent(self, domain: Domain) -> IndexDailyPx:
-        return domain.get(self.parent, IndexDailyPx)
+    def get_parent(self) -> IndexDailyPx:
+        return context.get().get(self.parent, IndexDailyPx)
 
 #  ------------------
 
@@ -290,8 +221,6 @@ __all__ = [
     "IndexDailyPx",
     "HandleUpdateIndexDailyPx",
     "HandleNewIndexDailyPx",
-    "IndexDailyDomainOnlyPx",
-    "IndexDailyPxDomain",
     "DependsIndexDailyPxParent",
 ]
 # TODO: if __name__ == __main__:

@@ -33,19 +33,48 @@ from ......apis import t
 from ......apis import kv
 from ......engine import *
 
-from ..root import *
-from .root import *
+from ..ident import *
 
 #  ------------------
 
+@dataclass(frozen=True)
+class FutDailyOrdinalTags(BarDailyTags):
+    symbol: str
+    ident: int
+    field: str
+    adjust: str
+    source: str
+    fx: str | None = None  # ccy to convert to
 
 @dataclass(frozen=True)
 class FutDailyOrdinal(
-    DependsDomainSync,
-    HasFutDailyParent,
+    DependsGraphSync,
     BarDaily,
 ):
-    parent: FutDaily | str
+    """
+    >>> obj = FutDailyOrdinal.new(
+    ...     symbol="ES", # spx
+    ...     ident = 1,
+    ...     field="close",
+    ...     adjust="pct",
+    ...     source="frd",
+    ... )
+    >>> g = Graph().with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-fut-d-ES-1-close-pct-frd' [f64]
+    [
+        5718.25
+        null
+        null
+        5815.5
+        5826.5
+        5759.5
+        5739.25
+        5623.0
+    ]
+    """
+    parent: Project | str | None
 
     tags: FutDailyOrdinalTags
 
@@ -53,29 +82,21 @@ class FutDailyOrdinal(
     type: Literal["FutDailyOrdinal"] = "FutDailyOrdinal"
 
     @dataclass(frozen=True)
-    class Snap(FutDaily.Snap):
+    class Snap(Daily.Snap):
         type: Literal["FutDailyOrdinalSnap"] = "FutDailyOrdinalSnap"
- 
-    def get_snap(
-        self,
-        domain: Domain,
-        t: Type[DailySnap] | None = None,
-    ) -> FutDailyOrdinal.Snap | None:
-        return self.snap_key_val(domain).get(self.path, FutDailyOrdinal.Snap)
     
     @classmethod
     def new(
         cls,
-        parent: FutDaily | EngineRoot,
         symbol: str,
         ident: int | str | None = None,
         field: str | None = None,
         adjust: str | None = None,
         source: str | None = None,
         fx: str | None = None,
+        #
+        parent: Project | str | None = None,
     ):
-        if isinstance(parent, EngineRoot):
-            parent = FutDaily.new(parent)
         (
             ident,
             symbol,
@@ -96,7 +117,12 @@ class FutDailyOrdinal(
         assert ord == 1, ord # TODO: for now only first
         assert adjust in ORD_ADJUSTMENTS, adjust
         return cls(
-            path=parent.extend_path(ident),
+            path=cls.build_path(
+                parent,
+                "fut-ord-d",
+                ident,
+                strict=False,
+            ),
             parent=parent,
             tags=FutDailyOrdinalTags(
                 symbol=symbol,
@@ -108,39 +134,13 @@ class FutDailyOrdinal(
             ),
         )
 
-    def depends(self, domain: Domain) -> list[Dependency]:
-        return (
-            self.depends_self(domain)
-            + self.depends_domain(domain)
-        )
-
-    def handlers(self, event: Event, domain: Domain) -> list[Handler]:
-        res: list[Handler] = []
-        if isinstance(event, DomainSync):
-            res.append(HandleUpdateFutDailyOrdinal())
-        elif isinstance(event, ObjectNew):
-            assert self.path == event.obj, (self, event)
-            res.append(HandleNewFutDailyOrdinal())
-        elif isinstance(event, ObjectChange):
-            # TODO: throw? unless only chunk change
-            # then just rechunk
-            # or backend type / loc, then move
-            raise ValueError((self, event))
-        return res
-
-@dataclass(frozen=True)
-class HandleUpdateFutDailyOrdinal(Handler):
-    def handle(
-        self,
-        event: ObjectNew,
-        obj: FutDailyOrdinal,
-        domain: Domain,
-    ):
-        # TODO:
-        # check latest update, if today, skip
-        # check new data available
-        # if after snap.last, get and append
-        return
+    def handler(self, event: Event, snap: Snap) -> Handler:
+        if isinstance(event, GraphSync):
+            return HandleNewFutDailyOrdinal()
+        # elif isinstance(event, ValueUpdate):
+            # return handle update
+        raise ValueError((self, event))
+        
 
 @dataclass(frozen=True)
 class HandleNewFutDailyOrdinal(
@@ -149,17 +149,11 @@ class HandleNewFutDailyOrdinal(
 ):
     def handle(
         self,
-        event: ObjectNew,
+        event: ObjectChange,
+        snap: FutDailyOrdinal.Snap,
         obj: FutDailyOrdinal,
-        domain: Domain,
     ):
         tags = obj.tags
-        snap = obj.get_snap(domain)
-
-        if snap is not None:
-            return None
-            # # NOTE: should already be handled?
-            # raise ValueError((self, event))
 
         if tags.source == "frd":
             df = apis.data.frd.read_file(
@@ -176,122 +170,42 @@ class HandleNewFutDailyOrdinal(
         else:
             raise ValueError(obj)
 
-        e, v = self.set_value_from_df(
+        v = self.set_value_from_df(
             obj,
-            domain,
             df,
             tags.field,
-            publish=True,
-            t = self.key_value_type(obj, domain),
+            t = self.key_value_type(obj),
         )
 
-        snap = self.set_snap_from_df(
-            df, event, obj, domain
-        )
-
-        return e
+        new_snap = self.update_snap_from_df(snap, df)
+        if (
+            new_snap.first != snap.first
+            and new_snap.last != snap.last
+        ):
+            return ValueUpdate.from_snap(
+                self.update_snap_from_df(snap, df),
+                into=frozendict()
+            )
+        return frozendict().set(obj.path, (snap, []))
 
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
 # if backend type / loc change, copy
 # else, throw
 
-#  ------------------
-
-@dataclass(frozen=True)
-class FutDailyDomainOnlyOrdinal(FutDailyDomainBase):
-
-    @dataclass(frozen=True)
-    class object_parser(ObjectParser):
-        obj: (
-            EngineRoot
-            | FutDaily
-            | FutDailyOrdinal
-        )
-
-    @dataclass(frozen=True)
-    class snap_parser(SnapParser):
-        snap: FutDailyOrdinal.Snap
-
-@dataclass(frozen=True)
-class FutDailyOrdinalDomain(FutDailyDomainOnlyOrdinal):
-    """
-    >>> eng = EngineRoot.new(ROOT)
-    >>> obj = FutDailyOrdinal.new(
-    ...     eng,
-    ...     symbol="ES", # spx
-    ...     ident = 1,
-    ...     field="close",
-    ...     adjust="pct",
-    ...     source="frd",
-    ... )
-    >>> domain = (
-    ...    FutDailyOrdinalDomain.empty(eng)
-    ...     .with_obj(obj)
-    ...     .sync()
-    ... )
-    >>> obj.value_key_val(domain).get(obj.path).tail(8)
-    shape: (8,)
-    Series: 'test-fut-d-ES-1-close-pct-frd' [f64]
-    [
-        5718.25
-        null
-        null
-        5815.5
-        5826.5
-        5759.5
-        5739.25
-        5623.0
-    ]
-    """
-    @dataclass(frozen=True)
-    class Root(FutDailyDomainBase.Root):
-        parent: FutDaily | str
-        version: int = 0
-        type: Literal["FutDailyOrdinalDomain"] = "FutDailyOrdinalDomain"
-
-        SUFFIX: ClassVar[str] = "ord"
-
-    @classmethod
-    def empty(cls, engine: EngineRoot):
-        root = FutDailyOrdinalDomain.Root.new(engine)
-        return FutDailyOrdinalDomain(root)
-
-    @classmethod
-    def new(
-        cls, symbol: str = "ES" # spx
-    ) -> FutDailyOrdinalDomain:
-        eng = EngineRoot.new(ROOT)
-        self = FutDailyOrdinalDomain.empty(eng)
-        for adj in ORD_ADJUSTMENTS:
-            obj = FutDailyOrdinal.new(
-                eng,
-                symbol=symbol, 
-                ident = 1,
-                field="close",
-                adjust=adj,
-                source="frd",
-            )
-            self = self.with_obj(obj)
-        return cast(FutDailyOrdinalDomain, self)
-    
 @dataclass(frozen=True)
 class DependsFutDailyOrdinalParent(DependsParentValue):
     parent: FutDailyOrdinal | str
 
-    def get_parent(self, domain: Domain) -> FutDailyOrdinal:
-        return domain.get(self.parent, FutDailyOrdinal)
+    def get_parent(self) -> FutDailyOrdinal:
+        return context.get().get(self.parent, FutDailyOrdinal)
 
-ORD_ADJUSTMENTS = ["pct", "abs", "raw"]
 
 #  ------------------
 
 __all__ = [
     "FutDailyOrdinal",
-    "HandleUpdateFutDailyOrdinal",
     "HandleNewFutDailyOrdinal",
-    "FutDailyDomainOnlyOrdinal",
-    "FutDailyOrdinalDomain",
     "DependsFutDailyOrdinalParent",
 ]
 # TODO: if __name__ == __main__:

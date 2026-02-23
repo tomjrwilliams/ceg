@@ -11,7 +11,8 @@ from functools import wraps
 
 from frozendict import frozendict
 
-import streamlit as st
+from ...apis.st import cache, library
+st = library()
 
 # os.environ["STREAMLIT"] = "true"
 os.environ["TIMEZONE_OFFSET"] = str(st.context.timezone_offset)

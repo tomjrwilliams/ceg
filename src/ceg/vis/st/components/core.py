@@ -27,9 +27,9 @@ else:
 
 from ..variables import *
 
-@dataclass(frozen=True)
-class Page:
-    pass
+# @dataclass(frozen=True)
+# class Page:
+#     pass
 
 @dataclass(frozen=True)
 class Component:
@@ -38,17 +38,18 @@ class Component:
     def child_key(self, key: str) -> str:
         return f"{self.key}_{key}"
     
-    def pre_render(self) -> None: ...
+    def pre_render(self, Project = None) -> None: ...
 
-    def render(self) -> Component: ...
+    def render(self, Project = None) -> Component: ...
 
-    def post_render(self) -> None: ...
+    def post_render(self, Project = None) -> None: ...
 
-    def page(self) -> Callable[[], None]:
+    def page(self, Project) -> Callable[[], None]:
         def f():
-            self.pre_render()
-            self.render()
-            self.post_render()
+            self.pre_render(Project)
+            self.render(Project)
+            self.post_render(Project)
             return
         return f
     
+__all__ = ["Component"]

@@ -4,7 +4,8 @@ import datetime as dt
 import math
 import numpy as np
 import polars as pl
-import streamlit as st
+from ...apis.st import cache, library
+st = library()
 
 from frozendict import frozendict
 

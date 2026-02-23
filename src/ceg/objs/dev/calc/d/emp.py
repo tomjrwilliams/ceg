@@ -44,18 +44,13 @@ class DailyEMPParams(DailyEMParams):
     alpha: float | None = None
     pwindow: int | None = None
 
-@dataclass(frozen=True)
-class DailyEMP(DailyEM):
-
-    params: DailyEMPParams
-
-    @classmethod
-    def params_suffix(
-        cls,
-        span: float | None = None,
-        alpha: float | None = None,
-        pwindow: int | None = None,
+    def build_path(
+        self,
+        cls: Type[DailyEM]
     ):
+        span = self.span
+        alpha = self.alpha
+        pwindow = self.pwindow
         i = apis.t.only_index_not_none(
             span, alpha, strict=True
         )
@@ -76,67 +71,38 @@ class DailyEMP(DailyEM):
             params += f"-{str(pwindow)}"
         return params
 
-        # span: float | None = None,
-        # alpha: float | None = None,
-        # pwindow: int | None = None,
+@dataclass(frozen=True)
+class DailyEMP(DailyEM):
 
-        #     span=span,
-        #     alpha=alpha,
-        #     pwindow=pwindow,
-
-    @overload
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: None = None,
-        span: float | None = None,
-        alpha: float | None = None,
-        pwindow: int | None = None,
-    ): ...
-    @overload
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ],
-        span: float | None = None,
-        alpha: float | None = None,
-        pwindow: int | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ): ...
+    params: DailyEMPParams
 
     @classmethod
     def new(
         cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ] | None = None,
+        parent: Daily,
         span: float | None = None,
         alpha: float | None = None,
         pwindow: int | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
+        project: Project | None = None,
     ):
-        if isinstance(parent, EngineRoot):
-            assert t is not None, t
-            parent = t(parent, *args, **kwargs)
-        return cls(
-            path=parent.extend_path(cls.params_suffix(
-                span=span,
-                alpha=alpha,
-            )),
-            parent=parent,
-            params=DailyEMPParams(
-                span=span,
-                alpha=alpha,
-                pwindow=pwindow,
-            ),
+        params=DailyEMPParams(
+            span=span,
+            alpha=alpha,
+            pwindow=pwindow,
         )
+        assert cls.SUFFIX != "M", cls
+        path = parent.extend_path(
+            params.build_path(cls)
+        )
+        if project is not None:
+            path = project.extend_path(path)
+        return cls(
+            path=path,
+            parent=parent,
+            params=params,
+            project=project,
+        )
+    
 __all__ = [
     "DailyEMPParams",
     "DailyEMP",

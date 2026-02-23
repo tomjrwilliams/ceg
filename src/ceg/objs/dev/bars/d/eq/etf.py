@@ -34,21 +34,126 @@ from ......apis import t
 from ......apis import kv
 from ......engine import *
 
-from ..root import *
-from .root import *
+from ..ident import *
 
 from ......apis.eq import *
 
 #  ------------------
 
+# SP500 trackers:
+# US: SPY, VOO, and IVV
+# UK/EU: VUSA, CSPX, and SPXP. 
+
+# ETFs:
+# XLY (Consumer Discretionary), XLE (Energy), XLU (Utilities), XLB (Materials).
+# VONV (Russell 1000 Value ETF), VTWO (Russell 2000 ETF).
+# VONG (Russell 1000 Growth ETF).
+# SCHD (U.S. Dividend Equity ETF), SCHM (U.S. Mid-Cap ETF), SCHV (U.S. Large-Cap Value ETF), FNDX (Fundamental U.S. Large Company ETF), FNDB (Fundamental U.S. Broad Market ETF), SCHX (U.S. Large-Cap ETF), SCHB (U.S. Broad Market ETF).
+# SCHG (U.S. Large-Cap Growth ETF).
+# FNDA (Fundamental U.S. Small Company ETF), SCHK (1000 Index® ETF), SCHP (U.S. TIPS ETF), SCYB (High Yield Bond ETF), SCMB (Municipal Bond ETF), SCHA (U.S. Small-Cap ETF), SCHR (Intermediate-Term U.S. Treasury ETF), SCHJ (1-5 Year Corporate Bond ETF), SCHO (Short-Term U.S. Treasury ETF), SCHZ (U.S. Aggregate Bond ETF), SCHI (5-10 Year Corporate Bond ETF), SCHF (International Equity ETF).
+# GLL (UltraShort Gold), EEV (UltraShort Emerging Markets), YXI (UltraShort Japan), BZQ (UltraShort Basic Materials).
+# Vanguard High Dividend Yield ETF (VYM) 
+
+@dataclass(frozen=True)
+class EqDailyEtfTags(BarDailyTags):
+    symbol: str
+    ident: None
+    field: str
+    adjust: str
+    source: str
+    fx: str | None = None  # ccy to convert to
+
 
 @dataclass(frozen=True)
 class EqDailyEtf(
-    DependsDomainSync,
-    HasEqDailyParent,
+    DependsGraphSync,
     BarDaily,
 ):
-    parent: EqDaily | str
+    """
+    >>> universe = [
+    ...     ("SPY", "pct"),
+    ...     ("VONG", "splits"),
+    ...     ("VONG", "price"),
+    ...     ("VYM", "divs"),
+    ...     ("VYM", "full"),
+    ... ]
+    >>> objs = [
+    ...     EqDailyEtf.new(
+    ...         eng,
+    ...         symbol=symbol,
+    ...         field="close",
+    ...         adjust=adjust,
+    ...         source="frd",
+    ...     )
+    ...     for symbol, adjust in universe
+    ... ]
+    >>> (
+    ...     spy, splits, price, divs, full
+    ... ) = objs
+    >>> Graph().with_objs(*objs).sync()
+    >>> f_v = lambda o: o.value_key_val().get(o.path)
+    >>> f_v(spy).tail(8)
+    shape: (8,)
+    Series: 'test-eq-d-SPY-close-pct-frd' [f64]
+    [
+        563.98
+        null
+        null
+        574.08
+        575.46
+        568.59
+        567.08
+        555.66
+    ]
+    >>> v_splits = f_v(splits)
+    >>> v_splits.ser.filter(v_splits.ser.is_not_null())
+    shape: (1,)
+    Series: 'test-eq-d-VONG-close-splits-frd' [f64]
+    [
+        4.0
+    ]
+    >>> v_divs = f_v(divs)
+    >>> v_divs.ser.filter(v_divs.ser.is_not_null()).tail(8)
+    shape: (8,)
+    Series: 'test-eq-d-VYM-close-divs-frd' [f64]
+    [
+        0.008103
+        0.007286
+        0.0099
+        0.00557
+        0.008493
+        0.006633
+        0.007696
+        0.006522
+    ]
+    >>> f_v(price).tail(8)
+    shape: (8,)
+    Series: 'test-eq-d-VONG-close-price-frd' [f64]
+    [
+        484.8
+        488.44
+        null
+        490.64
+        null
+        null
+        489.0
+        490.8
+    ]
+    >>> f_v(full).tail(8)
+    shape: (8,)
+    Series: 'test-eq-d-VYM-close-full-frd' [f64]
+    [
+        251.829977
+        254.082387
+        null
+        255.930067
+        null
+        null
+        253.378509
+        252.586646
+    ]
+    """
+    parent: Project | str | None
 
     tags: EqDailyEtfTags
     
@@ -56,29 +161,21 @@ class EqDailyEtf(
     type: Literal["EqDailyEtf"] = "EqDailyEtf"
 
     @dataclass(frozen=True)
-    class Snap(EqDaily.Snap):
+    class Snap(Daily.Snap):
         type: Literal["EqDailyEtfSnap"] = "EqDailyEtfSnap"
- 
-    def get_snap(
-        self,
-        domain: Domain,
-        t: Type[DailySnap] | None = None,
-    ) -> EqDailyEtf.Snap | None:
-        return self.snap_key_val(domain).get(self.path, EqDailyEtf.Snap)
+
     
     @classmethod
     def new(
         cls,
-        parent: EqDaily | EngineRoot,
         symbol: str,
         ident: int | str | None = None,
         field: str | None = None,
         adjust: str | None = None,
         source: str | None = None,
         fx: str | None = None,
+        parent: Project | str | None = None,
     ):
-        if isinstance(parent, EngineRoot):
-            parent = EqDaily.new(parent)
         (
             ident,
             symbol,
@@ -98,7 +195,12 @@ class EqDailyEtf(
         )
         assert adjust in EQ_ADJUSTMENTS, adjust
         return cls(
-            path=parent.extend_path(ident),
+            path=cls.build_path(
+                parent,
+                "eq-etf-d",
+                ident,
+                strict=False,
+            ),
             parent=parent,
             tags=EqDailyEtfTags(
                 symbol=symbol,
@@ -110,33 +212,18 @@ class EqDailyEtf(
             ),
         )
 
-    def depends(self, domain: Domain) -> list[Dependency]:
-        return (
-            self.depends_self(domain)
-            + self.depends_domain(domain)
-        )
-
-    def handlers(self, event: Event, domain: Domain) -> list[Handler]:
-        res: list[Handler] = []
-        if isinstance(event, DomainSync):
-            res.append(HandleUpdateEqDailyEtf())
-        elif isinstance(event, ObjectNew):
-            assert self.path == event.obj, (self, event)
-            res.append(HandleNewEqDailyEtf())
-        elif isinstance(event, ObjectChange):
-            # TODO: throw? unless only chunk change
-            # then just rechunk
-            # or backend type / loc, then move
-            raise ValueError((self, event))
-        return res
+    def handler(self, event: Event, snap: Snap) -> Handler:
+        if isinstance(event, GraphSync):
+            return HandleNewEqDailyEtf()
+        # elif isinstance(event, ValueUpdate):
+        raise ValueError((self, event))
 
 @dataclass(frozen=True)
 class HandleUpdateEqDailyEtf(Handler):
     def handle(
         self,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: EqDailyEtf,
-        domain: Domain,
     ):
         # TODO:
         # check latest update, if today, skip
@@ -173,7 +260,7 @@ def load_join_dfs(
         for adjust, alias in adjust_aliases
     ]
     return apis.pl.join_dfs(
-        *dfs,
+        dfs,
         on="date",
         how="full",
         coalesce=True,
@@ -187,17 +274,11 @@ class HandleNewEqDailyEtf(
 ):
     def handle(
         self,
-        event: ObjectNew,
+        event: ObjectChange,
+        snap: EqDailyEtf.Snap,
         obj: EqDailyEtf,
-        domain: Domain,
     ):
         tags = obj.tags
-        snap = obj.get_snap(domain)
-
-        if snap is not None:
-            return None
-            # # NOTE: should already be handled?
-            # raise ValueError((self, event))
 
         if tags.source == "frd":
             f_df = load_df_frd
@@ -276,20 +357,24 @@ class HandleNewEqDailyEtf(
         else:
             raise ValueError(tags)
 
-        e, v = self.set_value_from_df(
+        v = self.set_value_from_df(
             obj,
-            domain,
             df,
             tags.field,
-            publish=True,
-            t = self.key_value_type(obj, domain),
+            t = self.key_value_type(obj),
         )
 
-        snap = self.set_snap_from_df(
-            df, event, obj, domain
-        )
-
-        return e
+        new_snap = self.update_snap_from_df(snap, df)
+        if (
+            new_snap.first != snap.first
+            and new_snap.last != snap.last
+        ):
+            return ValueUpdate.from_snap(
+                self.update_snap_from_df(snap, df),
+                into=frozendict()
+            )
+        
+        return frozendict().set(obj.path, (snap, []))
 
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
@@ -299,162 +384,11 @@ class HandleNewEqDailyEtf(
 #  ------------------
 
 @dataclass(frozen=True)
-class EqDailyDomainOnlyEtf(EqDailyDomainBase):
-
-    @dataclass(frozen=True)
-    class object_parser(ObjectParser):
-        obj: (
-            EngineRoot
-            | EqDaily
-            | EqDailyEtf
-        )
-
-    @dataclass(frozen=True)
-    class snap_parser(SnapParser):
-        snap: EqDailyEtf.Snap
-
-# SP500 trackers:
-# US: SPY, VOO, and IVV
-# UK/EU: VUSA, CSPX, and SPXP. 
-
-# ETFs:
-# XLY (Consumer Discretionary), XLE (Energy), XLU (Utilities), XLB (Materials).
-# VONV (Russell 1000 Value ETF), VTWO (Russell 2000 ETF).
-# VONG (Russell 1000 Growth ETF).
-# SCHD (U.S. Dividend Equity ETF), SCHM (U.S. Mid-Cap ETF), SCHV (U.S. Large-Cap Value ETF), FNDX (Fundamental U.S. Large Company ETF), FNDB (Fundamental U.S. Broad Market ETF), SCHX (U.S. Large-Cap ETF), SCHB (U.S. Broad Market ETF).
-# SCHG (U.S. Large-Cap Growth ETF).
-# FNDA (Fundamental U.S. Small Company ETF), SCHK (1000 Index® ETF), SCHP (U.S. TIPS ETF), SCYB (High Yield Bond ETF), SCMB (Municipal Bond ETF), SCHA (U.S. Small-Cap ETF), SCHR (Intermediate-Term U.S. Treasury ETF), SCHJ (1-5 Year Corporate Bond ETF), SCHO (Short-Term U.S. Treasury ETF), SCHZ (U.S. Aggregate Bond ETF), SCHI (5-10 Year Corporate Bond ETF), SCHF (International Equity ETF).
-# GLL (UltraShort Gold), EEV (UltraShort Emerging Markets), YXI (UltraShort Japan), BZQ (UltraShort Basic Materials).
-# Vanguard High Dividend Yield ETF (VYM) 
-
-@dataclass(frozen=True)
-class EqDailyEtfDomain(EqDailyDomainOnlyEtf):
-    """
-    >>> eng = EngineRoot.new(ROOT)
-    >>> universe = [
-    ...     ("SPY", "pct"),
-    ...     ("VONG", "splits"),
-    ...     ("VONG", "price"),
-    ...     ("VYM", "divs"),
-    ...     ("VYM", "full"),
-    ... ]
-    >>> objs = [
-    ...     EqDailyEtf.new(
-    ...         eng,
-    ...         symbol=symbol,
-    ...         field="close",
-    ...         adjust=adjust,
-    ...         source="frd",
-    ...     )
-    ...     for symbol, adjust in universe
-    ... ]
-    >>> (
-    ...     spy, splits, price, divs, full
-    ... ) = objs
-    >>> dom = (
-    ...    EqDailyEtfDomain.empty(eng)
-    ...     .with_objs(*objs)
-    ...     .sync()
-    ... )
-    >>> f_v = lambda o: o.value_key_val(dom).get(o.path)
-    >>> f_v(spy).tail(8)
-    shape: (8,)
-    Series: 'test-eq-d-SPY-close-pct-frd' [f64]
-    [
-        563.98
-        null
-        null
-        574.08
-        575.46
-        568.59
-        567.08
-        555.66
-    ]
-    >>> v_splits = f_v(splits)
-    >>> v_splits.ser.filter(v_splits.ser.is_not_null())
-    shape: (1,)
-    Series: 'test-eq-d-VONG-close-splits-frd' [f64]
-    [
-        4.0
-    ]
-    >>> v_divs = f_v(divs)
-    >>> v_divs.ser.filter(v_divs.ser.is_not_null()).tail(8)
-    shape: (8,)
-    Series: 'test-eq-d-VYM-close-divs-frd' [f64]
-    [
-        0.008103
-        0.007286
-        0.0099
-        0.00557
-        0.008493
-        0.006633
-        0.007696
-        0.006522
-    ]
-    >>> f_v(price).tail(8)
-    shape: (8,)
-    Series: 'test-eq-d-VONG-close-price-frd' [f64]
-    [
-        484.8
-        488.44
-        null
-        490.64
-        null
-        null
-        489.0
-        490.8
-    ]
-    >>> f_v(full).tail(8)
-    shape: (8,)
-    Series: 'test-eq-d-VYM-close-full-frd' [f64]
-    [
-        251.829977
-        254.082387
-        null
-        255.930067
-        null
-        null
-        253.378509
-        252.586646
-    ]
-    """
-    @dataclass(frozen=True)
-    class Root(EqDailyDomainBase.Root):
-        parent: EqDaily | str
-        version: int = 0
-        type: Literal["EqDailyEtfDomain"] = "EqDailyEtfDomain"
-
-        SUFFIX: ClassVar[str] = "etf"
-
-    @classmethod
-    def empty(cls, engine: EngineRoot):
-        root = EqDailyEtfDomain.Root.new(engine)
-        return EqDailyEtfDomain(root)
-
-    @classmethod
-    def new(
-        cls, symbol: str = "SPY"
-    ) -> EqDailyEtfDomain:
-        eng = EngineRoot.new(ROOT)
-        self = EqDailyEtfDomain.empty(eng)
-        for adj in EQ_ADJUSTMENTS:
-            obj = EqDailyEtf.new(
-                eng,
-                symbol=symbol, 
-                ident = 1,
-                field="close",
-                adjust=adj,
-                source="frd",
-            )
-            self = self.with_obj(obj)
-        return cast(EqDailyEtfDomain, self)
-    
-@dataclass(frozen=True)
 class DependsEqDailyEtfParent(DependsParentValue):
     parent: EqDailyEtf | str
 
-    def get_parent(self, domain: Domain) -> EqDailyEtf:
-        return domain.get(self.parent, EqDailyEtf)
+    def get_parent(self) -> EqDailyEtf:
+        return context.get().get(self.parent, EqDailyEtf)
 
 #  ------------------
 
@@ -462,8 +396,6 @@ __all__ = [
     "EqDailyEtf",
     "HandleUpdateEqDailyEtf",
     "HandleNewEqDailyEtf",
-    "EqDailyDomainOnlyEtf",
-    "EqDailyEtfDomain",
     "DependsEqDailyEtfParent",
 ]
 # TODO: if __name__ == __main__:

@@ -33,8 +33,7 @@ from ......apis import t
 from ......apis import kv
 from ......engine import *
 
-from ..root import *
-from .root import *
+from ..ident import *
 
 from .etf import EqDailyEtf, DependsEqDailyEtfParent
 from .stock import EqDailyStock, DependsEqDailyStockParent
@@ -47,6 +46,29 @@ class EqDailyRx(
     DependsEqDailyEtfParent,
     BarDaily,
 ):
+    """
+    >>> ord = EqDailyEtf.new(
+    ...     symbol="SPY",
+    ...     field="close",
+    ...     adjust="full",
+    ...     source="frd"
+    ... )
+    >>> obj = EqDailyRx.new(ord)
+    >>> Graph.with_obj(obj).sync()
+    >>> obj.value_key_val().get(obj.path).tail(8)
+    shape: (8,)
+    Series: 'test-eq-d-SPY-close-full-frd-rx' [f64]
+    [
+        9.375071
+        6.945601
+        null
+        5.529652
+        null
+        null
+        -4.650274
+        1.877995
+    ]
+    """
     parent: EqDailyEtf | EqDailyStock | str
     # TODO: or stock
 
@@ -54,22 +76,13 @@ class EqDailyRx(
     type: Literal["EqDailyRx"] = "EqDailyRx"
 
     @dataclass(frozen=True)
-    class Snap(EqDaily.Snap):
+    class Snap(Daily.Snap):
         type: Literal["EqDailyRxSnap"] = "EqDailyRxSnap"
- 
-    def get_snap(
-        self,
-        domain: Domain,
-        t: Type[DailySnap] | None = None,
-    ) -> EqDailyRx.Snap | None:
-        return self.snap_key_val(domain).get(
-            self.path, EqDailyRx.Snap
-        )
     
     @classmethod
     def new(
         cls,
-        parent: EqDailyEtf | EngineRoot,
+        parent: EqDailyEtf | Project | None = None,
         symbol: str | None = None,
         ident: int | str | None = None,
         field: str | None = None,
@@ -77,18 +90,18 @@ class EqDailyRx(
         source: str | None = None,
         fx: str | None = None,
     ):
-        if isinstance(parent, EngineRoot):
+        if parent is None or isinstance(parent, Project):
             assert isinstance(symbol, str), symbol
             if ident is not None:
                 assert isinstance(ident, int), ident
             parent = EqDailyEtf.new(
-                parent,
                 symbol=symbol,
                 ident=ident,
                 field=field,
                 adjust=adjust,
                 source=source,
                 fx=fx,
+                parent=parent,
             )
         # assert ident is not None, parent
         return cls(
@@ -96,33 +109,20 @@ class EqDailyRx(
             parent=parent,
         )
 
-    def depends(self, domain: Domain) -> list[Dependency]:
-        return (
-            self.depends_self(domain)
-            + self.depends_parent(domain)
-        )
-
-    def handlers(self, event: Event, domain: Domain) -> list[Handler]:
-        res: list[Handler] = []
+    def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ValueAppend):
-            res.append(HandleUpdateEqDailyRx())
+            return HandleUpdateEqDailyRx()
         elif isinstance(event, ValueUpdate):
-            assert self.get_parent(domain).path == event.obj, (self, event)
-            res.append(HandleNewEqDailyRx())
-        elif isinstance(event, ObjectChange):
-            # TODO: throw? unless only chunk change
-            # then just rechunk
-            # or backend type / loc, then move
-            raise ValueError((self, event))
-        return res
+            assert self.get_parent().path == event.obj, (self, event)
+            return HandleNewEqDailyRx()
+        raise ValueError((self, event))
 
 @dataclass(frozen=True)
 class HandleUpdateEqDailyRx(Handler):
     def handle(
         self,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: EqDailyRx,
-        domain: Domain,
     ):
         # TODO:
         # check latest update, if today, skip
@@ -138,12 +138,11 @@ class HandleNewEqDailyRx(
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectNew,
+        event: ObjectChange,
         obj: EqDailyRx,
-        domain: Domain,
     ) -> pl.DataFrame:
         
-        parent = obj.get_parent(domain)
+        parent = obj.get_parent()
         
         # split: adjust by split ratio
         # dividends: 1 - (Dividend Amount / Prior Day's Close Price)
@@ -179,95 +178,11 @@ class HandleNewEqDailyRx(
 #  ------------------
 
 @dataclass(frozen=True)
-class EqDailyDomain(EqDailyDomainBase):
-
-    @dataclass(frozen=True)
-    class object_parser(ObjectParser):
-        obj: (
-            EngineRoot
-            | EqDaily
-            | EqDailyEtf
-            | EqDailyRx
-        )
-
-    @dataclass(frozen=True)
-    class snap_parser(SnapParser):
-        snap: (
-            EqDailyEtf.Snap
-            | EqDailyRx.Snap
-        )
-
-    @classmethod
-    def empty(cls, engine: EngineRoot):
-        root = cls.Root.new(engine)
-        return cls(root)
-
-@dataclass(frozen=True)
-class EqDailyRxDomain(EqDailyDomain):
-    """
-    >>> eng = EngineRoot.new(ROOT)
-    >>> ord = EqDailyEtf.new(
-    ...     eng,
-    ...     symbol="SPY",
-    ...     field="close",
-    ...     adjust="full",
-    ...     source="frd"
-    ... )
-    >>> obj = EqDailyRx.new(ord)
-    >>> domain = (
-    ...     EqDailyRxDomain.empty(eng)
-    ...     .with_obj(obj)
-    ...     .sync()
-    ... )
-    >>> obj.value_key_val(domain).get(obj.path).tail(8)
-    shape: (8,)
-    Series: 'test-eq-d-SPY-close-full-frd-rx' [f64]
-    [
-        9.375071
-        6.945601
-        null
-        5.529652
-        null
-        null
-        -4.650274
-        1.877995
-    ]
-    """
-
-    @dataclass(frozen=True)
-    class Root(EqDailyDomain.Root):
-        parent: EqDaily | str
-        version: int = 0
-        type: Literal["EqDailyRxDomain"] = "EqDailyRxDomain"
-
-        SUFFIX: ClassVar[str] = "rx"
-
-    @classmethod
-    def empty(cls, engine: EngineRoot):
-        root = EqDailyRxDomain.Root.new(engine)
-        return EqDailyRxDomain(root)
-    
-    @classmethod
-    def new(cls, symbol: str = "SPY") -> EqDailyRxDomain:
-        eng = EngineRoot.new(ROOT)
-        self = EqDailyRxDomain.empty(eng)
-        for adj in ["full"]:
-            obj = EqDailyRx.new(
-                eng,
-                symbol=symbol,
-                field="close",
-                adjust=adj,
-                source="frd",
-            )
-            self = self.with_obj(obj)
-        return cast(EqDailyRxDomain, self)
-    
-@dataclass(frozen=True)
 class HasEqDailyGrandParent(Object):
     parent: EqDailyEtf | EqDailyRx | str
 
-    def get_parent(self, domain: Domain) -> EqDailyEtf | EqDailyRx:
-        return domain.get(self.parent, EqDailyEtf | EqDailyRx)
+    def get_parent(self) -> EqDailyEtf | EqDailyRx:
+        return context.get().get(self.parent, EqDailyEtf | EqDailyRx)
 
 #  ------------------
 
@@ -278,7 +193,5 @@ __all__ = [
     "EqDailyRx",
     "HandleUpdateEqDailyRx",
     "HandleNewEqDailyRx",
-    "EqDailyDomain",
-    "EqDailyRxDomain",
     "HasEqDailyGrandParent",
 ]

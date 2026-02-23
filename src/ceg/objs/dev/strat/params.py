@@ -1,0 +1,657 @@
+
+from __future__ import annotations
+import os
+from typing import (
+    TYPE_CHECKING,
+    Type,
+    TypeVar,
+    ClassVar,
+    Literal,
+    Protocol,
+    overload,
+    cast,
+    final,
+)
+import datetime
+import datetime as dt
+
+import functools
+from dataclasses import replace
+
+if TYPE_CHECKING:
+    from dataclasses import dataclass
+else:
+    from pydantic.dataclasses import dataclass
+
+from frozendict import frozendict
+
+import numpy as np
+import polars as pl
+
+from .... import apis
+from ....apis import t, kv, assert_is
+from ....engine import *
+
+from ..bars.d import *
+from ..calc.d import *
+from ..eco.d import *
+
+from ..agg import *
+from ..pfo import *
+
+from .assets import *
+from .calcs import *
+
+#  ------------------
+
+TSignal = (
+    SignalOsc
+    | SignalEco
+    | SignalFactor
+    | SignalWmThold
+)
+
+TScale = (
+    ScaleNotional
+    | ScaleVol
+    | ScaleFactor
+)
+TCap = (
+    CapNotional
+    | CapVol
+)
+
+def unpack_paths(
+    obj: Daily | tuple[Daily, ...] | None
+):
+    return (
+        obj.path if isinstance(obj, Daily)
+        else tuple((
+            o.path for o in obj
+        ))
+        if isinstance(obj, tuple)
+        else None
+    )
+
+@dataclass(frozen=True)
+class StrategyParams:
+
+    scale: ScaleNotional | ScaleVol | ScaleFactor | None = None
+    signal: TSignal | None = None
+    weight: WeightFactor | None = None
+    cap: CapNotional | CapVol | None = None
+
+    rebal: str | None = None
+
+    scale_path: str | tuple[str, ...] | None = None
+    signal_path: str | tuple[str, ...] | None = None
+    weight_path: str | tuple[str, ...] | None = None
+    cap_path: str | tuple[str, ...] | None = None
+    rebal_path: str | tuple[str, ...] | None = None
+
+    def with_weight(self, weight: WeightFactor | None):
+        return replace(self, weight=weight)
+    
+    def label(self):
+        return (
+            f"{assert_is(self.scale).label()}"
+            + (
+                "" 
+                if self.signal is None 
+                else f"-{self.signal.label()}"
+            )
+            + (
+                "" 
+                if self.weight is None 
+                else f"-{self.weight.label()}"
+            )
+            + (
+                "" 
+                if self.rebal is None 
+                else f"-{self.rebal}"
+            ) + (
+                ""
+                if self.cap is None else f"-{self.cap.label()}"
+            )
+        )
+
+    def bind(
+        self, 
+        spec: Combination,
+        params: frozendict[str, TParamValue],
+        obj: Strategy | Basket,
+        univ: Collection
+    ):
+        
+        # if assert_scale:
+        #     assert params.scale is not None, self
+
+        if self.scale is not None:
+            scale, kvs = self.scale.obj(obj)
+            for k, v in kvs.items():
+                params = params.set(
+                    f"scale_{k}", 
+                    assert_is(v, TParamValue)
+                )
+            spec, univ = spec.with_objects(
+                univ,
+                scale=assert_is(scale),
+            )
+            self = replace(
+                self,
+                scale_path = unpack_paths(scale)
+            )
+
+        if self.signal is not None:
+            signal, kvs = self.signal.obj(obj)
+            for k, v in kvs.items():
+                params = params.set(
+                    f"signal_{k}", 
+                    assert_is(v, TParamValue)
+                )
+            spec, univ = spec.with_objects(
+                univ,
+                signal=assert_is(signal),
+            )
+            self = replace(
+                self,
+                signal_path = unpack_paths(signal)
+            )
+
+        if self.weight is not None:
+            weight, kvs = self.weight.obj(obj)
+            for k, v in kvs.items():
+                params = params.set(
+                    f"weight_{k}", 
+                    assert_is(v, TParamValue)
+                )
+            spec, univ = spec.with_objects(
+                univ,
+                weight=assert_is(weight),
+            )
+            self = replace(
+                self,
+                weight_path = unpack_paths(weight)
+            )
+
+        if self.cap is not None:
+            cap, kvs = self.cap.obj(obj)
+            for k, v in kvs.items():
+                params = params.set(
+                    f"cap_{k}", 
+                    assert_is(v, TParamValue)
+                )
+            spec, univ = spec.with_objects(
+                univ,
+                cap=assert_is(cap),
+            )
+            self = replace(
+                self,
+                cap_path = unpack_paths(cap)
+            )
+
+        # TODO: if rebalance is not None:
+        # as above
+        
+        univ, spec = spec.with_params(
+            univ,
+            t=Collection,
+            **params
+        )
+
+        return spec, self, univ
+
+@dataclass(frozen=True)
+class HasBackTest(HasAsset):
+
+    params: StrategyParams
+    name: str | None = None
+
+    bt: DailyBtUvar | DailyBtMvar | None = None
+    perf: DailyBtPerf | None = None
+
+    perf_variants: tuple[DailyBtPerf] | None = None
+
+    pfo: DailyPfolio | None = None
+    ntl: DailyPfolioNotional | None = None
+    ntl_cap: DailyPfolioNotionalCap | None = None
+    
+    def universe(self):
+        return assert_is(self.bt).get_parent()
+
+    def with_perf(self):
+        pos = assert_is(self.bt).pos()
+        context.get().with_obj(pos)
+
+        rx = assert_is(self.bt).rx()
+        context.get().with_obj(rx)
+
+        gross = assert_is(self.bt).gross()
+        context.get().with_obj(gross)
+        
+        perf = DailyBtPerf.new(rx)
+        context.get().with_obj(perf) # TODO: take gross?
+
+        return replace(self, perf=perf)
+
+    def with_perf_variants(
+        self, *variants: DailyBtPerf,
+    ):
+        curr = self.perf_variants or ()
+        return replace(
+            self, perf_variants=curr + variants
+        )
+
+    def with_pfo(self):
+        pfo = DailyPfolio.new(assert_is(self.bt))
+        context.get().with_obj(pfo, force=True)
+
+        pfo_rx = DailyPfolioRx.new(pfo)
+        context.get().with_obj(pfo_rx, force=True)
+        # NOTE: because ntl depends on pfo rx
+
+        # by key?
+
+        return replace(self, pfo = pfo)
+
+    def with_pfo_ntl(
+        self, 
+        # univ: Collection,
+        prices: dict[str, Daily],
+        cap: float = 1.,
+        t: Type[TCollection] = Collection,
+    ):
+        pfo = assert_is(self.pfo)
+        univ = self.universe()
+        # assert univ.path == self.universe().path, dict(
+        #     given=univ.path,
+        #     curr=self.universe().path,
+        # )
+        univ_px = {}
+
+        for k, px in prices.items():
+            univ, i = univ.with_object(px)
+            univ_px[k] = assert_is(i, int)
+
+        context.get().with_obj(univ, force=True)
+        
+        ntl = DailyPfolioNotional.new(
+            pfo,
+            **univ_px,
+            cap=cap,
+        )
+        context.get().with_obj(ntl, force=True)
+
+        return assert_is(univ, t), replace(self, ntl=ntl)
+
+@dataclass(frozen=True)
+class Strategy(HasBackTest, HasAsset, AssetLike):
+
+    asset: TAsset
+
+    params: StrategyParams
+    name: str | None = None
+    
+    # TODO: separate the params from the objects?
+
+    bt: DailyBtUvar | None = None
+    perf: DailyBtPerf | None = None
+
+    pfo: DailyPfolio | None = None
+    ntl: DailyPfolioNotional | None = None
+    ntl_cap: DailyPfolioNotionalCap | None = None
+
+
+    def get_key(self):
+        return None # pfolio compression key
+
+    def rx(self):
+        return assert_is(self.bt).rx()
+    
+    def px(self):
+        return assert_is(self.bt).px()
+    
+    def gross(self):
+        return assert_is(self.bt).gross()
+    
+    def pos(self):
+        return assert_is(self.bt).pos()
+    
+    def price_symbols(self):
+        return self.asset.price_symbols()
+
+    # TODO: with pfo, with ntl, with ntl_cap etc.
+
+    def label(self):
+        return f"{self.asset.label()}-{self.params.label()}"
+
+    def bind_spec(
+        self,
+        univ: Collection,
+    ):
+
+        assert isinstance(self.asset, (
+            AssetConcrete
+            | AssetSynthetic
+            | Strategy
+            | Basket
+        )), self
+
+        spec = Combination(
+            key=self.asset.get_key(),
+        )
+        params: frozendict[str, TParamValue] = frozendict()
+        params = params.set("unit", 1.)
+
+        rx = assert_is(self.asset.rx(), Daily)
+        spec, univ = spec.with_objects(
+            univ,
+            rx=rx,
+        )
+        px = assert_is(self.asset.px(), Daily)
+        spec, univ = spec.with_objects(
+            univ,
+            px=px,
+        )
+        gross = assert_is(self.asset.gross(), Daily)
+        spec, univ = spec.with_objects(
+            univ,
+            gross=gross,
+        )
+
+        spec, self_params, univ = self.params.bind(
+            spec, params, self, univ
+        )
+        self = replace(self, params=self_params)
+
+        univ, spec = univ.with_comb(
+            spec
+        )
+
+        return univ, self, spec
+
+    @overload
+    def bind(
+        self,
+        univ: Collection,
+        t: Type[TCollection],
+        into: None = None,
+    ) -> tuple[TCollection, Strategy]: ...
+
+    @overload
+    def bind(
+        self,
+        univ: Collection,
+        t: Type[TCollection],
+        into: list[Strategy | Basket],
+    ) -> tuple[TCollection, list[Strategy | Basket]]: ...
+
+    def bind(
+        self,
+        univ: Collection,
+        t: Type[TCollection],
+        into: list[Strategy | Basket] | None = None,
+    ):
+        univ, self, spec = self.bind_spec(univ)
+
+        bt = DailyBtUvar.new(univ, spec)
+        context.get().with_obj(bt)
+
+        univ = assert_is(univ, t)
+        self = assert_is(
+            replace(self, bt=bt).with_perf(),
+            Strategy
+        )
+
+        context.get().with_obj(univ, force=True)
+        
+        if into is None:
+            return univ, self
+        
+        return univ, into + [self]
+
+    def vis_spec_perf(self):
+        return (
+            assert_is(self.perf).path,
+            self.label(),
+            dict(group="perf")
+        )
+    def vis_spec_rx(self):
+        return (
+            assert_is(self.rx()).path,
+            self.label(),
+            dict(group="rx")
+        )
+    
+    def vis_spec_signal(self):
+        # TODO: get the object? not the spec
+        assert isinstance(self.params.signal, str), self
+        return (
+            self.params.signal,
+            self.label(),
+            dict(group="signal")
+        )
+
+@dataclass(frozen=True)
+class Basket(HasBackTest, HasAsset, AssetLike):
+    # always strat, even if basket of basket (wrap the basket in a strat, so we have scale etc.)
+    asset: tuple[Strategy, ...]
+
+    params: StrategyParams
+
+    name: str = ""
+
+    bt: DailyBtMvar | None = None
+    
+    def price_symbols(self):
+        res = set()
+        for a in self.asset:
+            res = res.union(a.price_symbols())
+        return res
+
+    def label(self):
+        assert self.name != "", self
+        return f"{self.name}-{self.params.label()}"
+    
+    def get_key(self):
+        return None
+
+    def rx(self, i: int | None = None):
+        return assert_is(self.bt).rx(i)
+    
+    def px(self, i: int | None = None):
+        return assert_is(self.bt).px(i)
+    
+    def gross(self, i: int | None = None):
+        return assert_is(self.bt).gross(i)
+    
+    def universe(self):
+        return assert_is(self.bt).get_parent()
+    
+    def bind_specs(
+        self,
+        univ: Collection,
+        t: Type[TCollection],
+        **mv_params,
+    ):
+
+        specs = []
+        spec = Combination(
+            key=None,
+        )
+        params: frozendict[str, TParamValue] = frozendict(
+            **mv_params
+        )
+        params = params.set("unit", 1.)
+        
+        spec, self_params, univ = self.params.bind(
+            spec, params, self, univ
+        )
+        self = replace(self, params=self_params)
+        univ, spec = univ.with_comb(
+            spec
+        )
+        specs.append(spec)
+        strats = []
+
+        for strat in self.asset:
+            univ, strat, strat_spec = strat.bind_spec(univ)
+            specs.append(strat_spec)
+            strats.append(strat)
+
+        self = replace(self, asset=tuple(strats))
+
+        return assert_is(univ, t), self, specs
+
+    @overload
+    def bind(
+        self,
+        univ: Collection,
+        t: Type[TCollection],
+        into: None = None,
+    ) -> tuple[TCollection, Basket]: ...
+
+    @overload
+    def bind(
+        self,
+        univ: Collection,
+        t: Type[TCollection],
+        into: list[Strategy | Basket],
+    ) -> tuple[TCollection, list[Strategy | Basket]]: ...
+
+    def bind(
+        self,
+        univ: Collection,
+        t: Type[TCollection],
+        into: list[Strategy | Basket] | None = None,
+    ):
+        univ, self, specs = self.bind_specs(univ, t)
+
+        assert self.name != "", self
+        
+        bt = DailyBtMvar.new(univ, tuple(specs))
+        context.get().with_obj(bt)
+
+        univ = assert_is(univ, t)
+        self = assert_is(
+            replace(self, bt=bt).with_perf(),
+            Basket
+        )
+        context.get().with_obj(univ, force=True)
+
+        if into is None:
+            return univ, self
+        return univ, into + [self]
+
+    def vis_spec_perf(self):
+        return (
+            assert_is(self.perf).path,
+            self.label(), 
+            dict(group="perf")
+        )
+    
+    def vis_spec_rx(self, i: int | None = None):
+        return (
+            assert_is(self.rx(i)).path,
+            self.label(), 
+            dict(group="rx")
+        )
+    
+    def vis_spec_signal(self):
+        assert isinstance(self.params.signal, str), self
+        return (
+            self.params.signal,
+            self.label(), 
+            dict(group="signal")
+        )
+
+TAsset = AssetConcrete | AssetSynthetic | Strategy | Basket
+
+@dataclass(frozen=True)
+class Strategies(Collection):
+    rxs: t.frozen.dict[TAsset, int] = t.frozen.dict()
+    
+    type: Literal["Strategies"] = "Strategies"
+
+    @classmethod
+    def under_project(
+        cls,
+        project: Project,
+        name: str, # of collection
+        depth: int | None = None,
+    ):
+        if depth is not None:
+            name = f"{name}-{depth}"
+        return cls.new(project, name=name)
+
+    def with_rx(
+        self, 
+        asset: TAsset,
+    ):
+        rx = asset.rx()
+        self, i = self.with_object(rx, Strategies)
+        return replace(self, rxs=self.rxs.set(asset, i))
+
+def cv(
+    asset: AssetConcrete | tuple[str, str],
+    span: int,
+    signal: TSignal | None = None,
+    cap: CapNotional | CapVol | None = None,
+    rebal: str | None = None,
+    scale: float= 1.,
+):
+    if isinstance(asset, tuple):
+        asset = AssetConcrete(*asset)
+    return Strategy(
+        asset,
+        StrategyParams(
+            scale=ScaleVol(span=span, val=scale),
+            signal=signal,
+            cap=cap,
+            rebal=rebal,
+        )
+    )
+
+def cv_osc(
+    asset: AssetConcrete | tuple[str, str],
+    span: int,
+    fast: int,
+    ratio: float,
+    vol: int | None = None,
+    cap: CapNotional | CapVol | None = None,
+    rebal: str | None = None,
+    activation: str ="tanh",
+    qile: SignalQile | SignalZile | None = None,
+    scale: float= 1.,
+    variant: str | None = None,
+):
+    vol = vol or span
+    return cv(
+        asset,
+        span=span,
+        signal=SignalOsc(
+            fast,
+            int(fast * ratio),
+            vol,
+            activation=activation, 
+            qile=qile if isinstance(qile, SignalQile) else None,
+            zile=qile if isinstance(qile, SignalZile) else None,
+            constraint=variant,
+        ),
+        cap=cap,
+        rebal=rebal,
+        scale=scale,
+    )
+
+__all__ = [
+    "TSignal",
+    "TAsset",
+    "TScale",
+    "TCap",
+    "Strategy",
+    "Basket",
+    "StrategyParams",
+    "Strategies",
+    "cv",
+    "cv_osc",
+]

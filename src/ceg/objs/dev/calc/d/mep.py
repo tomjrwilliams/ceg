@@ -44,18 +44,13 @@ class DailyMEPParams(DailyMParams):
     pspan: float | None = None
     palpha: float | None = None
 
-@dataclass(frozen=True)
-class DailyMEP(DailyM):
-
-    params: DailyMEPParams
-
-    @classmethod
-    def params_suffix(
-        cls,
-        window: int | None = None,
-        palpha: float | None = None,
-        pspan: float | None = None,
+    def build_path(
+        self,
+        cls: Type[DailyM]
     ):
+        window = self.window
+        palpha = self.palpha
+        pspan = self.pspan
         if window is None:
             params = "ex"
         else:
@@ -68,56 +63,37 @@ class DailyMEP(DailyM):
             raise ValueError(cls)
         return f"{cls.SUFFIX}-" + params
 
-    @overload
+@dataclass(frozen=True)
+class DailyMEP(DailyM):
+
+    params: DailyMEPParams
+
+
     @classmethod
     def new(
         cls,
-        parent: EngineRoot | Object,
-        t: None = None,
+        parent: Daily,
         window: int | None = None,
         pspan: float | None = None,
         palpha: float | None = None,
-    ): ...
-    @overload
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ],
-        window: int | None = None,
-        pspan: float | None = None,
-        palpha: float | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ): ...
-    @classmethod
-    def new(
-        cls,
-        parent: EngineRoot | Object,
-        t: Callable[
-            Concatenate[EngineRoot, P], O
-        ] | None = None,
-        window: int | None = None,
-        pspan: float | None = None,
-        palpha: float | None = None,
-        *args: P.args,
-        **kwargs: P.kwargs,
+        project: Project | None = None,
     ):
-        if isinstance(parent, EngineRoot):
-            assert t is not None, t
-            parent = t(parent, *args, **kwargs)
+        params=DailyMEPParams(
+            window=window,
+            pspan=pspan,
+            palpha=palpha,
+        )
+        assert cls.SUFFIX != "M", cls
+        path = parent.extend_path(
+            params.build_path(cls)
+        )
+        if project is not None:
+            path = project.extend_path(path)
         return cls(
-            path=parent.extend_path(cls.params_suffix(
-                window=window,
-            )),
+            path=path,
             parent=parent,
-            params=DailyMEPParams(
-                window=window,
-                pspan=pspan,
-                palpha=palpha,
-            ),
+            params=params,
+            project=project,
         )
 
 __all__ = [

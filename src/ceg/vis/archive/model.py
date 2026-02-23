@@ -20,7 +20,8 @@ from dataclasses import dataclass, replace, fields
 
 import numpy as np
 import polars as pl
-import streamlit as st
+from ...apis.st import cache, library
+st = library()
 
 
 from frozendict import frozendict
@@ -85,11 +86,11 @@ class Signature(NamedTuple):
     # eg. field for daily_close, bar etc.
 
 
-Universe = frozendict[str, ceg.Node.Any | Callable]
+Collection = frozendict[str, ceg.Node.Any | Callable]
 Signatures = frozendict[str, Signature]
 
 
-def signatures(universe: Universe) -> Signatures:
+def signatures(universe: Collection) -> Signatures:
     # TODO: drop keep? that's purely representational
     res = cast(Signatures, frozendict())
     for key, f in universe.items():
@@ -315,7 +316,7 @@ def parse_kwargs(
 def rows_to_refs(
     g: ceg.Graph,
     df: pl.DataFrame,
-    universe: Universe,
+    universe: Collection,
     sigs: Signatures,
     keep: dict[str, int] = {},
 ):
@@ -324,7 +325,7 @@ def rows_to_refs(
     >>> fs = ceg.fs
     >>> data = ceg.data
     >>> app = ceg.app
-    >>> universe = cast(app.model.Universe, frozendict({
+    >>> universe = cast(app.model.Collection, frozendict({
     ...     "days": fs.dates.daily.loop,
     ...     "close": data.bars.daily_close.bind
     ... }))
@@ -537,7 +538,7 @@ class ModelKW(NamedTuple):
 
     dfs_data: dict[str, pl.DataFrame] = {}
 
-    universe: Universe = cast(Universe, frozendict())
+    universe: Collection = cast(Collection, frozendict())
     signatures: Signatures = cast(Signatures, frozendict())
 
     def with_universe(self, universe: pl.DataFrame):
@@ -553,7 +554,7 @@ class ModelKW(NamedTuple):
             )
         )
 
-    def with_functions(self, universe: Universe):
+    def with_functions(self, universe: Collection):
         sigs = signatures(universe)
         sig_df = signatures_df(sigs)
         dfs = tuple(
