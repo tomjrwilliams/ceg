@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -38,16 +37,14 @@ from .....engine import *
 
 from .em import *
 
+
 @dataclass(frozen=True)
 class DailyEMPParams(DailyEMParams):
     span: float | None = None
     alpha: float | None = None
     pwindow: int | None = None
 
-    def build_path(
-        self,
-        cls: Type[DailyEM]
-    ):
+    def build_id(self, cls: Type[DailyEM]):
         span = self.span
         alpha = self.alpha
         pwindow = self.pwindow
@@ -71,9 +68,9 @@ class DailyEMPParams(DailyEMParams):
             params += f"-{str(pwindow)}"
         return params
 
+
 @dataclass(frozen=True)
 class DailyEMP(DailyEM):
-
     params: DailyEMPParams
 
     @classmethod
@@ -85,24 +82,23 @@ class DailyEMP(DailyEM):
         pwindow: int | None = None,
         project: Project | None = None,
     ):
-        params=DailyEMPParams(
+        params = DailyEMPParams(
             span=span,
             alpha=alpha,
             pwindow=pwindow,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
-    
+
+
 __all__ = [
     "DailyEMPParams",
     "DailyEMP",

@@ -1,4 +1,3 @@
-
 # prod is more organised by domain
 
 
@@ -7,7 +6,6 @@
 # but in the same manner that dev inherits / adapts prod, dev can inherit from each other
 
 # all just modules
-
 
 
 # prod is by domain, dev is by project and then domain

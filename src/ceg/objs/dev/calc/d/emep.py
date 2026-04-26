@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -38,19 +37,20 @@ from .....engine import *
 
 from .em import *
 
+
 @dataclass(frozen=True)
 class DailyEMEPParams(DailyEMParams):
     pspan: float | None = None
     palpha: float | None = None
 
-    def build_path(
+    def build_id(
         self,
         cls: Type[DailyEM],
     ):
-        span= self.span
-        alpha= self.alpha
-        palpha= self.palpha
-        pspan= self.pspan
+        span = self.span
+        alpha = self.alpha
+        palpha = self.palpha
+        pspan = self.pspan
         i = apis.t.only_index_not_none(
             span, alpha, strict=True
         )
@@ -73,11 +73,10 @@ class DailyEMEPParams(DailyEMParams):
             raise ValueError(cls)
         return params
 
+
 @dataclass(frozen=True)
 class DailyEMEP(DailyEM):
-
     params: DailyEMEPParams
-
 
     @classmethod
     def new(
@@ -89,25 +88,24 @@ class DailyEMEP(DailyEM):
         pspan: float | None = None,
         project: Project | None = None,
     ):
-        params=DailyEMEPParams(
+        params = DailyEMEPParams(
             span=span,
             alpha=alpha,
             palpha=palpha,
             pspan=pspan,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
-    
+
+
 __all__ = [
     "DailyEMEPParams",
     "DailyEMEP",

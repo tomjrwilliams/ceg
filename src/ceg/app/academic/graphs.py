@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from typing import (
@@ -11,11 +10,11 @@ from typing import (
 )
 
 from dataclasses import replace
+
 if TYPE_CHECKING:
     from dataclasses import dataclass
 else:
     from pydantic.dataclasses import dataclass
-
 
 
 T0 = TypeVar("T0")
@@ -25,6 +24,7 @@ T2 = TypeVar("T2")
 I0 = TypeVar("I0")
 I1 = TypeVar("I1")
 I2 = TypeVar("I2")
+
 
 @dataclass(frozen=True)
 class Graph:
@@ -54,9 +54,11 @@ class R1(Generic[T1]):
 class R2(Generic[T1, T2]):
     i: int
 
+
 @dataclass(frozen=True)
 class Node:
     pass
+
 
 @dataclass(frozen=True)
 class N0x1(Node, Generic[T1]):
@@ -68,7 +70,7 @@ class N0x1(Node, Generic[T1]):
     @classmethod
     def Ref(cls, i: int) -> R1[T1]:
         return R1(i)
-    
+
     @classmethod
     def bind(
         cls,
@@ -79,6 +81,7 @@ class N0x1(Node, Generic[T1]):
         ref = cls.Ref(len(graph.nodes))
         graph = graph.with_node(cls(ref, f, t, None))
         return graph, ref
+
 
 @dataclass(frozen=True)
 class N0x2(Node, Generic[T1, T2]):
@@ -102,12 +105,13 @@ class N0x2(Node, Generic[T1, T2]):
         graph = graph.with_node(cls(ref, f, t, None))
         return graph, ref
 
+
 @dataclass(frozen=True)
 class N1x1(Node, Generic[I1, T1]):
     ref: R1[T1]
     f: Callable[[I1], T1]
     t: Type[T1]
-    inputs: tuple[R1[I1]] 
+    inputs: tuple[R1[I1]]
 
     @classmethod
     def Ref(cls, i: int) -> R1[T1]:
@@ -119,7 +123,7 @@ class N1x1(Node, Generic[I1, T1]):
         graph: Graph,
         f: Callable[[I1], T1],
         t: Type[T1],
-        i1: R1[I1]
+        i1: R1[I1],
     ):
         ref = cls.Ref(len(graph.nodes))
         graph = graph.with_node(cls(ref, f, t, (i1,)))
@@ -149,25 +153,25 @@ class N1x2(Node, Generic[I1, T1, T2]):
         graph = graph.with_node(cls(ref, f, t, (i1,)))
         return graph, ref
 
+
 class N:
-    
     @dataclass(frozen=True)
     class F64(N0x1[float]):
-        
         @classmethod
         def Ref(cls, i: int):
             return R.R64(i)
-        
+
     # TODO: sub type bind
 
+
 class R:
-    
     @dataclass(frozen=True)
     class R64(R1[float]):
         pass
 
+
 g = Graph([])
-g, r0 = N.F64.bind(g, lambda: 1., float)
+g, r0 = N.F64.bind(g, lambda: 1.0, float)
 v0 = r0.value(g)
 
 

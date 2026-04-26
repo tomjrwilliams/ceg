@@ -1,10 +1,11 @@
-
 import os
 import sys
+
 sys.path.append("./src")
 
 import polars as pl
 from ...apis.st import cache, library
+
 st = library()
 
 import ceg
@@ -12,14 +13,16 @@ import ceg
 core = ceg.app.academic.core
 ui = ceg.vis.legacy
 
+
 def init_app():
     with st.sidebar:
         sim = ui.components.session_state_text_input(
             "sim",
             variable="SIM",
-            default=os.environ.get("SIM")
+            default=os.environ.get("SIM"),
         )
         ui.components.reset_cache_button()
+
 
 def drop_zero(
     df: pl.DataFrame,
@@ -37,70 +40,74 @@ def drop_zero(
         expr = expr.round(dp)
     return df.filter(expr != 0)
 
+
 if __name__ == "__main__":
-    ui.apps.app({
-        "constants": {
-            "technologies": ui.components.single_table(
-                "technologies",
-                core.technologies.df_wide,
-                f_data = lambda v: v[0],
-            ),
-            "rels": ui.components.single_table(
-                "rels",
-                core.rels.df_wide,
-                f_data = lambda v: v[0],
-            ),
-            "functions": ui.components.single_table(
-                "functions",
-                core.functions.df_wide,
-                f_data = lambda v: v[0],
-            ),
+    ui.apps.app(
+        {
+            "constants": {
+                "technologies": ui.components.single_table(
+                    "technologies",
+                    core.technologies.df_wide,
+                    f_data=lambda v: v[0],
+                ),
+                "rels": ui.components.single_table(
+                    "rels",
+                    core.rels.df_wide,
+                    f_data=lambda v: v[0],
+                ),
+                "functions": ui.components.single_table(
+                    "functions",
+                    core.functions.df_wide,
+                    f_data=lambda v: v[0],
+                ),
+            },
+            "variables": {
+                "deliveries": ui.components.single_table(
+                    "deliveries",
+                    core.deliveries.df_tall,
+                    f_df=lambda df: df.pipe(
+                        drop_zero, "delivery"
+                    ),
+                ),
+                "production": ui.components.single_table(
+                    "production",
+                    core.production.df_tall,
+                    f_df=lambda df: df.pipe(
+                        drop_zero, "production"
+                    ),
+                ),
+                "inventory": ui.components.single_table(
+                    "inventory",
+                    core.inventory.df_tall,
+                    f_df=lambda df: df.pipe(
+                        drop_zero, "inventory"
+                    ),
+                ),
+                "cash": ui.components.single_table(
+                    "cash",
+                    core.cash.df_tall,
+                    f_df=lambda df: df.pipe(
+                        drop_zero, "cash"
+                    ),
+                ),
+                "prices": ui.components.single_table(
+                    "prices",
+                    core.prices.df_tall,
+                    f_df=lambda df: df.pipe(
+                        drop_zero, "price"
+                    ),
+                ),
+                "orders": ui.components.single_table(
+                    "orders",
+                    core.orders.df_tall,
+                    f_df=lambda df: df.pipe(
+                        drop_zero, "order"
+                    ),
+                ),
+            },
         },
-        "variables": {
-            "deliveries": ui.components.single_table(
-                "deliveries",
-                core.deliveries.df_tall,
-                f_df = lambda df: df.pipe(
-                    drop_zero, "delivery"
-                )
-            ),
-            "production": ui.components.single_table(
-                "production",
-                core.production.df_tall,
-                f_df = lambda df: df.pipe(
-                    drop_zero, "production"
-                )
-            ),
-            "inventory": ui.components.single_table(
-                "inventory",
-                core.inventory.df_tall,
-                f_df = lambda df: df.pipe(
-                    drop_zero, "inventory"
-                )
-            ),
-            "cash":  ui.components.single_table(
-                "cash",
-                core.cash.df_tall,
-                f_df = lambda df: df.pipe(
-                    drop_zero, "cash"
-                )
-            ),
-            "prices":  ui.components.single_table(
-                "prices",
-                core.prices.df_tall,
-                f_df = lambda df: df.pipe(
-                    drop_zero, "price"
-                )
-            ),
-            "orders": ui.components.single_table(
-                "orders",
-                core.orders.df_tall,
-                f_df = lambda df: df.pipe(
-                    drop_zero, "order"
-                )
-            ),
-        },
-    }, init_elements=init_app).run()
+        init_elements=init_app,
+    ).run()
 
 # simple streamlit page with charts
 
@@ -119,8 +126,6 @@ if __name__ == "__main__":
 
 # essentially just a page for each variable?
 # can presumably open two pages and compare side by side if interested in more than one data point at a time
-
-
 
 
 # possibly, you want side split, at the top, you pick the variable to explore and then given that it shows charts

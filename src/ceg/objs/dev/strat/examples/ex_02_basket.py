@@ -1,4 +1,3 @@
-
 from ..... import apis
 from .....apis import t
 from .....apis import kv
@@ -12,6 +11,7 @@ from ..calcs import *
 from ..signals import *
 from ..params import *
 from ..domain import *
+
 
 def ex_02_basket():
     """
@@ -31,7 +31,7 @@ def ex_02_basket():
     >>> dom, univ = dom.with_univ("basket", depth=0)
     >>> dom, univ, bts = dom.with_strats(univ, spec_es, spec_tn)
     >>> dom, _, agg = dom.with_rx_agg(
-    ...     Collection.new(univ.get_parent(dom), "rx"), bts
+    ...     Container.new(univ.get_parent(dom), "rx"), bts
     ... )
     >>> spec_b = Basket(
     ...     asset=tuple([
@@ -39,7 +39,7 @@ def ex_02_basket():
     ...         for bt in bts
     ...     ]),
     ...     name="ES-TN",
-    ...     scale=ScaleVol(span=256, rx = agg.path)
+    ...     scale=ScaleVol(span=256, rx = agg.id)
     ... )
     >>> dom, univ = dom.with_univ("basket", depth=1)
     >>> dom, univ, bts = dom.with_strats(univ, spec_b)
@@ -79,7 +79,7 @@ def ex_02_basket():
         -0.000537
         -0.000566
     ]
-    >>> rx.value_key_val(dom).get(rx.path).tail(8)
+    >>> rx.value_key_val(dom).get(rx.id).tail(8)
     shape: (8,)
     Series: 'basket-1-bt-mv-000-rx-0' [f64]
     [
@@ -92,7 +92,7 @@ def ex_02_basket():
         0.010556
         0.062418
     ]
-    >>> pf_rx.value_key_val(dom).get(pf_rx.path).tail(8)
+    >>> pf_rx.value_key_val(dom).get(pf_rx.id).tail(8)
     shape: (8,)
     Series: 'basket-1-bt-mv-000-pf-rx-ES' [f64]
     [
@@ -105,7 +105,7 @@ def ex_02_basket():
         0.010556
         0.062418
     ]
-    >>> rx_agg.value_key_val(dom).get(rx.path).tail(8)
+    >>> rx_agg.value_key_val(dom).get(rx.id).tail(8)
     shape: (8,)
     Series: 'basket-1-bt-mv-000-rx-0' [f64]
     [
@@ -118,7 +118,7 @@ def ex_02_basket():
         0.010556
         0.062418
     ]
-    >>> pf_agg.value_key_val(dom).get(pf_agg.path).tail(8)
+    >>> pf_agg.value_key_val(dom).get(pf_agg.id).tail(8)
     shape: (8,)
     Series: 'basket-1-bt-mv-000-pf-rx' [f64]
     [
@@ -131,7 +131,7 @@ def ex_02_basket():
         0.007361
         0.074568
     ]
-    >>> v_perf = perf.value_key_val(dom).get(perf.path)
+    >>> v_perf = perf.value_key_val(dom).get(perf.id)
     >>> v_perf.row(0, round=4, repr=True)
     key basket-1-bt-mv-000-rx-bench
     mu 0.5207

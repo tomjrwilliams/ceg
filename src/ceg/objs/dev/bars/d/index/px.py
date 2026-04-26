@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -37,6 +36,7 @@ from ..ident import *
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class IndexDailyTags(BarDailyTags):
     symbol: str
@@ -46,11 +46,13 @@ class IndexDailyTags(BarDailyTags):
     source: str
     idx: str | None = None  # ccy to convert to
 
+
 # VXTLT = tlt bond vol (from 2020 only)
 # GVZ = gold
 # EVZ eurocurrency
 # OVX = crude vol
 # vvix = vix vol
+
 
 @dataclass(frozen=True)
 class IndexDailyPx(
@@ -65,7 +67,7 @@ class IndexDailyPx(
     ...     source="frd",
     ... )
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-idx-d-VIX-close-raw-frd' [f64]
     [
@@ -79,6 +81,7 @@ class IndexDailyPx(
         21.65
     ]
     """
+
     parent: Project | str | None
 
     tags: IndexDailyTags
@@ -88,8 +91,10 @@ class IndexDailyPx(
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["IndexDailyPxSnap"] = "IndexDailyPxSnap"
- 
+        type: Literal["IndexDailyPxSnap"] = (
+            "IndexDailyPxSnap"
+        )
+
     @classmethod
     def new(
         cls,
@@ -110,17 +115,17 @@ class IndexDailyPx(
             source,
             fx,
         ) = cls.identifier(
-            symbol, 
-            ident, 
-            field, 
-            adjust, 
-            source, 
+            symbol,
+            ident,
+            field,
+            adjust,
+            source,
             fx=fx,
-            expect=INDEX
+            expect=INDEX,
         )
         assert adjust in IDX_ADJUSTMENTS, adjust
         return cls(
-            path=cls.build_path(
+            id=cls.build_id(
                 parent,
                 "idx-d",
                 ident,
@@ -135,12 +140,13 @@ class IndexDailyPx(
                 fx=fx,
                 source=source,
             ),
-        )    
+        )
 
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, GraphSync):
             return HandleNewIndexDailyPx()
         raise ValueError((self, event))
+
 
 @dataclass(frozen=True)
 class HandleUpdateIndexDailyPx(Handler):
@@ -154,6 +160,7 @@ class HandleUpdateIndexDailyPx(Handler):
         # check new data available
         # if after snap.last, get and append
         return
+
 
 @dataclass(frozen=True)
 class HandleNewIndexDailyPx(
@@ -174,11 +181,12 @@ class HandleNewIndexDailyPx(
                 folder=apis.data.frd.Folders.IND,
                 symbol=tags.symbol,
                 suffix=tags.adjust,
-                snap = "full",  # full
-                freq = "1day",  # 1day
+                snap="full",  # full
+                freq="1day",  # 1day
                 #
-                start = None,
-                end = None,
+                start=None,
+                end=None,
+                update=True,
             ).select("date", tags.field)
         else:
             raise ValueError(obj)
@@ -187,7 +195,7 @@ class HandleNewIndexDailyPx(
             obj,
             df,
             tags.field,
-            t = self.key_value_type(obj),
+            t=self.key_value_type(obj),
         )
 
         new_snap = self.update_snap_from_df(snap, df)
@@ -197,9 +205,10 @@ class HandleNewIndexDailyPx(
         ):
             return ValueUpdate.from_snap(
                 self.update_snap_from_df(snap, df),
-                into=frozendict()
+                into=frozendict(),
             )
-        return frozendict().set(obj.path, (snap, []))
+        return frozendict().set(obj.id, (snap, []))
+
 
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
@@ -208,12 +217,14 @@ class HandleNewIndexDailyPx(
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class DependsIndexDailyPxParent(DependsParentValue):
     parent: IndexDailyPx | str
 
     def get_parent(self) -> IndexDailyPx:
         return context.get().get(self.parent, IndexDailyPx)
+
 
 #  ------------------
 

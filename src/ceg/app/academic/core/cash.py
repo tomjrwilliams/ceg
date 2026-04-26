@@ -5,6 +5,7 @@ import pandas as pd
 from .types import *
 from .states import State
 
+
 def df_tall(
     v: F64_2D,
     agents: list[str] | None = None,
@@ -23,8 +24,9 @@ def df_tall(
         {
             "time": pl.Int32,
             "agent": t_agents,
-        }
+        },
     )
+
 
 def df_wide(
     v: F64_2D,
@@ -38,10 +40,9 @@ def df_wide(
         agents = enumerated_labels(agent, a, justify=3)
     return pd.DataFrame(
         data={
-            name: v[:, i]
-            for i, name in enumerate(agents)
+            name: v[:, i] for i, name in enumerate(agents)
         },
-        index=list(range(v.shape[0]))
+        index=list(range(v.shape[0])),
     )
 
 
@@ -50,9 +51,11 @@ def init_constant(
     v: F64_1D,
 ) -> Callable[[State], F64_1D]:
     assert n_agents == v.shape[0]
+
     def f(state: State) -> F64_1D:
-        assert state.n_agents==n_agents
+        assert state.n_agents == n_agents
         return v
+
     return f
 
 
@@ -63,4 +66,3 @@ def init_constant(
 #     shape = (n_agents,)
 #     # will this later include other cash types? debt?
 #     return f_sample(shape)
-

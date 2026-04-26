@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -37,6 +36,7 @@ from ..ident import *
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class FxDailyTags(BarDailyTags):
     symbol: str
@@ -60,7 +60,7 @@ class FxDailyPx(
     ...     source="frd",
     ... )
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fx-d-EURUSD-close-raw-frd' [f64]
     [
@@ -74,6 +74,7 @@ class FxDailyPx(
         1.08281
     ]
     """
+
     parent: Project | str | None
 
     tags: FxDailyTags
@@ -84,7 +85,7 @@ class FxDailyPx(
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["FxDailyPxSnap"] = "FxDailyPxSnap"
- 
+
     @classmethod
     def new(
         cls,
@@ -107,17 +108,17 @@ class FxDailyPx(
             source,
             fx,
         ) = cls.identifier(
-            symbol, 
-            ident, 
-            field, 
-            adjust, 
-            source, 
+            symbol,
+            ident,
+            field,
+            adjust,
+            source,
             fx=fx,
-            expect=FX
+            expect=FX,
         )
         assert adjust in FX_ADJUSTMENTS, adjust
         return cls(
-            path=cls.build_path(
+            id=cls.build_id(
                 parent,
                 "fx-d",
                 ident,
@@ -133,11 +134,12 @@ class FxDailyPx(
                 source=source,
             ),
         )
-    
+
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, GraphSync):
             return HandleNewFxDailyPx()
         raise ValueError((self, event))
+
 
 @dataclass(frozen=True)
 class HandleUpdateFxDailyPx(Handler):
@@ -151,6 +153,7 @@ class HandleUpdateFxDailyPx(Handler):
         # check new data available
         # if after snap.last, get and append
         return
+
 
 @dataclass(frozen=True)
 class HandleNewFxDailyPx(
@@ -171,11 +174,12 @@ class HandleNewFxDailyPx(
                 folder=apis.data.frd.Folders.FX,
                 symbol=tags.symbol,
                 suffix=tags.adjust,
-                snap = "full",  # full
-                freq = "1day",  # 1day
+                snap="full",  # full
+                freq="1day",  # 1day
                 #
-                start = None,
-                end = None,
+                start=None,
+                end=None,
+                update=True,
             ).select("date", tags.field)
         else:
             raise ValueError(obj)
@@ -184,17 +188,16 @@ class HandleNewFxDailyPx(
             pass
         else:
             df = df.with_columns(
-                (1 / pl.col(tags.field))
-                .alias(tags.field)
+                (1 / pl.col(tags.field)).alias(tags.field)
             )
 
         v = self.set_value_from_df(
             obj,
             df,
             tags.field,
-            t = self.key_value_type(obj),
+            t=self.key_value_type(obj),
         )
-        
+
         new_snap = self.update_snap_from_df(snap, df)
         if (
             new_snap.first != snap.first
@@ -202,10 +205,10 @@ class HandleNewFxDailyPx(
         ):
             return ValueUpdate.from_snap(
                 self.update_snap_from_df(snap, df),
-                into=frozendict()
+                into=frozendict(),
             )
-        return frozendict().set(obj.path, (snap, []))
-    
+        return frozendict().set(obj.id, (snap, []))
+
 
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
@@ -219,7 +222,8 @@ class DependsFxDailyPxParent(DependsParentValue):
 
     def get_parent(self) -> FxDailyPx:
         return context.get().get(self.parent, FxDailyPx)
-    
+
+
 #  ------------------
 
 __all__ = [

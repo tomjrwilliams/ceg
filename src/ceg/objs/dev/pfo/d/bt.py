@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -50,7 +49,6 @@ logger, log = logs.logger(
 
 @dataclass(frozen=True)
 class Backtest(Combination):
-
     @classmethod
     def cast(cls, comb: Combination):
         # assert index > -1?
@@ -61,84 +59,76 @@ class Backtest(Combination):
             comb.index,
         )
 
-    def rx(self, coll: Collection, t: Type[O] = Daily):
+    def rx(self, coll: Container, t: Type[O] = Daily):
         return self.get_obj("rx", coll, t)
-
 
 
 #  ------------------
 
+
 def rx_price_types(
-    univ: Collection,
+    univ: Container,
     comb: Combination,
 ):
     from ...bars import FutDailyRx, EqDailyRx, FxDailyRx
     from .pfo import DailyPfolioRx
-    rx_ref = Ref.decode(
-        assert_is(comb.refs.get("rx"), str)
-    )
+
+    rx_ref = Ref.decode(assert_is(comb.refs.get("rx"), str))
     assert rx_ref.type == "obj", (comb, rx_ref)
-    rx = context.get().get(
-        univ.objects[rx_ref.i], Daily
-    )
-    if isinstance(rx, (
-        FutDailyRx,
-        EqDailyRx,
-        FxDailyRx,
-    )):
+    rx = context.get().get(univ.objects[rx_ref.i], Daily)
+    if isinstance(
+        rx,
+        (
+            FutDailyRx,
+            EqDailyRx,
+            FxDailyRx,
+        ),
+    ):
         return [type(rx)]
     elif isinstance(rx, DailyBtRx):
-        return (
-            rx.get_parent()
-            .price_types()
-        )
-    elif isinstance(rx, DailyPfolioRx):
-        raise ValueError(rx)
-    else:
-        raise ValueError(rx)
-    
-def rx_price_symbols(
-    univ: Collection,
-    comb: Combination,
-):
-    from ...bars import FutDailyRx, EqDailyRx, FxDailyRx
-    from .pfo import DailyPfolioRx
-    rx_ref = Ref.decode(
-        assert_is(comb.refs.get("rx"), str)
-    )
-    assert rx_ref.type == "obj", (comb, rx_ref)
-    rx = context.get().get(
-        univ.objects[rx_ref.i], Daily
-    )
-    if isinstance(rx, (
-        FutDailyRx,
-        EqDailyRx,
-        FxDailyRx,
-    )):
-        px = rx.get_parent()
-        return [px.tags.symbol]
-    elif isinstance(rx, DailyBtRx):
-        return (
-            rx.get_parent()
-            .price_symbols()
-        )
+        return rx.get_parent().price_types()
     elif isinstance(rx, DailyPfolioRx):
         raise ValueError(rx)
     else:
         raise ValueError(rx)
 
-@dataclass(frozen=True)
-class DailyBtXvar(
-    DailyCombination
+
+def rx_price_symbols(
+    univ: Container,
+    comb: Combination,
 ):
-    
-    metric: str = "bt" # TODO: or bt_cum?
+    from ...bars import FutDailyRx, EqDailyRx, FxDailyRx
+    from .pfo import DailyPfolioRx
+
+    rx_ref = Ref.decode(assert_is(comb.refs.get("rx"), str))
+    assert rx_ref.type == "obj", (comb, rx_ref)
+    rx = context.get().get(univ.objects[rx_ref.i], Daily)
+    if isinstance(
+        rx,
+        (
+            FutDailyRx,
+            EqDailyRx,
+            FxDailyRx,
+        ),
+    ):
+        px = rx.get_parent()
+        return [px.tags.symbol]
+    elif isinstance(rx, DailyBtRx):
+        return rx.get_parent().price_symbols()
+    elif isinstance(rx, DailyPfolioRx):
+        raise ValueError(rx)
+    else:
+        raise ValueError(rx)
+
+
+@dataclass(frozen=True)
+class DailyBtXvar(DailyCombination):
+    metric: str = "bt"  # TODO: or bt_cum?
 
 
 @dataclass(frozen=True)
 class DailyBtUvar(DailyBtXvar):
-
-    metric: str = "bt-uv" # TODO: or bt_cum?
+    metric: str = "bt-uv"  # TODO: or bt_cum?
 
     version: int = 0
     type: Literal["DailyBtUvar"] = "DailyBtUvar"
@@ -150,51 +140,49 @@ class DailyBtUvar(DailyBtXvar):
     @classmethod
     def new(
         cls,
-        parent: Collection,
+        parent: Container,
         comb: int | Combination,
     ):
         return cls.new_(parent, "bt-uv", comb)
-    
+
     def price_symbols(self):
-        coll = self.get_parent()
+        container= self.get_parent()
         try:
             comb = coll.comb[self.args[0]]
         except:
             raise ValueError((coll, self))
         return rx_price_symbols(coll, comb)
-    
+
     def price_types(self):
-        coll = self.get_parent()
+        container= self.get_parent()
         comb = coll.comb[self.args[0]]
         return rx_price_types(coll, comb)
-    
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyBtUvar:
+
+    def handler_object_new(self) -> HandleNewDailyBtUvar:
         return HandleNewDailyBtUvar()
-    
+
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ValueUpdate):
             return self.handler_object_new()
         raise ValueError((self, event))
-    
-    def params(self, coll: Collection):
+
+    def params(self, coll: Container):
         assert len(self.args) == 1, self
         comb = coll.comb[self.args[0]]
         return assert_is(comb, Backtest)
 
     def rx(self):
         return DailyBtRx.new(self)
-    
+
     def px(self):
         return DailyBtPx.new(self)
-    
+
     def gross(self):
         return DailyBtGross.new(self)
-    
+
     def pos(self):
         return DailyBtPos.new(self)
-    
+
     def deriv(
         self,
         index: int | None = None,
@@ -210,18 +198,19 @@ class DailyBtUvar(DailyBtXvar):
         elif key == "gross":
             return DailyBtGross.new(self, key=key)
         return DailyCombinationDeriv.new(self, index, key)
-    
+
     # def explorer_df(self):
 
     #     # TODO: return df with signal, scale, etc.
 
     #     # all stacked, relevant group keys
 
-    #     return    
+    #     return
+
 
 @dataclass(frozen=True)
 class DailyBtMvar(DailyBtXvar):
-    metric: str = "bt-mv" # TODO: or bt_cum?
+    metric: str = "bt-mv"  # TODO: or bt_cum?
 
     version: int = 0
     type: Literal["DailyBtMvar"] = "DailyBtMvar"
@@ -233,48 +222,55 @@ class DailyBtMvar(DailyBtXvar):
     @classmethod
     def new(
         cls,
-        parent: Collection,
+        parent: Container,
         comb: tuple[int | Combination, ...],
     ):
         return cls.new_(parent, "bt-mv", comb)
-    
+
     def price_symbols(self):
-        coll = self.get_parent()
-        return list(set().union(*[
-            rx_price_symbols(coll, coll.comb[i])
-            for i in self.args[1:]
-        ]))
+        container= self.get_parent()
+        return list(
+            set().union(
+                *[
+                    rx_price_symbols(coll, coll.comb[i])
+                    for i in self.args[1:]
+                ]
+            )
+        )
+
     def price_types(self):
-        coll = self.get_parent()
-        return list(set().union(*[
-            rx_price_types(coll, coll.comb[i])
-            for i in self.args[1:]
-        ]))
-    
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyBtMvar:
+        container= self.get_parent()
+        return list(
+            set().union(
+                *[
+                    rx_price_types(coll, coll.comb[i])
+                    for i in self.args[1:]
+                ]
+            )
+        )
+
+    def handler_object_new(self) -> HandleNewDailyBtMvar:
         return HandleNewDailyBtMvar()
 
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ValueUpdate):
-            # assert self.get_parent().path == event.obj, (self, event)
+            # assert self.get_parent().id == event.obj, (self, event)
             return self.handler_object_new()
         raise ValueError((self, event))
-    
+
     def rx(self, index: int | None = None):
         return DailyBtRx.new(self, index)
-    
+
     def px(self, index: int | None = None):
         return DailyBtPx.new(self, index)
-    
+
     def gross(self, index: int | None = None):
         return DailyBtGross.new(self, index)
-    
+
     def pos(self, index: int | None = None):
         return DailyBtPos.new(self, index)
-    
-    def params(self, coll: Collection):
+
+    def params(self, coll: Container):
         comb, *combs = [
             assert_is(coll.comb[c], Backtest)
             for c in self.args
@@ -284,16 +280,22 @@ class DailyBtMvar(DailyBtXvar):
     def deriv(
         self,
         key: str | None = None,
-        index: int | None = None
+        index: int | None = None,
     ):
         if key == "pos":
-            return DailyBtPos.new(self, index=index, key=key)
+            return DailyBtPos.new(
+                self, index=index, key=key
+            )
         elif key == "rx":
-            return DailyBtPos.new(self, index=index, key=key)
+            return DailyBtPos.new(
+                self, index=index, key=key
+            )
         elif key == "px":
             return DailyBtPx.new(self, index=index, key=key)
         elif key == "gross":
-            return DailyBtGross.new(self, index=index, key=key)
+            return DailyBtGross.new(
+                self, index=index, key=key
+            )
         return DailyCombinationDeriv.new(self, index, key)
 
     # def explorer_df(self):
@@ -302,59 +304,65 @@ class DailyBtMvar(DailyBtXvar):
 
     #     # all stacked, relevant group keys
 
-    #     return    
-    
+    #     return
+
+
 @dataclass(frozen=True)
 class DailyBtWeights(DailyCombination):
-    metric: str = "bt-w" 
+    metric: str = "bt-w"
 
     version: int = 0
     type: Literal["DailyBtWeights"] = "DailyBtWeights"
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["DailyBtWeightsSnap"] = "DailyBtWeightsSnap"
+        type: Literal["DailyBtWeightsSnap"] = (
+            "DailyBtWeightsSnap"
+        )
 
     @classmethod
     def new(
         cls,
-        parent: Collection,
+        parent: Container,
         comb: tuple[int | Combination, ...],
     ):
         return cls.new_(parent, "bt-w", comb)
-    
+
     def price_symbols(self):
-        coll = self.get_parent()
-        return list(set().union(*[
-            rx_price_symbols(coll, coll.comb[i])
-            for i in self.args[1:]
-        ]))
+        container= self.get_parent()
+        return list(
+            set().union(
+                *[
+                    rx_price_symbols(coll, coll.comb[i])
+                    for i in self.args[1:]
+                ]
+            )
+        )
+
     def price_types(self):
-        coll = self.get_parent()
-        return list(set().union(*[
-            rx_price_types(coll, coll.comb[i])
-            for i in self.args[1:]
-        ]))
-    
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyBtWeights:
+        container= self.get_parent()
+        return list(
+            set().union(
+                *[
+                    rx_price_types(coll, coll.comb[i])
+                    for i in self.args[1:]
+                ]
+            )
+        )
+
+    def handler_object_new(self) -> HandleNewDailyBtWeights:
         return HandleNewDailyBtWeights()
 
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ValueUpdate):
-            # assert self.get_parent().path == event.obj, (self, event)
+            # assert self.get_parent().id == event.obj, (self, event)
             return self.handler_object_new()
         raise ValueError((self, event))
-    
-    def weight(
-        self, 
-        key: str, 
-        index: int
-    ):
+
+    def weight(self, key: str, index: int):
         return DailyBtWeight.new(self, index, key=key)
-    
-    def params(self, coll: Collection):
+
+    def params(self, coll: Container):
         comb, *combs = [
             assert_is(coll.comb[c], Backtest)
             for c in self.args
@@ -368,7 +376,7 @@ class DailyBtWeights(DailyCombination):
     def deriv(
         self,
         key: str | None = None,
-        index: int | None = None
+        index: int | None = None,
     ):
         return DailyBtWeight.new(self, index, key)
 
@@ -378,15 +386,16 @@ class DailyBtWeights(DailyCombination):
 
     #     # all stacked, relevant group keys
 
-    #     return    
+    #     return
+
+
 #  ------------------
 
+
 @dataclass(frozen=True)
-class HandleNewDailyBtUvar(
-    HandleNewDailyCombination
-):
+class HandleNewDailyBtUvar(HandleNewDailyCombination):
     # TODO: shifts: ...
-    unit: float = 1.
+    unit: float = 1.0
 
     def comb_dfs(
         self,
@@ -398,17 +407,13 @@ class HandleNewDailyBtUvar(
         ],
     ) -> (
         pl.DataFrame
-        | tuple[pl.DataFrame, list[
-            str
-            | int
-            | tuple[str, int]
-        ]]
+        | tuple[
+            pl.DataFrame, list[str | int | tuple[str, int]]
+        ]
     ):
         dfs, params = dfs_params
-        cap=params.get("cap", None)
-        cap=(
-            cap if cap is None else float(cap)
-        )
+        cap = params.get("cap", None)
+        cap = cap if cap is None else float(cap)
         df = combine_backtest_dfs(
             assert_is(dfs.get("rx", None)),
             dfs.get("scale", None),
@@ -421,22 +426,30 @@ class HandleNewDailyBtUvar(
             assert_is(dfs.get("px", None)),
             assert_is(dfs.get("gross", None)),
             # **shifts
-            cap=cap
+            cap=cap,
         )
-        
+
         df = df.pipe(
             run_backtest,
-            signal=None if "signal" not in dfs else "signal",
-            rebal=None if "rebalance" not in dfs else "rebalance",
-            calendar=None if "calendar" not in dfs else "calendar",
+            signal=None
+            if "signal" not in dfs
+            else "signal",
+            rebal=None
+            if "rebalance" not in dfs
+            else "rebalance",
+            calendar=None
+            if "calendar" not in dfs
+            else "calendar",
             fx=None if "fx" not in dfs else "fx",
             cap=None if "cap" not in dfs else "cap",
             unit=self.unit,
         )
-        
+
         return df, ["rx", "px", "gross", "pos"]
-    
+
+
 #  ------------------
+
 
 def combine_mv_dfs(
     df_uv: pl.DataFrame | None,
@@ -447,21 +460,26 @@ def combine_mv_dfs(
         return df_mv
     elif df_mv is None:
         return df_uv
-    return df_uv.join(
-        df_mv.rename({k: VALUE}),
-        on="date",
-        how="full",
-        coalesce=True,
-    ).sort(by="date").select(
-        "date",
-        (pl.col(VALUE) * pl.col(k)).alias(k)
+    return (
+        df_uv.join(
+            df_mv.rename({k: VALUE}),
+            on="date",
+            how="full",
+            coalesce=True,
+        )
+        .sort(by="date")
+        .select(
+            "date", (pl.col(VALUE) * pl.col(k)).alias(k)
+        )
     )
+
 
 def combine_mv_scale(
     df_uv: pl.DataFrame | None,
     df_mv: pl.DataFrame | None,
 ):
     return combine_mv_dfs(df_uv, df_mv, "scale")
+
 
 def combine_mv_signal(
     df_uv: pl.DataFrame | None,
@@ -471,11 +489,8 @@ def combine_mv_signal(
 
 
 @dataclass(frozen=True)
-class HandleNewDailyBtMvar(
-    HandleNewDailyCombination
-):
-
-    unit: float = 1.
+class HandleNewDailyBtMvar(HandleNewDailyCombination):
+    unit: float = 1.0
 
     def comb_dfs(
         self,
@@ -487,13 +502,11 @@ class HandleNewDailyBtMvar(
         ],
     ) -> (
         pl.DataFrame
-        | tuple[pl.DataFrame, list[
-            str
-            | int
-            | tuple[str, int]
-        ]]
+        | tuple[
+            pl.DataFrame, list[str | int | tuple[str, int]]
+        ]
     ):
-        
+
         dfs_ps_mv, *dfs_ps_uvs = dfs_params
 
         dfs_mv, ps_mv = dfs_ps_mv
@@ -510,7 +523,9 @@ class HandleNewDailyBtMvar(
             df_rx = assert_is(dfs_uv.get("rx", None))
 
             df_scale = dfs_uv.get("scale", None)
-            df_scale = combine_mv_scale(df_scale, mv_df_scale)
+            df_scale = combine_mv_scale(
+                df_scale, mv_df_scale
+            )
 
             df_signal = dfs_uv.get("signal", None)
             df_signal = combine_mv_signal(
@@ -522,7 +537,7 @@ class HandleNewDailyBtMvar(
 
             if df_scale is None:
                 df_scale = df_rx.select(
-                    "date", pl.lit(1.).alias("scale")
+                    "date", pl.lit(1.0).alias("scale")
                 )
 
             cap = p_uv.get("cap", None)
@@ -538,17 +553,21 @@ class HandleNewDailyBtMvar(
                 dfs_uv.get("fx", None),
                 dfs_uv.get("px", None),
                 dfs_uv.get("gross", None),
-                cap=(
-                    cap if cap is None else float(cap)
-                )
+                cap=(cap if cap is None else float(cap)),
                 # **shifts
             )
-        
+
             df = df.pipe(
                 run_backtest,
-                signal=None if "signal" not in dfs_uv else "signal",
-                rebal=None if "rebalance" not in dfs_uv else "rebalance",
-                calendar=None if "calendar" not in dfs_uv else "calendar",
+                signal=None
+                if "signal" not in dfs_uv
+                else "signal",
+                rebal=None
+                if "rebalance" not in dfs_uv
+                else "rebalance",
+                calendar=None
+                if "calendar" not in dfs_uv
+                else "calendar",
                 fx=None if "fx" not in dfs_uv else "fx",
                 cap=None if "cap" not in dfs_uv else "cap",
                 unit=self.unit,
@@ -557,78 +576,93 @@ class HandleNewDailyBtMvar(
             acc.append(df)
 
         n = len(dfs_ps_uvs)
-        
-        res = apis.pl.join_dfs(
-            [
-                df.select(
-                    "date", "pos", "gross", "px", "rx"
-                ).rename({
-                    "gross": f"gross_{i}",
-                    "px": f"px_{i}",
-                    "pos": f"pos_{i}",
-                    "rx": f"rx_{i}",
-                })
-                for i, df in enumerate(acc)
-            ],
-            align=True,
-            on="date",
-        ).with_columns(
-            pl.all_horizontal([
-                pl.col(f"rx_{i}").is_null()
-                for i in range(n)
-            ]).alias("mask"),
-            pl.sum_horizontal(*[
-                pl.col(f"rx_{i}") for i in range(n)
-            ]).alias("rx"),
-            pl.all_horizontal([
-                pl.col(f"px_{i}").is_null()
-                for i in range(n)
-            ]).alias("px_mask"),
-            pl.sum_horizontal(*[
-                pl.col(f"px_{i}")
-                .forward_fill()
-                for i in range(n)
-            ]).alias("px"),
-            pl.all_horizontal([
-                pl.col(f"gross_{i}").is_null()
-                for i in range(n)
-            ]).alias("gross_mask"),
-            pl.sum_horizontal(*[
-                pl.col(f"gross_{i}")
-                .forward_fill()
-                for i in range(n)
-            ]).alias("gross"),
-        ).with_columns(
-            pl.when(pl.col("mask"))
-            .then(None)
-            .otherwise("rx")
-            .alias("rx"),
-            pl.when(pl.col("px_mask"))
-            .then(None)
-            .otherwise("px")
-            .alias("px"),
-            pl.when(pl.col("gross_mask"))
-            .then(None)
-            .otherwise("gross")
-            .alias("gross"),
-        ).drop("mask", "px_mask", "gross_mask")
 
-        k_is: list[
-            str | int | tuple[str, int]
-        ] = ["rx", "px", "gross", "px"] + [
-            (k, i)
-            for i in list(range(n))
-            for k in ["rx", "pos", "gross", "px"]
-        ] + [0][1:]
+        res = (
+            apis.pl.join_dfs(
+                [
+                    df.select(
+                        "date", "pos", "gross", "px", "rx"
+                    ).rename(
+                        {
+                            "gross": f"gross_{i}",
+                            "px": f"px_{i}",
+                            "pos": f"pos_{i}",
+                            "rx": f"rx_{i}",
+                        }
+                    )
+                    for i, df in enumerate(acc)
+                ],
+                align=True,
+                on="date",
+            )
+            .with_columns(
+                pl.all_horizontal(
+                    [
+                        pl.col(f"rx_{i}").is_null()
+                        for i in range(n)
+                    ]
+                ).alias("mask"),
+                pl.sum_horizontal(
+                    *[pl.col(f"rx_{i}") for i in range(n)]
+                ).alias("rx"),
+                pl.all_horizontal(
+                    [
+                        pl.col(f"px_{i}").is_null()
+                        for i in range(n)
+                    ]
+                ).alias("px_mask"),
+                pl.sum_horizontal(
+                    *[
+                        pl.col(f"px_{i}").forward_fill()
+                        for i in range(n)
+                    ]
+                ).alias("px"),
+                pl.all_horizontal(
+                    [
+                        pl.col(f"gross_{i}").is_null()
+                        for i in range(n)
+                    ]
+                ).alias("gross_mask"),
+                pl.sum_horizontal(
+                    *[
+                        pl.col(f"gross_{i}").forward_fill()
+                        for i in range(n)
+                    ]
+                ).alias("gross"),
+            )
+            .with_columns(
+                pl.when(pl.col("mask"))
+                .then(None)
+                .otherwise("rx")
+                .alias("rx"),
+                pl.when(pl.col("px_mask"))
+                .then(None)
+                .otherwise("px")
+                .alias("px"),
+                pl.when(pl.col("gross_mask"))
+                .then(None)
+                .otherwise("gross")
+                .alias("gross"),
+            )
+            .drop("mask", "px_mask", "gross_mask")
+        )
+
+        k_is: list[str | int | tuple[str, int]] = (
+            ["rx", "px", "gross", "px"]
+            + [
+                (k, i)
+                for i in list(range(n))
+                for k in ["rx", "pos", "gross", "px"]
+            ]
+            + [0][1:]
+        )
 
         return res, k_is
-    
-@dataclass(frozen=True)
-class HandleNewDailyBtWeights(
-    HandleNewDailyCombination
-):
 
-    unit: float = 1.
+
+@dataclass(frozen=True)
+class HandleNewDailyBtWeights(HandleNewDailyCombination):
+    unit: float = 1.0
 
     def comb_dfs(
         self,
@@ -640,13 +674,11 @@ class HandleNewDailyBtWeights(
         ],
     ) -> (
         pl.DataFrame
-        | tuple[pl.DataFrame, list[
-            str
-            | int
-            | tuple[str, int]
-        ]]
+        | tuple[
+            pl.DataFrame, list[str | int | tuple[str, int]]
+        ]
     ):
-        
+
         dfs_ps_mv, *dfs_ps_uvs = dfs_params
 
         dfs_mv, ps_mv = dfs_ps_mv
@@ -668,7 +700,9 @@ class HandleNewDailyBtWeights(
             df_rx = assert_is(dfs_uv.get("rx", None))
 
             df_scale = dfs_uv.get("scale", None)
-            df_scale = combine_mv_scale(df_scale, mv_df_scale)
+            df_scale = combine_mv_scale(
+                df_scale, mv_df_scale
+            )
 
             df_signal = dfs_uv.get("signal", None)
             df_signal = combine_mv_signal(
@@ -680,7 +714,7 @@ class HandleNewDailyBtWeights(
 
             if df_scale is None:
                 df_scale = df_rx.select(
-                    "date", pl.lit(1.).alias("scale")
+                    "date", pl.lit(1.0).alias("scale")
                 )
 
             cap = p_uv.get("cap", None)
@@ -698,17 +732,21 @@ class HandleNewDailyBtWeights(
                 dfs_uv.get("fx", None),
                 dfs_uv.get("px", None),
                 dfs_uv.get("gross", None),
-                cap=(
-                    cap if cap is None else float(cap)
-                )
+                cap=(cap if cap is None else float(cap)),
                 # **shifts
             )
-        
+
             df = df.pipe(
                 run_backtest,
-                signal=None if "signal" not in dfs_uv else "signal",
-                rebal=None if "rebalance" not in dfs_uv else "rebalance",
-                calendar=None if "calendar" not in dfs_uv else "calendar",
+                signal=None
+                if "signal" not in dfs_uv
+                else "signal",
+                rebal=None
+                if "rebalance" not in dfs_uv
+                else "rebalance",
+                calendar=None
+                if "calendar" not in dfs_uv
+                else "calendar",
                 fx=None if "fx" not in dfs_uv else "fx",
                 cap=None if "cap" not in dfs_uv else "cap",
                 unit=self.unit,
@@ -717,18 +755,19 @@ class HandleNewDailyBtWeights(
             dfs.append(df)
 
         n = len(dfs_ps_uvs)
-        
+
         return pfo_weights_df(
             first,
             last,
             dfs,
             params,
             ps_mv,
-        ) # type: ignore
-    
+        )  # type: ignore
+
+
 #  ------------------
 
-    
+
 @dataclass(frozen=True)
 class DailyBtPos(
     DailyCombinationDeriv,
@@ -748,7 +787,8 @@ class DailyBtPos(
         return context.get().get(
             self.parent, DailyBtUvar | DailyBtMvar
         )
-    
+
+
 @dataclass(frozen=True)
 class DailyBtRx(
     DailyCombinationDeriv,
@@ -768,7 +808,8 @@ class DailyBtRx(
         return context.get().get(
             self.parent, DailyBtUvar | DailyBtMvar
         )
-    
+
+
 @dataclass(frozen=True)
 class DailyBtPx(
     DailyCombinationDeriv,
@@ -788,6 +829,8 @@ class DailyBtPx(
         return context.get().get(
             self.parent, DailyBtUvar | DailyBtMvar
         )
+
+
 @dataclass(frozen=True)
 class DailyBtGross(
     DailyCombinationDeriv,
@@ -801,20 +844,23 @@ class DailyBtGross(
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["DailyBtGrossSnap"] = "DailyBtGrossSnap"
+        type: Literal["DailyBtGrossSnap"] = (
+            "DailyBtGrossSnap"
+        )
 
     def get_parent(self) -> DailyBtUvar | DailyBtMvar:
         return context.get().get(
             self.parent, DailyBtUvar | DailyBtMvar
         )
-    
+
+
 @dataclass(frozen=True)
 class DailyBtWeight(
     DailyCombinationDeriv,
 ):
     parent: DailyBtWeights | str
 
-    # NOTE: key is the param comb 
+    # NOTE: key is the param comb
     # key: str = "weight"
 
     version: int = 0
@@ -822,13 +868,16 @@ class DailyBtWeight(
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["DailyBtWeightSnap"] = "DailyBtWeightSnap"
+        type: Literal["DailyBtWeightSnap"] = (
+            "DailyBtWeightSnap"
+        )
 
     def get_parent(self) -> DailyBtWeights:
         return context.get().get(
             self.parent, DailyBtWeights
         )
-    
+
+
 #  ------------------
 
 

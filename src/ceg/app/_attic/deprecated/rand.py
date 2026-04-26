@@ -26,7 +26,9 @@ def empty_row(
 
 
 def label_padding(df: pl.DataFrame):
-    return 0 if not len(df) else 2 + int(math.log(len(df), 10))
+    return (
+        0 if not len(df) else 2 + int(math.log(len(df), 10))
+    )
 
 
 def rows_to_refs_rand(
@@ -74,7 +76,9 @@ TYPES = {
 }
 
 
-def parse_kwarg(kw: str, refs: dict[str, ceg.Ref.Scalar_F64]):
+def parse_kwarg(
+    kw: str, refs: dict[str, ceg.Ref.Scalar_F64]
+):
     # TODO: pass in the type so we can infer from sig
     k, v = kw.split("=")
     if ":" in k:
@@ -174,7 +178,9 @@ class Gaussian(Page):
         st.text("rolling:")
         df_rolling = cast(
             pl.DataFrame,
-            st.data_editor(schema_rolling, num_rows="dynamic"),
+            st.data_editor(
+                schema_rolling, num_rows="dynamic"
+            ),
         )
 
         steps = 100

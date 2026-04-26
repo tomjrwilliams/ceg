@@ -23,7 +23,9 @@ class ndarray(np.ndarray):
     """
 
     @classmethod
-    def validate(cls, v: Any, info: core_schema.ValidationInfo):
+    def validate(
+        cls, v: Any, info: core_schema.ValidationInfo
+    ):
         if isinstance(v, np.ndarray):
             return v
         elif isinstance(v, Iterable):

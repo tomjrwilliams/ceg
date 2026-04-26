@@ -8,7 +8,6 @@ from typing import (
     Literal,
     overload,
     cast,
-
 )
 from pathlib import Path
 import datetime as dt
@@ -32,12 +31,14 @@ from ..dates import *
 from ..dfs import *
 
 from ..... import apis
+
 st = apis.st.library()
 
 from .....apis import t
 from .....apis import perf
 
 from .explorer import *
+
 
 @dataclass(frozen=True)
 class DailyHeatmap(ExploreDailyComponent):
@@ -58,19 +59,21 @@ class DailyHeatmap(ExploreDailyComponent):
         res = {}
         for ss in s.split(","):
             k, v = ss.split("=")
-            res[{
-                "x": "x_key",
-                "y": "y_key",
-                "v": "v_key",
-            }.get(k, k)] = v
+            res[
+                {
+                    "x": "x_key",
+                    "y": "y_key",
+                    "v": "v_key",
+                }.get(k, k)
+            ] = v
         return res
 
     def render(self) -> DailyHeatmap:
-        
+
         df = self.df
         if not len(df):
             return self
-        
+
         exp = self.explorer
         # df = self.render_date_filter(df)
 
@@ -89,27 +92,26 @@ class DailyHeatmap(ExploreDailyComponent):
 
         if ":" in x:
             if x[0] == ":":
-                x = ks[:ks.index(x[1:])]
+                x = ks[: ks.index(x[1:])]
             elif x[-1] == ":":
-                x = ks[ks.index(x[:-1]) + 1:]
+                x = ks[ks.index(x[:-1]) + 1 :]
             else:
                 l, r = x.split(":")
-                x = ks[ks.index(l) + 1:ks.index(r)]
+                x = ks[ks.index(l) + 1 : ks.index(r)]
             df = df.with_columns(
-                pl.concat_str(*[
-                    pl.col(k).cast(pl.String)
-                    for k in x
-                ], separator="_")
-                .alias("_".join(x))
+                pl.concat_str(
+                    *[pl.col(k).cast(pl.String) for k in x],
+                    separator="_",
+                ).alias("_".join(x))
             )
             x = "_".join(x)
 
         df = df.with_columns(pl.col(v).round(3))
 
         v_min, v_max = apis.pl.select_items(
-            df.filter(
-                pl.col(v).is_not_null()
-            ), (pl.col(v).min(), pl.col(v).max()), float
+            df.filter(pl.col(v).is_not_null()),
+            (pl.col(v).min(), pl.col(v).max()),
+            float,
         )
 
         if v_min < 0 and v_max > 0:
@@ -120,7 +122,7 @@ class DailyHeatmap(ExploreDailyComponent):
             v_min = v_max = None
 
         df_v = df.pivot(
-            on=x, # cols
+            on=x,  # cols
             index=y,
             values=v,
             # agg = mean?
@@ -132,15 +134,13 @@ class DailyHeatmap(ExploreDailyComponent):
         st.dataframe(
             df_v.to_pandas()
             .style.background_gradient(
-                cmap=cmap,
-                vmin=v_min,
-                vmax=v_max,
-                axis=None
+                cmap=cmap, vmin=v_min, vmax=v_max, axis=None
             )
             .format(precision=3)
         )
 
         return self
+
 
 EXPLORER_COMPONENTS["heatmap"] = DailyHeatmap
 

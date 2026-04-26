@@ -1,4 +1,3 @@
-
 from ..... import apis
 from .....apis import t
 from .....apis import kv
@@ -12,6 +11,7 @@ from ..calcs import *
 from ..signals import *
 from ..params import *
 from ..domain import *
+
 
 def ex_01_nested():
     """
@@ -64,7 +64,7 @@ def ex_01_nested():
         -0.000606
         -0.000639
     ]
-    >>> rx.value_key_val(dom).get(rx.path).tail(8)
+    >>> rx.value_key_val(dom).get(rx.id).tail(8)
     shape: (8,)
     Series: 'nested-1-bt-uv-000-rx' [f64]
     [
@@ -77,7 +77,7 @@ def ex_01_nested():
         0.011919
         0.07044
     ]
-    >>> pf_rx.value_key_val(dom).get(pf_rx.path).tail(8)
+    >>> pf_rx.value_key_val(dom).get(pf_rx.id).tail(8)
     shape: (8,)
     Series: 'nested-1-bt-uv-000-pf-rx-ES' [f64]
     [
@@ -90,7 +90,7 @@ def ex_01_nested():
         0.011919
         0.07044
     ]
-    >>> pf_agg.value_key_val(dom).get(pf_agg.path).tail(8)
+    >>> pf_agg.value_key_val(dom).get(pf_agg.id).tail(8)
     shape: (8,)
     Series: 'nested-1-bt-uv-000-pf-rx' [f64]
     [
@@ -103,7 +103,7 @@ def ex_01_nested():
         0.011919
         0.07044
     ]
-    >>> v_perf = perf.value_key_val(dom).get(perf.path)
+    >>> v_perf = perf.value_key_val(dom).get(perf.id)
     >>> v_perf.row(0, round=4, repr=True)
     key nested-1-bt-uv-000-rx-bench
     mu 0.4026

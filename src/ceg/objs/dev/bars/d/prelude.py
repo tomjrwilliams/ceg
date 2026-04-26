@@ -1,4 +1,3 @@
-
 from .fut import (
     FutDailyOrdinal,
     FutDailyRx,

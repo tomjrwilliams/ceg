@@ -18,6 +18,7 @@ from pprint import pp
 #  ------------------
 
 import os
+
 TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
 
 
@@ -73,7 +74,7 @@ TYPE_NAME = {
     int: "INTEGER",
     float: "REAL",
     str: "TEXT",
-    datetime.datetime: "REAL", # DATETIME? NUMERIC?
+    datetime.datetime: "REAL",  # DATETIME? NUMERIC?
     datetime.date: "INTEGER",
     bytes: "BLOB",
 }
@@ -91,7 +92,9 @@ TYPE_PARSE = {
     int: int,
     float: float,
     str: str,
-    datetime.datetime: lambda v: datetime.datetime.fromtimestamp(v),
+    datetime.datetime: lambda v: (
+        datetime.datetime.fromtimestamp(v)
+    ),
     datetime.date: lambda v: datetime.date.fromordinal(v),
     bytes: lambda v: v,
     None: lambda b: b,
@@ -155,42 +158,36 @@ class Comparator:
 
 @dataclass(frozen=True)
 class eq(Comparator):
-
     def comp(self):
         return f"={self.fval()}"
 
 
 @dataclass(frozen=True)
 class ne(Comparator):
-
     def comp(self):
         return f"!={self.fval()}"
 
 
 @dataclass(frozen=True)
 class gt(Comparator):
-
     def comp(self):
         return f">{self.fval()}"
 
 
 @dataclass(frozen=True)
 class lt(Comparator):
-
     def comp(self):
         return f"<{self.fval()}"
 
 
 @dataclass(frozen=True)
 class ge(Comparator):
-
     def comp(self):
         return f">={self.fval()}"
 
 
 @dataclass(frozen=True)
 class le(Comparator):
-
     def comp(self):
         return f"<={self.fval()}"
 
@@ -234,12 +231,14 @@ class order:
 from pydantic_core import CoreSchema, core_schema
 from pydantic import GetCoreSchemaHandler, TypeAdapter
 
+
 class Schema(frozendict[str, Type]):
-    
     @classmethod
-    def validate(cls, v: Any, info: core_schema.ValidationInfo):
+    def validate(
+        cls, v: Any, info: core_schema.ValidationInfo
+    ):
         if isinstance(v, frozendict):
-            return v # TODO: type to string?
+            return v  # TODO: type to string?
         elif isinstance(v, dict):
             return frozendict(v)
         raise ValueError(v)
@@ -255,6 +254,7 @@ class Schema(frozendict[str, Type]):
                 ),
             ]
         )
+
 
 class Table(NamedTuple):
     """
@@ -298,7 +298,8 @@ class Table(NamedTuple):
         cls,
         name: str,
         primary_key: str | tuple[str, ...] = "id",
-        unique: tuple[str | tuple[str, ...], ...] | None = None,
+        unique: tuple[str | tuple[str, ...], ...]
+        | None = None,
         not_null: tuple[str, ...] | None = None,
         flags: dict | None = None,
         # id: str | None = None,
@@ -311,10 +312,15 @@ class Table(NamedTuple):
                 pass
             else:
                 # assume auto increment
-                flag = {primary_key: "PRIMARY KEY AUTOINCREMENT"}
+                flag = {
+                    # primary_key: "PRIMARY KEY AUTOINCREMENT"
+                    primary_key: "PRIMARY KEY ASC"
+                }
                 schema = {primary_key: int} | schema
                 flags = (
-                    flag | flags if flags is not None else flag
+                    flag | flags
+                    if flags is not None
+                    else flag
                 )
             id = primary_key
             primary_key = (primary_key,)
@@ -324,9 +330,7 @@ class Table(NamedTuple):
             primary_key=primary_key,
             unique=unique,
             not_null=not_null,
-            flags=(
-                flags if flags is None else dict(flags)
-            ),
+            flags=(flags if flags is None else dict(flags)),
             id=id,
             db=None,
             pragma=None,
@@ -355,7 +359,8 @@ class Table(NamedTuple):
         ) = self
         if flags is None:
             pass
-        elif flags.get(id) == "PRIMARY KEY AUTOINCREMENT":
+        # elif flags.get(id) == "PRIMARY KEY AUTOINCREMENT":
+        elif flags.get(id) == "PRIMARY KEY ASC":
             primary_key = None
         pragma = create_table(
             db,
@@ -547,27 +552,41 @@ def create_table(
         pk = ", ".join(primary_key)
         s = s + f", PRIMARY KEY({pk})"
     if unique is not None:
-        s = s + ", " + ", ".join(
-            ["UNIQUE(" + (
-                u if isinstance(u, str) else ",".join(u)
-            ) + ")" for u in unique]
+        s = (
+            s
+            + ", "
+            + ", ".join(
+                [
+                    "UNIQUE("
+                    + (
+                        u
+                        if isinstance(u, str)
+                        else ",".join(u)
+                    )
+                    + ")"
+                    for u in unique
+                ]
+            )
         )
+    assert table != "Values", table
     with connect(db) as cur:
         try:
+            s = f"CREATE TABLE IF NOT EXISTS {table}({s})"
             cur.execute(
-                f"CREATE TABLE IF NOT EXISTS {table} ({s})"
+                s
             )
         except Exception as e:
-            raise ValueError((e, table, s))
+            raise ValueError(s) from e
         try:
-            cols = cur.execute(
-                f"; PRAGMA table_info({table})"
-            ).fetchall()
+            s = f"; PRAGMA table_info({table})"
+            cols = cur.execute(s).fetchall()
         except Exception as e:
-            raise ValueError((e, table, s))
+            raise ValueError((table, s)) from e
     cols = parse_table_info(cols)
     if len(cols) >= len(schema):
-        return {k: c for k, c in cols.items() if k in schema}
+        return {
+            k: c for k, c in cols.items() if k in schema
+        }
     for k, t in schema.items():
         if k not in cols:
             s = f"ALTER TABLE {table} "
@@ -625,9 +644,9 @@ def format_values(
         )
     return tuple(
         (
-            format.get( # type: ignore
+            format.get(  # type: ignore
                 k, TYPE_FORMAT.get(type(v), identity)
-            )(v) 
+            )(v)
             for k, v in d.items()
         )
     )

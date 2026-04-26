@@ -92,7 +92,9 @@ class pca(Node.D1_F64_D2_F64):
 
     def __call__(self, event: Event, graph: Graph):
         vs = [
-            v.history(graph).last_n_before(self.window, event.t)
+            v.history(graph).last_n_before(
+                self.window, event.t
+            )
             for v in self.vs
         ]
         if self.mus is not None:

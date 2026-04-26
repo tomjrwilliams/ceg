@@ -1,4 +1,3 @@
-
 from typing import Callable
 import polars as pl
 import numpy as np
@@ -17,6 +16,7 @@ from .norm import *
 
 # ----------------------------------------
 
+
 @nb.jit()
 def calc_basket_calmar(
     nd_rx: np.ndarray,
@@ -25,7 +25,7 @@ def calc_basket_calmar(
     nd_sample: np.ndarray,
     window: float,
 ):
-    nd_v = np.zeros(nd_rx.shape) # = metric
+    nd_v = np.zeros(nd_rx.shape)  # = metric
     nd_v_null = np.zeros(nd_rx.shape, dtype=np.bool)
 
     n_t: int = nd_rx.shape[0]
@@ -35,14 +35,14 @@ def calc_basket_calmar(
     while x < n_x:
         nd_null_x = nd_null[:, x]
         if window > 1:
-            (
-                nd_v[:, x], nd_v_null[:, x]
-            ) = calc_calmar_rolling(
-                nd_rx[:, x],
-                nd_null_x,
-                nd_sample[:, x],
-                int(window) * 4,
-                n_t,
+            (nd_v[:, x], nd_v_null[:, x]) = (
+                calc_calmar_rolling(
+                    nd_rx[:, x],
+                    nd_null_x,
+                    nd_sample[:, x],
+                    int(window) * 4,
+                    n_t,
+                )
             )
         else:
             # if zero, just becomes expanding?
@@ -52,9 +52,7 @@ def calc_basket_calmar(
                 span = (2 / window) - 1
                 span = span * 4
                 alpha = 2 / (span + 1)
-            (
-                nd_v[:, x], nd_v_null[:, x]
-            ) = calc_calmar_ewm(
+            (nd_v[:, x], nd_v_null[:, x]) = calc_calmar_ewm(
                 nd_rx[:, x],
                 nd_null_x,
                 nd_sample[:, x],
@@ -65,6 +63,7 @@ def calc_basket_calmar(
 
     return nd_v, nd_v_null
 
+
 @nb.jit()
 def calc_basket_sharpe(
     nd_rx: np.ndarray,
@@ -73,7 +72,7 @@ def calc_basket_sharpe(
     nd_sample: np.ndarray,
     window: float,
 ):
-    nd_v = np.zeros(nd_rx.shape) # = metric
+    nd_v = np.zeros(nd_rx.shape)  # = metric
     nd_v_null = np.zeros(nd_rx.shape, dtype=np.bool)
 
     n_t: int = nd_rx.shape[0]
@@ -97,26 +96,26 @@ def calc_basket_sharpe(
                 window,
                 n_t,
             )
-        
+
         nd_v[:, x] = v_x
         nd_v_null[:, x] = v_null_x
         x += 1
 
     return nd_v, nd_v_null
 
+
 @nb.jit()
 def calc_basket_smooth(
     nd_v: np.ndarray,
     nd_null: np.ndarray,
     smoothing: float,
-
 ):
     nd_v_smooth = np.zeros(nd_v.shape)
     nd_v_null = np.zeros(nd_v.shape, dtype=np.bool)
 
     n_t: int = nd_v.shape[0]
     n_x: int = nd_v.shape[1]
-        
+
     x = 0
     while x < n_x:
         nd_v_x = nd_v[:, x]
@@ -131,8 +130,8 @@ def calc_basket_smooth(
             return nd_v, nd_null
         elif smoothing < 1:
             (
-                nd_v_smooth[:, x], 
-                nd_v_null[:, x], 
+                nd_v_smooth[:, x],
+                nd_v_null[:, x],
             ) = smooth_ewm(
                 nd_v_x,
                 nd_null_x,
@@ -141,8 +140,8 @@ def calc_basket_smooth(
             )
         elif smoothing == 1:
             (
-                nd_v_smooth[:, x], 
-                nd_v_null[:, x], 
+                nd_v_smooth[:, x],
+                nd_v_null[:, x],
             ) = smooth_cum(
                 nd_v_x,
                 nd_null_x,
@@ -150,8 +149,8 @@ def calc_basket_smooth(
             )
         elif smoothing > 1:
             (
-                nd_v_smooth[:, x], 
-                nd_v_null[:, x], 
+                nd_v_smooth[:, x],
+                nd_v_null[:, x],
             ) = smooth_rolling(
                 nd_v_x,
                 nd_null_x,
@@ -160,7 +159,7 @@ def calc_basket_smooth(
             )
         else:
             raise ValueError(smoothing)
-        
+
         x += 1
 
     return (
@@ -168,12 +167,9 @@ def calc_basket_smooth(
         nd_v_null,
     )
 
+
 @nb.jit()
-def combine_weights(
-    n_x: int,
-    n_t: int,
-    *nds: np.ndarray
-):
+def combine_weights(n_x: int, n_t: int, *nds: np.ndarray):
 
     res = np.zeros((n_t, n_x))
     for nd in nds:
@@ -201,8 +197,9 @@ def combine_weights(
             res[t][x] *= div
             x += 1
         t += 1
-    
+
     return res
+
 
 @nb.jit()
 def ffill(nd_v: np.ndarray, n_t: int, n_x: int):
@@ -220,6 +217,7 @@ def ffill(nd_v: np.ndarray, n_t: int, n_x: int):
         x += 1
     return res
 
+
 @nb.jit()
 def calc_net_rx(
     nd_rx: np.ndarray,
@@ -232,10 +230,9 @@ def calc_net_rx(
 
     t = 0
     while t < n_t:
-
         acc = 0
         n = 0
-        
+
         x = 0
         while x < n_x:
             if nd_null[t][x]:
@@ -261,9 +258,10 @@ def calc_net_rx(
                 res[t][x] = rx - rx_basket
             x += 1
 
-        t += 1 
-    
+        t += 1
+
     return res, res_null
+
 
 def weights_rank_df(
     df: pl.DataFrame,
@@ -272,7 +270,7 @@ def weights_rank_df(
     window: float,
     smoothing: float,
     norm: str,
-    top: int, # 0 = all
+    top: int,  # 0 = all
 ):
 
     sample = (
@@ -280,22 +278,24 @@ def weights_rank_df(
     )
 
     (
-        nd_rx, nd_null, nd_active, v_null_expr, nd_all_null
-    ) = cols_with_null_map(
-        df, drop = ["date"]
-    )
-    
+        nd_rx,
+        nd_null,
+        nd_active,
+        v_null_expr,
+        nd_all_null,
+    ) = cols_with_null_map(df, drop=["date"])
+
     cols = [k for k in df.schema.keys() if k != "date"]
 
     df = df.pipe(
         with_sample_masks,
         sample,
         cols,
-        with_period="period"
+        with_period="period",
     )
-    nd_sample = df.select(*[
-        f"{k}_{sample}" for k in cols
-    ]).to_numpy()
+    nd_sample = df.select(
+        *[f"{k}_{sample}" for k in cols]
+    ).to_numpy()
 
     assert len(nd_sample.shape) == 2, (
         nd_sample.shape,
@@ -322,14 +322,14 @@ def weights_rank_df(
         else:
             nd_rx_ = nd_rx
             nd_null_ = nd_null
-        
+
         if met == "sharpe":
             nd_v, nd_v_null = calc_basket_sharpe(
                 nd_rx_,
                 nd_null_,
                 nd_all_null,
                 nd_sample,
-                assert_is(window, float)
+                assert_is(window, float),
             )
         elif met == "calmar":
             nd_v, nd_v_null = calc_basket_calmar(
@@ -337,21 +337,19 @@ def weights_rank_df(
                 nd_null_,
                 nd_all_null,
                 nd_sample,
-                assert_is(window, float)
+                assert_is(window, float),
             )
         else:
             raise ValueError(met)
 
         nd_smooth, nd_smooth_null = calc_basket_smooth(
-            nd_v,
-            nd_v_null,
-            assert_is(smoothing, float)
+            nd_v, nd_v_null, assert_is(smoothing, float)
         )
         nd_smooth_fill = ffill(nd_smooth, n_t, n_x)
         nd_smooth_fill = np.where(
             nd_active,
             nd_smooth_fill,
-            np.ones(nd_smooth_fill.shape) * -10e6
+            np.ones(nd_smooth_fill.shape) * -10e6,
         )
         # NOTE: so that null values that havent started yet always get sorted after null values that have
         # TODO: needed, or was that a bug in normal_equal?
@@ -360,9 +358,8 @@ def weights_rank_df(
             -nd_smooth_fill, axis=1
         )
 
-        norm = (
-            assert_is(norm, str)
-            .replace("pr", "pow_rank_")
+        norm = assert_is(norm, str).replace(
+            "pr", "pow_rank_"
         )
         if norm == "eq":
             nd_v_norm = norm_equal(
@@ -371,7 +368,7 @@ def weights_rank_df(
                 nd_active,
                 n_x,
                 n_t,
-                top=int(top)
+                top=int(top),
             )
         elif norm == "sm":
             nd_v_norm = norm_softmax(
@@ -380,13 +377,16 @@ def weights_rank_df(
                 nd_active,
                 n_x,
                 n_t,
-                top=int(top)
+                top=int(top),
             )
         elif str(norm).startswith("pow_rank"):
             ratio = assert_is(
-                2. if norm == "pow_rank_2"
-                else 1.5 if norm == "pow_rank_15"
-                else 3 if norm == "pow_rank_3"
+                2.0
+                if norm == "pow_rank_2"
+                else 1.5
+                if norm == "pow_rank_15"
+                else 3
+                if norm == "pow_rank_3"
                 else None
             )
             nd_v_norm = norm_pow_rank(
@@ -396,24 +396,25 @@ def weights_rank_df(
                 n_x,
                 n_t,
                 ratio=ratio,
-                top=int(top)
+                top=int(top),
             )
         else:
             raise ValueError(norm)
-        
+
         res[metric] = nd_v
         res[f"{metric}_smooth"] = nd_smooth
         res[f"{metric}_norm"] = nd_v_norm
-    
+
     # TODO: pre smooth or post smooth?
 
     res["weight"] = combine_weights(
         n_x,
         n_t,
         *[
-            nd for k, nd in res.items()
+            nd
+            for k, nd in res.items()
             if k.endswith("_norm")
-        ]
+        ],
     )
 
     return df.pipe(
@@ -422,9 +423,10 @@ def weights_rank_df(
         pipe=None,
         null=None,
         # **res,
-        weight=res["weight"]
+        weight=res["weight"],
         # NOTE: only save weight
     )
+
 
 # TODO:
 
@@ -441,7 +443,7 @@ def weights_rank_df(
 
 # in both cases, can presumably also pass prices
 # as a second df (i guess very redundant, many same cols?)
-# to also constrain by notional 
+# to also constrain by notional
 # but would need to be per unit position (ie. if basket, so not straightforward)
 
 __all__ = [

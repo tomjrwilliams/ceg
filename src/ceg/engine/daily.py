@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -46,9 +45,11 @@ from .storage import *
 # class DailyTags:
 #     pass
 
+
 @dataclass(frozen=True)
 class DailyParams:
     pass
+
 
 @dataclass(frozen=True)
 class Daily(Object):
@@ -60,30 +61,33 @@ class Daily(Object):
     # type: Literal["DailyM"] = "DailyM"
     # NOTE: to change
 
-    @dataclass(frozen=True) 
+    @dataclass(frozen=True)
     class Snap(Snap):
-        first: dt.date | None = None # most recently added
+        first: dt.date | None = None  # most recently added
         last: dt.date | None = None
+
+        def with_dates(self, first: dt.date, last: dt.date):
+            return replace(self, first=first, last=last)
 
     @overload
     def get_snap(
         self,
         t: None = None,
     ) -> Daily.Snap: ...
-        
+
     @overload
     def get_snap(
         self,
         t: Type[TDailySnap],
     ) -> TDailySnap: ...
-        
+
     def get_snap(
         self,
         t: Type[Daily.Snap] | None = None,
     ) -> Daily.Snap:
         s = self._get_snap()
         if s is None:
-            s = type(self).Snap.new(self.path)
+            s = type(self).Snap.new(self.id)
         if t is None:
             t = Daily.Snap
         assert isinstance(s, t), (s, t)
@@ -92,12 +96,14 @@ class Daily(Object):
 
 TDailySnap = TypeVar("TDailySnap", bound=Daily.Snap)
 
+
 @dataclass(frozen=True)
 class DailyChunked(
     Daily,
     UseRootChunkedStorage,
 ):
     pass
+
 
 @overload
 def daily_pl_value(
@@ -108,6 +114,7 @@ def daily_pl_value(
     expr: pl.Expr | None = None,
 ) -> pl.DataFrame: ...
 
+
 @overload
 def daily_pl_value(
     obj: Daily,
@@ -117,6 +124,7 @@ def daily_pl_value(
     expr: pl.Expr | None = None,
 ) -> ValuePlSeries: ...
 
+
 def daily_pl_value(
     obj: Daily,
     t: Literal["df"] | Literal["series"],
@@ -124,42 +132,53 @@ def daily_pl_value(
     scale: float = 1.0,
     expr: pl.Expr | None = None,
 ) -> pl.DataFrame | ValuePlSeries:
-    snap = obj.get_snap(t = Daily.Snap)
-    assert snap is not None, (obj)
+    snap = obj.get_snap(t=Daily.Snap)
+    assert snap is not None, obj
     assert snap.first is not None, (obj, snap)
     assert snap.last is not None, (obj, snap)
-    v = (
-        obj.value_key_val()
-        .get(obj.path, t=ValuePlSeries)
+    v = obj.value_key_val().get(
+        obj.id,
+        # t=(ValuePlSeries, ValuePlDataFrame)
     )
+    # if t == "series":
+    #     v = obj.value_key_val().get(obj.id, t=ValuePlSeries)
+    # elif t == "df":
+    #     v = obj.value_key_val().get(obj.id, t=ValuePlDataFrame)
+    # else:
+    #     raise ValueError(obj, t)
     assert v is not None, obj
-    alias = alias or obj.path
+    alias = alias or obj.id
     if expr is None:
         try:
             df = v.to_df(
-                pipe = lambda e: e * scale,
+                pipe=lambda e: e * scale,
                 alias=alias,
             )
-        except:
-            raise ValueError((v, scale, alias))
+        except Exception as e:
+            raise ValueError((v, scale, alias)) from e
     else:
         df = pl.select(
             expr.alias(alias) * scale,
-            pl.date_range(snap.first, snap.last)
-            .alias("date")
+            pl.date_range(snap.first, snap.last).alias(
+                "date"
+            ),
         )
     if t == "df":
         if expr is not None:
             return df
+        if "date" in df.columns:
+            return df
         return df.with_columns(
-            pl.date_range(snap.first, snap.last)
-            .alias("date")
+            pl.date_range(snap.first, snap.last).alias(
+                "date"
+            )
         )
     return ValuePlSeries.synthetic(
         df.get_column(alias),
-        start=snap.first, 
-        end=snap.last
+        start=snap.first,
+        end=snap.last,
     )
+
 
 @overload
 def daily_pl_values(
@@ -171,6 +190,7 @@ def daily_pl_values(
     objs: tuple[Object | str, ...] | None = None,
 ) -> pl.DataFrame: ...
 
+
 @overload
 def daily_pl_values(
     t: Literal["series"],
@@ -181,6 +201,7 @@ def daily_pl_values(
     objs: tuple[Object | str, ...] | None = None,
 ) -> list[ValuePlSeries]: ...
 
+
 @overload
 def daily_pl_values(
     t: Literal["series"],
@@ -190,6 +211,7 @@ def daily_pl_values(
     agg: str = "",
     objs: tuple[Object | str, ...] | None = None,
 ) -> ValuePlSeries: ...
+
 
 def daily_pl_values(
     t: Literal["df"] | Literal["series"],
@@ -204,22 +226,23 @@ def daily_pl_values(
     for i in inds:
         if isinstance(i, int):
             i = (i,)
-        if isinstance(i, Daily): 
+        if isinstance(i, Daily):
             i_objs.append(i)
         elif isinstance(i, str):
             i_objs.append(context.get().get(i, Daily))
         elif isinstance(i, tuple):
             assert objs is not None, (objs, inds)
             for ix in i:
-                i_objs.append(context.get().get(
-                    objs[ix], Daily
-                ))
+                i_objs.append(
+                    context.get().get(objs[ix], Daily)
+                )
         else:
             raise ValueError(inds)
-        
+
     dfs = [
         daily_pl_value(
-            obj,"df", 
+            obj,
+            "df",
         )
         for obj in i_objs
     ]
@@ -231,61 +254,59 @@ def daily_pl_values(
         how="full",
     ).sort(by="date")
 
-    (
-        first, last
-    ) = df.pipe(apis.pl.select_min_max, "date", dt.date)
+    (first, last) = df.pipe(
+        apis.pl.select_min_max, "date", dt.date
+    )
 
     if agg == "sum":
         df = df.select(
             "date",
-            pl.sum_horizontal(pl.exclude("date"))
-            .alias(alias)
+            pl.sum_horizontal(pl.exclude("date")).alias(
+                alias
+            ),
         )
     elif agg == "mean":
         df = df.select(
             "date",
-            pl.mean_horizontal(pl.exclude("date"))
-            .alias(alias)
+            pl.mean_horizontal(pl.exclude("date")).alias(
+                alias
+            ),
         )
     elif agg == "prod":
         try:
             df = df.select(
                 "date",
                 pl.fold(
-                    acc=pl.lit(1), 
-                    function=lambda acc, x: acc * x, 
+                    acc=pl.lit(1),
+                    function=lambda acc, x: acc * x,
                     exprs=pl.exclude("date"),
                     return_dtype=pl.Float64,
-                )
-                .alias(alias)
+                ).alias(alias),
             )
         except:
             raise ValueError((objs, df))
     elif len(dfs) == 1:
         df = df.select(
-            "date",
-            pl.col(i_objs[0].path).alias(alias)
+            "date", pl.col(i_objs[0].id).alias(alias)
         )
     else:
         pass
-    
+
     if t == "df":
         return df
-    
+
     if agg is None:
         return [
             ValuePlSeries.synthetic(
-                df.get_column(obj.path) * scale,
+                df.get_column(obj.id) * scale,
                 start=first,
-                end=last
+                end=last,
             )
             for obj in i_objs
         ]
-    
+
     return ValuePlSeries.synthetic(
-        df.get_column(alias) * scale,
-        start=first,
-        end=last
+        df.get_column(alias) * scale, start=first, end=last
     )
 
 
@@ -297,7 +318,10 @@ def daily_pl_df(
 ):
     if isinstance(obj, Daily):
         return daily_pl_value(
-            obj,"df", alias=alias, scale=scale,
+            obj,
+            "df",
+            alias=alias,
+            scale=scale,
         )
     alias = alias or "res"
     return daily_pl_values(
@@ -308,6 +332,17 @@ def daily_pl_df(
         agg=method,
     )
 
+from functools import lru_cache
+
+@lru_cache(maxsize=32)
+def daily_pl_df_cached(
+    obj: Daily,
+    alias: str | None = None,
+    scale: float = 1.0,
+    method: str | None = None,
+):
+    return daily_pl_df(obj, alias, scale, method)
+
 def daily_pl_series(
     obj: Daily | list[Daily],
     alias: str | None = None,
@@ -316,7 +351,10 @@ def daily_pl_series(
 ):
     if isinstance(obj, Daily):
         return daily_pl_value(
-            obj,"series", alias=alias, scale=scale,
+            obj,
+            "series",
+            alias=alias,
+            scale=scale,
         )
     alias = alias or "res"
     return daily_pl_values(
@@ -327,11 +365,13 @@ def daily_pl_series(
         agg=method,
     )
 
+
 __all__ = [
     "DailyParams",
     "Daily",
     "DailyChunked",
     "daily_pl_df",
+    "daily_pl_df_cached",
     "daily_pl_series",
     "daily_pl_value",
     "daily_pl_values",

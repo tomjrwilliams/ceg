@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -35,6 +34,7 @@ from .....engine import *
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class EcoDailyTags:
     symbol: str
@@ -70,7 +70,7 @@ def apply_transform(
             pl.col(v)
             .fill_nan(None)
             .fill_null(0)
-            .mul(1/100)
+            .mul(1 / 100)
             .add(1)
             .cum_prod()
             .pipe(apis.pl.null_mask, pl.col(v))
@@ -78,7 +78,7 @@ def apply_transform(
         )
     else:
         raise ValueError((transform, units, v))
-        
+
 
 @dataclass(frozen=True)
 class EcoDailyObservation(
@@ -95,7 +95,7 @@ class EcoDailyObservation(
     ...     .with_obj(obj)
     ...     .sync()
     ... )
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-eco-d-VIXCLS-fred' [f64]
     [
@@ -118,7 +118,7 @@ class EcoDailyObservation(
     ...     .with_obj(obj)
     ...     .sync()
     ... )
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-eco-d-US_CAP_UTIL-fred-3W' [f64]
     [
@@ -132,17 +132,22 @@ class EcoDailyObservation(
         75.8847
     ]
     """
+
     parent: Project | str | None
 
     tags: EcoDailyTags
 
     version: int = 0
-    type: Literal["EcoDailyObservation"] = "EcoDailyObservation"
+    type: Literal["EcoDailyObservation"] = (
+        "EcoDailyObservation"
+    )
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["EcoDailyObservationSnap"] = "EcoDailyObservationSnap"
- 
+        type: Literal["EcoDailyObservationSnap"] = (
+            "EcoDailyObservationSnap"
+        )
+
     @classmethod
     def new(
         cls,
@@ -168,14 +173,14 @@ class EcoDailyObservation(
                     lag = apis.cal.parse_lag(s_lag[1:])
                 elif asof is None and s[0] != "L":
                     asof = s
-            
+
         if units is None:
             if source == "fred":
                 s = apis.data.fred.load_spec(
                     symbol,
                     os.environ.get(
                         "FRED_DATA", "./__local__/fred"
-                    )
+                    ),
                 )
                 units = s.units
                 frequency = s.frequency
@@ -193,7 +198,7 @@ class EcoDailyObservation(
         if transform is not None:
             ident = f"{ident}-{transform}"
         return cls(
-            path=cls.build_path(
+            id=cls.build_id(
                 parent,
                 "eco-d-obs",
                 ident,
@@ -214,13 +219,12 @@ class EcoDailyObservation(
 
     # resampling etc.?
 
-    
-
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ObjectChange):
-            assert self.path == event.obj, (self, event)
+            assert self.id == event.obj, (self, event)
             return HandleNewEcoDailyObservation()
         raise ValueError((self, event))
+
 
 @dataclass(frozen=True)
 class HandleUpdateEcoDailyObservation(Handler):
@@ -234,6 +238,7 @@ class HandleUpdateEcoDailyObservation(Handler):
         # check new data available
         # if after snap.last, get and append
         return
+
 
 @dataclass(frozen=True)
 class HandleNewEcoDailyObservation(
@@ -269,14 +274,14 @@ class HandleNewEcoDailyObservation(
                 apply_transform,
                 tags.transform,
                 units=tags.units,
-                v = tags.symbol
+                v=tags.symbol,
             )
-        
+
         v = self.set_value_from_df(
             obj,
             df,
             tags.symbol,
-            t = self.key_value_type(obj),
+            t=self.key_value_type(obj),
         )
 
         new_snap = self.update_snap_from_df(snap, df)
@@ -286,9 +291,10 @@ class HandleNewEcoDailyObservation(
         ):
             return ValueUpdate.from_snap(
                 self.update_snap_from_df(snap, df),
-                into=frozendict()
+                into=frozendict(),
             )
-        return frozendict().set(obj.path, (snap, []))
+        return frozendict().set(obj.id, (snap, []))
+
 
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
@@ -297,12 +303,16 @@ class HandleNewEcoDailyObservation(
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class DependsEcoDailyObservationParent(DependsParentValue):
     parent: EcoDailyObservation | str
 
     def get_parent(self) -> EcoDailyObservation:
-        return context.get().get(self.parent, EcoDailyObservation)
+        return context.get().get(
+            self.parent, EcoDailyObservation
+        )
+
 
 #  ------------------
 

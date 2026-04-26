@@ -21,6 +21,7 @@ from dataclasses import dataclass, replace, fields
 import numpy as np
 import polars as pl
 from ...apis.st import cache, library
+
 st = library()
 
 
@@ -86,11 +87,11 @@ class Signature(NamedTuple):
     # eg. field for daily_close, bar etc.
 
 
-Collection = frozendict[str, ceg.Node.Any | Callable]
+Container = frozendict[str, ceg.Node.Any | Callable]
 Signatures = frozendict[str, Signature]
 
 
-def signatures(universe: Collection) -> Signatures:
+def signatures(universe: Container) -> Signatures:
     # TODO: drop keep? that's purely representational
     res = cast(Signatures, frozendict())
     for key, f in universe.items():
@@ -99,10 +100,14 @@ def signatures(universe: Collection) -> Signatures:
         if isinstance(f, tuple):
             f, r = f
             hints = get_type_hints(r)
-            hints_extra = get_type_hints(r, include_extras=True)
+            hints_extra = get_type_hints(
+                r, include_extras=True
+            )
         else:
             hints = get_type_hints(f)
-            hints_extra = get_type_hints(f, include_extras=True)
+            hints_extra = get_type_hints(
+                f, include_extras=True
+            )
         returns = hints.pop("return", None)
         keep = hints.pop("keep", None)
         alias = hints.pop("alias", None)
@@ -118,7 +123,11 @@ def signatures(universe: Collection) -> Signatures:
                 args = get_args(h)
                 if type(None) in args:
                     args = tuple(
-                        (a for a in args if a is not type(None))
+                        (
+                            a
+                            for a in args
+                            if a is not type(None)
+                        )
                     )
                     if len(args) == 1:
                         sig[k] = Annot(
@@ -146,7 +155,9 @@ def signatures(universe: Collection) -> Signatures:
         res = res.set(
             key,
             Signature(
-                cast(frozendict[str, Annot], frozendict(sig)),
+                cast(
+                    frozendict[str, Annot], frozendict(sig)
+                ),
                 depth,
                 f,
             ),
@@ -194,7 +205,9 @@ def empty_row(
 
 
 def label_padding(df: pl.DataFrame):
-    return 0 if not len(df) else 2 + int(math.log(len(df), 10))
+    return (
+        0 if not len(df) else 2 + int(math.log(len(df), 10))
+    )
 
 
 def parse_date(v: str | int):
@@ -316,7 +329,7 @@ def parse_kwargs(
 def rows_to_refs(
     g: ceg.Graph,
     df: pl.DataFrame,
-    universe: Collection,
+    universe: Container,
     sigs: Signatures,
     keep: dict[str, int] = {},
 ):
@@ -325,7 +338,7 @@ def rows_to_refs(
     >>> fs = ceg.fs
     >>> data = ceg.data
     >>> app = ceg.app
-    >>> universe = cast(app.model.Collection, frozendict({
+    >>> universe = cast(app.model.Container, frozendict({
     ...     "days": fs.dates.daily.loop,
     ...     "close": data.bars.daily_close.bind
     ... }))
@@ -457,7 +470,8 @@ def df_to_line_plot(
     data = pl.DataFrame(
         {
             label: (
-                g.aliased(label).history(g)
+                g.aliased(label)
+                .history(g)
                 # , **(
                 #     {} if slot is None else dict(slot=slot)
                 # ))
@@ -514,7 +528,9 @@ def df_to_line_plot(
             ).with_columns(**exprs),
             x=x,
             y=[
-                k for k in data.schema.keys() if k not in x_label
+                k
+                for k in data.schema.keys()
+                if k not in x_label
             ],
         )
         st.plotly_chart(plot, key=id)
@@ -538,7 +554,7 @@ class ModelKW(NamedTuple):
 
     dfs_data: dict[str, pl.DataFrame] = {}
 
-    universe: Collection = cast(Collection, frozendict())
+    universe: Container = cast(Container, frozendict())
     signatures: Signatures = cast(Signatures, frozendict())
 
     def with_universe(self, universe: pl.DataFrame):
@@ -554,7 +570,7 @@ class ModelKW(NamedTuple):
             )
         )
 
-    def with_functions(self, universe: Collection):
+    def with_functions(self, universe: Container):
         sigs = signatures(universe)
         sig_df = signatures_df(sigs)
         dfs = tuple(
@@ -580,7 +596,9 @@ class ModelKW(NamedTuple):
 
     def expand_functions(
         self,
-        aliasing: dict[Callable | Type[ceg.Node.Any], str] = {},
+        aliasing: dict[
+            Callable | Type[ceg.Node.Any], str
+        ] = {},
     ):
         universe = self.universe
         for f_or_node_t, alias in aliasing.items():
@@ -591,7 +609,9 @@ class ModelKW(NamedTuple):
                     (f_or_node_t.bind),  # type: ignore
                 )
             else:
-                universe = universe.set(alias, (f_or_node_t))
+                universe = universe.set(
+                    alias, (f_or_node_t)
+                )
         if len(universe) > len(self.universe):
             return self.with_functions(universe)
         return self
@@ -602,11 +622,15 @@ class ModelKW(NamedTuple):
             ceg.Graph | pl.DataFrame | list[dict] | None
         ) = None,
         using: dict[ceg.Ref.Any, Callable] = {},
-        aliasing: dict[Callable | Type[ceg.Node.Any], str] = {},
+        aliasing: dict[
+            Callable | Type[ceg.Node.Any], str
+        ] = {},
         init: dict[ceg.Ref.Any, bool] = {},
     ):
         if isinstance(nodes, ceg.Graph):
-            nodes = graph_to_model(nodes, using, aliasing, init)
+            nodes = graph_to_model(
+                nodes, using, aliasing, init
+            )
             self = self.expand_functions(aliasing)
 
         i_schema = None
@@ -656,7 +680,11 @@ class ModelKW(NamedTuple):
                             f"kw-{i}": v
                             for i, v in enumerate(
                                 list(r.values())[
-                                    (2 if "I" not in r else 3) :
+                                    (
+                                        2
+                                        if "I" not in r
+                                        else 3
+                                    ) :
                                 ]
                             )
                         },
@@ -753,7 +781,6 @@ class Model(ModelKW, Dynamic):
 
 
 class RunGraph(Transformation):
-
     def apply(
         self,
         page: Model,
@@ -767,9 +794,9 @@ class RunGraph(Transformation):
         ]
         df_plot = pl.concat([dfs[tf.name] for tf in plots])
 
-        align_label = (pl.col("align") == pl.lit("")) | pl.col(
-            "align"
-        ).is_null()
+        align_label = (
+            pl.col("align") == pl.lit("")
+        ) | pl.col("align").is_null()
 
         df_align = df_plot.filter(align_label.not_())
         df_keep = df_plot.filter(align_label)
@@ -805,7 +832,9 @@ class RunGraph(Transformation):
                 )
 
             g, ref = g.bind(
-                ceg.func.align.scalar_f64.new(ref, ref_align),
+                ceg.func.align.scalar_f64.new(
+                    ref, ref_align
+                ),
                 keep=True,
                 when=ceg.Ready.ref(ref_align),
                 alias=label,
@@ -897,14 +926,16 @@ def graph_to_model(
         )
 
         for fld in fields(node):
-
             extra = hints_extra[fld.name]
 
             if get_origin(extra) is Annotated:
                 args = get_args(extra)
                 annots = args[1:]
 
-                if ceg.define.Annotation("internal") in annots:
+                if (
+                    ceg.define.Annotation("internal")
+                    in annots
+                ):
                     continue
 
             if fld.name == "type":

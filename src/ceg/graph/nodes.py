@@ -95,7 +95,6 @@ N = TypeVar("N", bound=NodeInterface)
 
 @dataclass(frozen=True)
 class Node_Null(NodeInterface[Ref.Any]):
-
     def pipe(
         self,
         f: Callable[Concatenate[Node_Null, F], FRes],
@@ -121,7 +120,6 @@ class Node_Null(NodeInterface[Ref.Any]):
 
 @dataclass(frozen=True)
 class Node_D0_Date(NodeInterface[Ref.D0_Date]):
-
     def pipe(
         self,
         f: Callable[Concatenate[Node_D0_Date, F], FRes],
@@ -144,7 +142,6 @@ class Node_D0_Date(NodeInterface[Ref.D0_Date]):
 
 @dataclass(frozen=True)
 class Node_D0_F64(NodeInterface):
-
     def pipe(
         self,
         f: Callable[Concatenate[Node_D0_F64, F], FRes],
@@ -170,7 +167,6 @@ class Node_D0_F64(NodeInterface):
 
 @dataclass(frozen=True)
 class Node_D1_Date(NodeInterface):
-
     def pipe(
         self,
         f: Callable[Concatenate[Node_D1_Date, F], FRes],
@@ -193,7 +189,6 @@ class Node_D1_Date(NodeInterface):
 
 @dataclass(frozen=True)
 class Node_D1_F64(NodeInterface):
-
     def pipe(
         self,
         f: Callable[Concatenate[Node_D1_F64, F], FRes],
@@ -219,7 +214,6 @@ class Node_D1_F64(NodeInterface):
 
 @dataclass(frozen=True)
 class Node_D2_F64(NodeInterface):
-
     def pipe(
         self,
         f: Callable[Concatenate[Node_D2_F64, F], FRes],
@@ -245,7 +239,6 @@ class Node_D2_F64(NodeInterface):
 
 @dataclass(frozen=True)
 class Node_D0_F64_3(NodeInterface):
-
     def pipe(
         self,
         f: Callable[Concatenate[Node_D0_F64_3, F], FRes],
@@ -268,7 +261,6 @@ class Node_D0_F64_3(NodeInterface):
 
 @dataclass(frozen=True)
 class Node_D0_F64_4(NodeInterface):
-
     def pipe(
         self,
         f: Callable[Concatenate[Node_D0_F64_4, F], FRes],
@@ -291,10 +283,11 @@ class Node_D0_F64_4(NodeInterface):
 
 @dataclass(frozen=True)
 class Node_D1_F64_D2_F64(NodeInterface):
-
     def pipe(
         self,
-        f: Callable[Concatenate[Node_D1_F64_D2_F64, F], FRes],
+        f: Callable[
+            Concatenate[Node_D1_F64_D2_F64, F], FRes
+        ],
         *args: F.args,
         **kwargs: F.kwargs,
     ) -> FRes:

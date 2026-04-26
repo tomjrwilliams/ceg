@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -32,11 +31,20 @@ from .... import apis
 from ....apis import t, kv, assert_is
 from ....engine import *
 
+
 @dataclass(frozen=True)
-class Aggregate():    
+class Aggregate:
     objs: tuple[int, ...]
     # name?
     index: int = -1
+
+    
+    @classmethod
+    def obj(cls, i: int):
+        return cls("obj", i)
+    @classmethod
+    def agg(cls, i: int):
+        return cls("agg", i)
 
     # NOTE: if objs is empty, assume take all (for eg. total portfolio?)
 
@@ -44,50 +52,51 @@ class Aggregate():
 
     def get_objects(
         self,
-        collection: Collection,
+        container: Container,
     ):
         if len(self.objs) == 0:
             raise ValueError(self)
             # objs = [
-            #     collection.get_object(
+            #     container.get_object(
             #         i, Daily
             #     )
             #     for i in range(
-            #         len(collection.objects)
-            #     )           
+            #         len(container.objects)
+            #     )
             # ]
         else:
             objs = [
-                collection.get_object(
-                    i, Daily
-                )
+                container.get_object(i, Daily)
                 for i in self.objs
             ]
         return objs
 
+
 @dataclass(frozen=True)
-class Ref():
+class Ref:
     type: Literal["obj"] | Literal["agg"]
     i: int
 
     def encode(self):
         return f"{self.type}_{self.i}"
-    
+
     @classmethod
     def decode(cls, s: str):
         t, i = s.split("_", maxsplit=1)
         assert t == "obj" or t == "agg", s
         return Ref(t, int(i))
 
+
 TParamValue = bool | int | float | str | None
 TParamDict = t.frozen.dict[str, TParamValue]
 
+
 @dataclass(frozen=True)
-class Collection(
-    TracksLatestUpstream,
+class Container(
+    TriageUpstream,
     UseRootStorage,
 ):
-    parent: Project | str 
+    parent: Project | str
 
     name: str
 
@@ -97,11 +106,11 @@ class Collection(
 
     params: tuple[TParamDict, ...] = ()
 
-    type: Literal["Collection"] = "Collection"
+    type: Literal["Container"] = "Container"
 
     @dataclass(frozen=True)
-    class Snap(TracksLatestUpstream.Snap):
-        type: Literal["CollectionSnap"] = "CollectionSnap"
+    class Snap(TriageUpstream.Snap):
+        type: Literal["ContainerSnap"] = "ContainerSnap"
 
     @classmethod
     def new(
@@ -113,26 +122,28 @@ class Collection(
         comb: tuple[Combination, ...] = (),
         params: tuple[TParamDict, ...] = (),
     ):
+        if isinstance(parent, str):
+            parent = context.get().get(parent, Project)
         return cls(
             parent=parent,
-            path=parent.extend_path(name),
+            id=parent.extend_id(name),
             name=name,
             objects=objects,
             agg=agg,
             comb=comb,
             params=params,
         )
-    
+
     def assume_object(self, i: int, t: Type[O]) -> O:
         o = self.objects[i]
         assert isinstance(o, t), (o, t)
         return o
-    
+
     def upstream_paths(self):
         upstream = set()
 
         for obj in self.objects:
-            if obj_path(obj) == self.path:
+            if obj_path(obj) == self.id:
                 raise ValueError((obj, self))
             upstream.add(obj_path(obj))
 
@@ -141,55 +152,50 @@ class Collection(
     def depends(self) -> list[Dependency]:
         return [
             Dependency(
-                self.path,
-                depend,
-                events=("ValueUpdate",)
+                self.id, depend, events=("ValueUpdate",)
             )
             for depend in self.upstream_paths()
-            if depend != self.path
+            if depend != self.id
         ]
-    
-    def handler(
-        self, event: Event, snap: Snap
-    ) -> Handler:
+
+    def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ValueUpdate):
             # do the check if ready to tick here?
             return HandleUpdateLatestUpstream()
         else:
             raise ValueError((self, event))
-        
+
     @overload
     def with_params(
-        self, 
-        t: Type[TCollection],
-        obj: TParamDict | None=None,
-        **kwargs: TParamValue
-    ) -> tuple[TCollection, int]: ...
+        self,
+        t: Type[TContainer],
+        obj: TParamDict | None = None,
+        **kwargs: TParamValue,
+    ) -> tuple[TContainer, int]: ...
 
     @overload
     def with_params(
         self,
         t: None = None,
-        obj: TParamDict | None=None,
-        **kwargs: TParamValue
-    ) -> tuple[Collection, int]: ...
+        obj: TParamDict | None = None,
+        **kwargs: TParamValue,
+    ) -> tuple[Container, int]: ...
 
     def with_params(
         self,
-        t: Type[TCollection] | None = None,
-        obj: TParamDict | None=None,
-        **kwargs: TParamValue
-    ) -> tuple[Collection | TCollection, int]:
-        params = frozendict({
-            **({} if obj is None else obj),
-            **kwargs
-        })
+        t: Type[TContainer] | None = None,
+        obj: TParamDict | None = None,
+        **kwargs: TParamValue,
+    ) -> tuple[Container | TContainer, int]:
+        params = frozendict(
+            {**({} if obj is None else obj), **kwargs}
+        )
         try:
             i = self.params.index(params)
         except ValueError:
             i = len(self.params)
             self = replace(
-                self, params= self.params + (params,)
+                self, params=self.params + (params,)
             )
         if t is not None:
             return assert_is(self, t), i
@@ -197,26 +203,26 @@ class Collection(
 
     @overload
     def with_object(
-        self, obj: Object | str, t: Type[TCollection],
-    ) -> tuple[TCollection, int]: ...
+        self,
+        obj: Object | str,
+        t: Type[TContainer],
+    ) -> tuple[TContainer, int]: ...
 
     @overload
     def with_object(
-        self, obj: Object | str, t: None = None,
-    ) -> tuple[Collection, int]: ...
+        self,
+        obj: Object | str,
+        t: None = None,
+    ) -> tuple[Container, int]: ...
 
     def with_object(
-        self, obj: Object | str, t: Type[TCollection] |None = None,
-    ) -> tuple[Collection | TCollection, int]:
-        assert obj_path(obj) != self.path, dict(
-            obj=(
-                f"{type(obj).__name__}"
-                f"({obj_path(obj)})"
-            ),
-            self=(
-                f"{type(self).__name__}"
-                f"({self.path})"
-            ),
+        self,
+        obj: Object | str,
+        t: Type[TContainer] | None = None,
+    ) -> tuple[Container | TContainer, int]:
+        assert obj_path(obj) != self.id, dict(
+            obj=(f"{type(obj).__name__}({obj_path(obj)})"),
+            self=(f"{type(self).__name__}({self.id})"),
         )
         i = find_object(obj, self.objects)
         if i is not None:
@@ -227,30 +233,27 @@ class Collection(
         self = replace(self, objects=objs)
         if t is not None:
             assert isinstance(self, t), (self, t)
-        return (
-            self,    
-            len(objs) - 1
-        )
+        return (self, len(objs) - 1)
 
     @overload
     def with_agg(
-        self, 
+        self,
         agg: tuple[Object | str | int, ...] | Aggregate,
-        t: Type[TCollection] ,
-    ) -> tuple[TCollection, Aggregate]: ...
-        
+        t: Type[TContainer],
+    ) -> tuple[TContainer, Aggregate]: ...
+
     @overload
     def with_agg(
-        self, 
+        self,
         agg: tuple[Object | str | int, ...] | Aggregate,
         t: None = None,
-    ) -> tuple[Collection, Aggregate]: ...
+    ) -> tuple[Container, Aggregate]: ...
 
     def with_agg(
-        self, 
+        self,
         agg: tuple[Object | str | int, ...] | Aggregate,
-        t: Type[TCollection] | None = None,
-    ) -> tuple[Collection | TCollection, Aggregate]:
+        t: Type[TContainer] | None = None,
+    ) -> tuple[Container | TContainer, Aggregate]:
         i_agg = len(self.agg)
         # TODO: if agg in aggs
         if isinstance(agg, Aggregate):
@@ -266,19 +269,17 @@ class Collection(
                 else:
                     if isinstance(o, Object):
                         context.get().with_obj(o)
-                    self, i = (
-                        self.with_object(o)
-                    )
+                    self, i = self.with_object(o)
                     args.append(i)
             res = Aggregate(tuple(args), i_agg)
         self = replace(self, agg=self.agg + (res,))
         if t is not None:
             return assert_is(self, t), res
         return self, res
-    
+
     @overload
     def with_comb(
-        self, 
+        self,
         comb: dict[
             str,
             int
@@ -286,14 +287,15 @@ class Collection(
             | str
             | Aggregate
             | tuple[int | Object | str, ...]
-            | Ref
-        ] | Combination,
-        t: Type[TCollection] ,
-    ) -> tuple[TCollection, Combination]: ...
-    
+            | Ref,
+        ]
+        | Combination,
+        t: Type[TContainer],
+    ) -> tuple[TContainer, Combination]: ...
+
     @overload
     def with_comb(
-        self, 
+        self,
         comb: dict[
             str,
             int
@@ -301,13 +303,14 @@ class Collection(
             | str
             | Aggregate
             | tuple[int | Object | str, ...]
-            | Ref
-        ] | Combination,
+            | Ref,
+        ]
+        | Combination,
         t: None = None,
-    ) -> tuple[Collection, Combination]: ...
-    
+    ) -> tuple[Container, Combination]: ...
+
     def with_comb(
-        self, 
+        self,
         comb: dict[
             str,
             int
@@ -315,9 +318,10 @@ class Collection(
             | str
             | Aggregate
             | tuple[int | Object | str, ...]
-            | Ref
-        ] | Combination,
-        t: Type[TCollection] | None = None,
+            | Ref,
+        ]
+        | Combination,
+        t: Type[TContainer] | None = None,
     ):
         i_comb = len(self.comb)
         if isinstance(comb, Combination):
@@ -325,7 +329,7 @@ class Collection(
         else:
             res = Combination().with_objects(
                 self,
-                t=Collection,
+                t=Container,
                 index=i_comb,
                 **comb,
             )
@@ -333,15 +337,11 @@ class Collection(
         if t is not None:
             return assert_is(self, t), res
         return self, res
-    
+
     @overload
-    def get_object(
-        self, i: int, t: Type[O]
-    ) -> O: ...
+    def get_object(self, i: int, t: Type[O]) -> O: ...
     @overload
-    def get_object(
-        self, i: None, t: Type[O]
-    ) -> None: ...
+    def get_object(self, i: None, t: Type[O]) -> None: ...
     def get_object(
         self, i: int | None, t: Type[O]
     ) -> O | None:
@@ -349,39 +349,41 @@ class Collection(
             return None
         return context.get().get(self.objects[i], t=t)
 
-TCollection = TypeVar("TCollection", bound=Collection)
+
+TContainer = TypeVar("TContainer", bound=Container)
+
 
 @dataclass(frozen=True)
-class Combination():
+class Combination:
     refs: t.frozen.dict[str, str] = frozendict()
 
     key: str | None = None
 
     params: int | None = None
 
-    index: int = -1 # of self
+    index: int = -1  # of self
 
     def get_obj(
-        self,#
+        self,  #
         key: str,
-        collection: Collection,
-        t: Type[O]
+        container: Container,
+        t: Type[O],
     ) -> O:
         ref = Ref.decode(
             assert_is(self.refs.get(key, None))
         )
         assert ref.type == "obj", ref
         return context.get().get(
-            collection.objects[ref.i], t
+            container.objects[ref.i], t
         )
-    
+
     def with_params(
         self,
-        collection: Collection,
-        t: Type[TCollection] = Collection,
+        container: Container,
+        t: Type[TContainer] = Container,
         **kwargs: TParamValue,
     ):
-        coll, i = collection.with_params(
+        coll, i = container.with_params(
             t=t, obj=None, **kwargs
         )
         self = replace(self, params=i)
@@ -389,8 +391,8 @@ class Combination():
 
     def with_objects(
         self,
-        collection: Collection,
-        t: Type[TCollection] = Collection,
+        container: Container,
+        t: Type[TContainer] = Container,
         **objs: (
             int
             | str
@@ -403,33 +405,38 @@ class Combination():
         refs = self.refs
         for key, obj in objs.items():
             if isinstance(obj, Ref):
-                # assert in collection?
+                # assert in container?
                 refs = refs.set(key, obj.encode())
             elif isinstance(obj, int):
-                # assert in collection?
+                # assert in container?
                 refs = refs.set(key, Ref("obj", i).encode())
             elif isinstance(obj, Aggregate):
                 assert obj.index > -1, agg
-                refs = refs.set(key, Ref("agg", obj.index).encode())
+                refs = refs.set(
+                    key, Ref("agg", obj.index).encode()
+                )
             elif isinstance(obj, tuple):
-                collection, agg = collection.with_agg(obj)
-                refs = refs.set(key, Ref("agg", agg.index).encode())
+                container, agg = container.with_agg(obj)
+                refs = refs.set(
+                    key, Ref("agg", agg.index).encode()
+                )
             else:
                 if isinstance(obj, Object):
                     context.get().with_obj(obj)
-                collection, i = collection.with_object(obj)
+                container, i = container.with_object(obj)
                 refs = refs.set(key, Ref("obj", i).encode())
         return (
             replace(self, refs=refs),
-            assert_is(collection, t)
+            assert_is(container, t),
         )
-    
+
+
 __all__ = [
     "Ref",
     "Aggregate",
-    "Collection",
+    "Container",
     "Combination",
-    "TCollection",
+    "TContainer",
     "TParamValue",
     "TParamDict",
 ]

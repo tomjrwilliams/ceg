@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -42,19 +41,18 @@ from .....apis.calcs.regimes.dd import with_dd_regime
 from .....engine import *
 
 
-
 @dataclass(frozen=True)
 class DailyDDRegimeParams(DailyParams):
     chunk: int = 32
 
-    threshold: float = 1.
+    threshold: float = 1.0
     span: int = 16
     window: int = 16
     continuation: float = 0.1
 
     # TODO: cum
 
-    def build_path(
+    def build_id(
         self,
         cls: Type[DailyDDRegime],
     ):
@@ -64,13 +62,15 @@ class DailyDDRegimeParams(DailyParams):
         continuation = self.continuation
         return f"ddreg-{span}-{window}-{threshold}-{continuation}"
 
+
 P = ParamSpec("P")
+
 
 @dataclass(frozen=True)
 class DailyDDRegime(DailyWithDailyParent, DailyChunked):
     parent: Object | str
     # tags: DailyTags
-    
+
     params: DailyDDRegimeParams
 
     project: Project | None = None
@@ -78,51 +78,49 @@ class DailyDDRegime(DailyWithDailyParent, DailyChunked):
     version: int = 0
     type: Literal["DailyDDRegime"] = "DailyDDRegime"
     # NOTE: to change
-    
+
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["DailyDDRegimeSnap"] = "DailyDDRegimeSnap"
- 
+        type: Literal["DailyDDRegimeSnap"] = (
+            "DailyDDRegimeSnap"
+        )
+
     @classmethod
     def new(
         cls,
         parent: Daily,
-        threshold: float = 1.,
+        threshold: float = 1.0,
         span: int = 16,
         window: int = 16,
         continuation: float = 0.0,
         # TODO: cum: bool = True
         project: Project | None = None,
     ) -> DailyDDRegime:
-        params=DailyDDRegimeParams(
+        params = DailyDDRegimeParams(
             threshold=threshold,
             span=span,
             window=window,
             # continuation=continuation,
         )
         assert continuation == 0, cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
-    
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDDRegime:
+
+    def handler_object_new(self) -> HandleNewDailyDDRegime:
         return HandleNewDailyDDRegime()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyDDRegime(
     HandleNewDailyFromDailyParentPl
 ):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -137,10 +135,8 @@ class HandleNewDailyDDRegime(
             threshold=params.threshold,
             window=params.window,
             continuation=params.continuation,
-        ).select(
-            "date",
-            pl.col("label").alias(VALUE)
-        )
+        ).select("date", pl.col("label").alias(VALUE))
+
 
 __all__ = [
     "DailyDDRegimeParams",

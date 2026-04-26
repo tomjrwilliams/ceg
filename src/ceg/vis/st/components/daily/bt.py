@@ -8,7 +8,6 @@ from typing import (
     Literal,
     overload,
     cast,
-
 )
 from pathlib import Path
 import datetime as dt
@@ -30,13 +29,15 @@ from ..dates import *
 from ..dfs import *
 
 from ..... import apis
+
 st = apis.st.library()
 
 from .....apis import t
 from .....apis import perf
 
 from .explorer import *
-    
+
+
 @dataclass(frozen=True)
 class DailyBackTest(ExploreDailyComponent):
     key: str
@@ -48,7 +49,7 @@ class DailyBackTest(ExploreDailyComponent):
     rebal: str = "daily"
 
     def render(self) -> DailyBackTest:
-        
+
         df = self.df
         if not len(df):
             return self
@@ -80,13 +81,9 @@ class DailyBackTest(ExploreDailyComponent):
             }
 
         df_rx = df_groups.pop("rx", None)
-        assert df_rx is not None, list(
-            df_groups.keys()
-        )
+        assert df_rx is not None, list(df_groups.keys())
 
-        ks = [
-            k for k in df_rx.columns if k != exp.date_key
-        ]
+        ks = [k for k in df_rx.columns if k != exp.date_key]
         bt_dfs = []
 
         for k in ks:
@@ -97,11 +94,10 @@ class DailyBackTest(ExploreDailyComponent):
                 pl.col(k)
                 .is_null()
                 .not_()
-                .alias("calendar")
+                .alias("calendar"),
             )
             g_kwargs = {}
             for g, g_df in df_groups.items():
-                
                 # TODO: permutations of sig and scale
                 # or just scale only
 
@@ -112,9 +108,9 @@ class DailyBackTest(ExploreDailyComponent):
                 bt_df = bt_df.join(
                     g_df.select(
                         exp.date_key,
-                        pl.col(k).pipe(
-                            lag_given_group, g
-                        ).alias(g),
+                        pl.col(k)
+                        .pipe(lag_given_group, g)
+                        .alias(g),
                     ),
                     on=exp.date_key,
                     how="left",
@@ -132,7 +128,7 @@ class DailyBackTest(ExploreDailyComponent):
             )
             bt_dfs.append(bt_df)
         return self.calc(df_rx, bt_dfs, ks, exp)
-    
+
     def calc(
         self,
         df_rx: pl.DataFrame,
@@ -140,6 +136,7 @@ class DailyBackTest(ExploreDailyComponent):
         ks: list[str],
         exp: ExploreDaily,
     ) -> DailyBackTest: ...
+
 
 def lag_given_group(e: pl.Expr, g: str) -> pl.Expr:
     if g == "scale":
@@ -151,9 +148,9 @@ def lag_given_group(e: pl.Expr, g: str) -> pl.Expr:
     e_res = e_res.forward_fill()
     return pl.when(e.is_null()).then(None).otherwise(e_res)
 
+
 @dataclass(frozen=True)
 class DailyBackTestLineRx(DailyBackTest):
-
     def calc(
         self,
         df_rx: pl.DataFrame,
@@ -161,15 +158,20 @@ class DailyBackTestLineRx(DailyBackTest):
         ks: list[str],
         exp: ExploreDaily,
     ):
-        df = pl.concat((
-            df_rx.select(exp.date_key),
-            *([
-                df_bt.select(
-                    pl.col(f"{k}_rx").alias(k)
-                )
-                for k, df_bt in zip(ks, df_bts)
-            ])
-        ), how="horizontal").unpivot(
+        df = pl.concat(
+            (
+                df_rx.select(exp.date_key),
+                *(
+                    [
+                        df_bt.select(
+                            pl.col(f"{k}_rx").alias(k)
+                        )
+                        for k, df_bt in zip(ks, df_bts)
+                    ]
+                ),
+            ),
+            how="horizontal",
+        ).unpivot(
             index=exp.date_key,
             on=ks,
             variable_name="label",
@@ -186,9 +188,9 @@ class DailyBackTestLineRx(DailyBackTest):
 
         return self
 
+
 @dataclass(frozen=True)
 class DailyBackTestTableRx(DailyBackTest):
-
     include_sig: str = "only"
 
     @classmethod
@@ -203,7 +205,6 @@ class DailyBackTestTableRx(DailyBackTest):
         return {
             # cum": ...,
             # rebal: ...,
-
         }
 
     def calc(
@@ -219,7 +220,6 @@ class DailyBackTestTableRx(DailyBackTest):
         # if RxCum, then use pct
 
         for k, bt_df in zip(ks, df_bts):
-
             # TODO: from the k, bt_df
             # should identify if sig and scale
             # or just scale
@@ -238,6 +238,7 @@ class DailyBackTestTableRx(DailyBackTest):
         st.dataframe(pl.DataFrame(res))
 
         return self
+
 
 EXPLORER_COMPONENTS["bt_line_rx"] = DailyBackTestLineRx
 EXPLORER_COMPONENTS["bt_table"] = DailyBackTestTableRx

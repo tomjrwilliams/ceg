@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -34,7 +33,11 @@ from ......apis import kv
 from ......engine import *
 
 from ..ident import *
-from .ord import FutDailyOrdinal, DependsFutDailyOrdinalParent, BarDaily
+from .ord import (
+    FutDailyOrdinal,
+    DependsFutDailyOrdinalParent,
+    BarDaily,
+)
 
 #  ------------------
 
@@ -54,7 +57,7 @@ class FutDailyRx(
     ... )
     >>> obj = FutDailyRx.new(ord)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rx' [f64]
     [
@@ -68,6 +71,7 @@ class FutDailyRx(
         -0.020255
     ]
     """
+
     parent: FutDailyOrdinal | str
     # TODO: or contract
 
@@ -77,7 +81,7 @@ class FutDailyRx(
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["FutDailyRxSnap"] = "FutDailyRxSnap"
- 
+
     @classmethod
     def new(
         cls,
@@ -104,18 +108,21 @@ class FutDailyRx(
             )
         # assert ident is not None, parent
         return cls(
-            path=parent.extend_path("rx"),
+            id=parent.extend_id("rx"),
             parent=parent,
         )
-
 
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ValueAppend):
             return HandleUpdateFutDailyRx()
         elif isinstance(event, ValueUpdate):
-            assert self.get_parent().path == event.obj, (self, event)
+            assert self.get_parent().id == event.obj, (
+                self,
+                event,
+            )
             return HandleNewFutDailyRx()
         raise ValueError((self, event))
+
 
 @dataclass(frozen=True)
 class HandleUpdateFutDailyRx(Handler):
@@ -130,18 +137,16 @@ class HandleUpdateFutDailyRx(Handler):
         # if after snap.last, Wget and append
         return
 
+
 @dataclass(frozen=True)
-class HandleNewFutDailyRx(
-    HandleNewDailyFromDailyParentPl
-):
-    
+class HandleNewFutDailyRx(HandleNewDailyFromDailyParentPl):
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
         obj: FutDailyRx,
     ) -> pl.DataFrame:
-        
+
         parent = obj.get_parent()
 
         e = (
@@ -162,6 +167,7 @@ class HandleNewFutDailyRx(
 
         return df
 
+
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
 # if backend type / loc change, copy
@@ -169,12 +175,16 @@ class HandleNewFutDailyRx(
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class HasFutDailyGrandParent(Object):
     parent: FutDailyOrdinal | FutDailyRx | str
 
     def get_parent(self) -> FutDailyOrdinal | FutDailyRx:
-        return context.get().get(self.parent, FutDailyOrdinal | FutDailyRx)
+        return context.get().get(
+            self.parent, FutDailyOrdinal | FutDailyRx
+        )
+
 
 #  ------------------
 

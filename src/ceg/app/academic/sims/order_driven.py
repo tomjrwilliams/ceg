@@ -1,9 +1,9 @@
-
 from pathlib import Path
 import numpy as np
 
 from .. import core
 from ..core.types import *
+
 
 def example(
     fp: Path,
@@ -13,8 +13,8 @@ def example(
     batch: int | None = None,
     # TODO: other args - eg. n agents, etc.
 ) -> Path:
-    n_agents=agents
-    n_products=products
+    n_agents = agents
+    n_products = products
 
     results = core.results.Results.init(
         str(fp),
@@ -23,7 +23,7 @@ def example(
         length=length,
         batch=batch,
     )
-    
+
     assert n_products == n_agents
     functions = technology = np.eye(n_products) - np.roll(
         np.eye(n_products), 1, 1
@@ -34,35 +34,33 @@ def example(
         n_agents=n_agents,
         n_products=n_products,
         #
-        f_technology = core.technologies.init_constant(
+        f_technology=core.technologies.init_constant(
             n_products,
             technology,
         ),
-        f_rels = core.rels.init_constant(
-            n_agents,
-            np.ones((n_agents, n_agents))
+        f_rels=core.rels.init_constant(
+            n_agents, np.ones((n_agents, n_agents))
         ),
         #
-        f_functions = core.functions.init_constant(
+        f_functions=core.functions.init_constant(
             n_agents,
             n_products,
             functions,
         ),
         #
-        f_prices = core.prices.init_constant(
+        f_prices=core.prices.init_constant(
             n_agents,
             n_products,
-            np.ones((n_agents, n_products))
+            np.ones((n_agents, n_products)),
             # only the products for sale count
         ),
-        f_inventory = core.inventory.init_constant(
+        f_inventory=core.inventory.init_constant(
             n_agents,
             n_products,
             inventory,
         ),
-        f_cash = core.cash.init_constant(
-            n_agents,
-            np.ones((n_products,))
+        f_cash=core.cash.init_constant(
+            n_agents, np.ones((n_products,))
         ),
     )
 
@@ -70,9 +68,7 @@ def example(
     for p in range(state.n_products):
         init_orders[p][p][(p - 1) % n_products] = 1
 
-    state = replace(
-        state, orders = init_orders
-    )
+    state = replace(state, orders=init_orders)
     sim = core.sims.OrderDriven(state, results)
 
     for _ in range(length):
@@ -87,17 +83,15 @@ def example(
 
     return fp
 
+
 def run(
     fp: Path,
     variant: str | None = None,
-
     # TODO: other args
     # force same types if shared across variant
     # but all should be optional
     # then below pass explicitly per variant, no **kwargs
-
     # TODO: type cast args
-
 ) -> Path:
     if variant is None or variant == "example":
         return example(fp)

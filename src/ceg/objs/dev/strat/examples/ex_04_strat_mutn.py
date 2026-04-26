@@ -1,4 +1,3 @@
-
 import polars as pl
 
 from ..... import apis
@@ -14,7 +13,6 @@ from ..calcs import *
 from ..signals import *
 from ..params import *
 from ..domain import *
-
 
 
 def ex_04_strat_ls():

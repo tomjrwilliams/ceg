@@ -27,6 +27,7 @@ class KeyChunkConfig(KeyValConfig):
 @dataclass(frozen=True)
 class KeyChunkStore(ABC, Generic[ID, KeyI, ValI]):
     """KeyChunkStore[ID, KeyI, ValI]"""
+
     config: KeyChunkConfig
 
     type_id: Type[ID]
@@ -37,10 +38,14 @@ class KeyChunkStore(ABC, Generic[ID, KeyI, ValI]):
     def prepare(self) -> KeyChunkStore: ...
 
     @abstractmethod
-    def lookup(self, id: ID) -> tuple[KeyI, int] | tuple[None, None]: ...
+    def lookup(
+        self, id: ID
+    ) -> tuple[KeyI, int] | tuple[None, None]: ...
 
     @abstractmethod
-    def identify(self, key: KeyI, chunk: int) -> None | ID: ...
+    def identify(
+        self, key: KeyI, chunk: int
+    ) -> None | ID: ...
 
     @abstractmethod
     def select(
@@ -74,10 +79,10 @@ class KeyChunkStore(ABC, Generic[ID, KeyI, ValI]):
     ) -> ID: ...
 
 
-
 @dataclass(frozen=True)
 class KeyChunkIO(Generic[ID, KeyI, ValI, KeyO, ValO, ValT]):
     """KeyChunkIO[ID, KeyI, ValI, KeyO, ValO, ValT]"""
+
     type_id: Type[ID]
     type_key_i: Type[KeyI]
     type_val_i: Type[ValI]
@@ -121,11 +126,11 @@ class KeyChunkIO(Generic[ID, KeyI, ValI, KeyO, ValO, ValT]):
     def check_type_key_o(self, key_o: KeyO) -> KeyO:
         assert isinstance(key_o, self.type_key_o)
         return key_o
-    
+
     def check_type_val_i(self, val_i: ValI) -> ValI:
         assert isinstance(val_i, self.type_val_i)
         return val_i
-        
+
     def check_type_val_o(self, val_o: ValO) -> ValO:
         assert isinstance(val_o, self.type_val_o)
         return val_o
@@ -142,17 +147,22 @@ class KeyChunk(
     KeyChunkStore[ID, KeyI, ValI],
 ):
     """KeyChunk[ID, KeyI, ValI, KeyO, ValO, ValT]"""
+
     config: KeyChunkConfig
 
-    on_create: Callable[[KeyO, ValO, int], None] | None = None
-    on_update: Callable[[KeyO, ValO, int], None] | None = None
+    on_create: Callable[[KeyO, ValO, int], None] | None = (
+        None
+    )
+    on_update: Callable[[KeyO, ValO, int], None] | None = (
+        None
+    )
 
     @overload
     def get(
         self,
         key: KeyO,
         t: None = None,
-        chunk: int | None=None,
+        chunk: int | None = None,
         # TODO: default value if not found
     ) -> ValO | None: ...
     @overload
@@ -160,14 +170,14 @@ class KeyChunk(
         self,
         key: KeyO,
         t: Type[T],
-        chunk: int | None=None,
+        chunk: int | None = None,
         # TODO: default value if not found
     ) -> T: ...
     def get(
         self,
         key: KeyO,
         t: Type[T] | None = None,
-        chunk: int | None=None,
+        chunk: int | None = None,
         # TODO: default value if not found
     ) -> ValO | T | None:
         key_i = self.encode_key(key)
@@ -180,9 +190,7 @@ class KeyChunk(
                     if val_o is None:
                         val_o = v_o
                     else:
-                        val_o = self.concat_val(
-                            val_o, v_o
-                        )
+                        val_o = self.concat_val(val_o, v_o)
             if val_o is None:
                 assert t is None, (key, t)
                 return val_o
@@ -331,7 +339,9 @@ class KeyChunk(
         tail: bool = True,
     ) -> tuple[ID, ValO]:
 
-        i, val_o = self.iget(key, chunk=TAIL if tail else HEAD)
+        i, val_o = self.iget(
+            key, chunk=TAIL if tail else HEAD
+        )
 
         if i is None:
             assert val_o is None, val_o
@@ -416,7 +426,9 @@ class KeyChunk(
         tail: bool = True,
     ) -> tuple[ID, ValO]:
 
-        i, val_o = self.iget(key, chunk=TAIL if tail else HEAD)
+        i, val_o = self.iget(
+            key, chunk=TAIL if tail else HEAD
+        )
 
         if i is None:
             assert val_o is None, val_o
@@ -476,7 +488,7 @@ class KeyChunk(
     ) -> ValO:
         i, val_o = self.iextend(key, val, tail=tail)
         return val_o
-    
+
     def extend_head(
         self,
         key: KeyO,
@@ -493,19 +505,23 @@ class KeyChunk(
         i, val_o = self.iextend(key, val, True)
         return val_o
 
-
     # TODO: append / extend many
+
 
 @dataclass(frozen=True)
 class MemoryKeyChunk(
     KeyChunk[ID, KeyI, ValI, KeyO, ValO, ValT]
 ):
-    data: dict[tuple[KeyI, int], ValI] = field(default_factory=dict)
+    data: dict[tuple[KeyI, int], ValI] = field(
+        default_factory=dict
+    )
 
     def prepare(self) -> MemoryKeyChunk:
         return self
 
-    def lookup(self, id: ID) -> tuple[KeyI, int] | tuple[None, None]:
+    def lookup(
+        self, id: ID
+    ) -> tuple[KeyI, int] | tuple[None, None]:
         assert isinstance(id, int)
         return list(self.data.keys())[id]
 
@@ -558,11 +574,13 @@ class MemoryKeyChunk(
         self.data[(key, chunk)] = val
         return id
 
+
 @dataclass(frozen=True)
 class ExampleKeyChunk(
     KeyChunk[int, str, bytes, str, np.ndarray, float]
 ):
     """MemoryKeyChunk[int, str, bytes, str, np.ndarray, float]"""
+
     type_id: Type[int] = int
     type_key_i: Type[str] = str
     type_val_i: Type[bytes] = bytes
@@ -573,7 +591,9 @@ class ExampleKeyChunk(
     def init_val(self) -> np.ndarray:
         return np.zeros((1,))[1:]
 
-    def chunk_val(self, acc: np.ndarray, tail: bool = True) -> tuple[np.ndarray, np.ndarray | None]:
+    def chunk_val(
+        self, acc: np.ndarray, tail: bool = True
+    ) -> tuple[np.ndarray, np.ndarray | None]:
         size = self.config.size
         if acc.size >= size * 2:
             if tail:
@@ -595,19 +615,21 @@ class ExampleKeyChunk(
         return self.chunk_val(acc, tail=tail)
 
     def extend_val(
-        self, val: np.ndarray, acc: np.ndarray, tail: bool = True
+        self,
+        val: np.ndarray,
+        acc: np.ndarray,
+        tail: bool = True,
     ) -> tuple[np.ndarray, np.ndarray | None]:
-        acc = np.concat(
-            (acc, val) if tail else (val, acc)
-        )
+        acc = np.concat((acc, val) if tail else (val, acc))
         return self.chunk_val(acc, tail=tail)
 
     def concat_val(
-        self, val: np.ndarray, acc: np.ndarray, tail: bool = True
+        self,
+        val: np.ndarray,
+        acc: np.ndarray,
+        tail: bool = True,
     ) -> np.ndarray:
-        return np.concat(
-            (acc, val) if tail else (val, acc)
-        )
+        return np.concat((acc, val) if tail else (val, acc))
 
     def encode_key_type(self, t: Type[str]) -> Type[str]:
         return t
@@ -630,11 +652,12 @@ class ExampleKeyChunk(
         # NOTE: assumes 1d only
         return np.frombuffer(v)
 
+
 @final
 @dataclass(frozen=True)
 class ExampleMemoryKeyChunk(
     ExampleKeyChunk,
-    MemoryKeyChunk[int, str, bytes, str, np.ndarray, float]
+    MemoryKeyChunk[int, str, bytes, str, np.ndarray, float],
 ):
     """
     >>> j, k, l, updated = ("j", "k", "l", [])
@@ -667,7 +690,9 @@ class ExampleMemoryKeyChunk(
     >>> kv.get(j, HEAD), kv.get(j, BODY), kv.get(j, TAIL)
     (array([0.]), array([1., 2., 3., 2., 1.]), array([0.]))
     """
+
     config: KeyChunkConfig = KeyChunkConfig(size=1)
+
 
 # NOTE: typing examples
 i, v = ExampleMemoryKeyChunk().iselect("", chunk=HEAD)

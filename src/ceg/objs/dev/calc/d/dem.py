@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -38,21 +37,25 @@ from .....engine import *
 
 from .em import *
 
+
 @dataclass(frozen=True)
 class DailyDEM(DailyEM):
     pass
 
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class HandleNewDailyDEM(
     HandleNewValueFromPl,
     HandleNewDailyFromDailyParent,
-
 ):
     pass
 
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class DailyDEMA(DailyDEM):
@@ -66,7 +69,7 @@ class DailyDEMA(DailyDEM):
     ... )
     >>> obj = DailyDEMA.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-dema-4' [f64]
     [
@@ -80,6 +83,7 @@ class DailyDEMA(DailyDEM):
         -82.003264
     ]
     """
+
     version: int = 0
     type: Literal["DailyDEMA"] = "DailyDEMA"
 
@@ -88,18 +92,15 @@ class DailyDEMA(DailyDEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDEMASnap"] = "DailyDEMASnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDEMA:
+
+    def handler_object_new(self) -> HandleNewDailyDEMA:
         return HandleNewDailyDEMA()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyDEMA(
-    HandleNewDailyDEM,
-    HandleNewDailyEMA
+    HandleNewDailyDEM, HandleNewDailyEMA
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -111,6 +112,7 @@ class HandleNewDailyDEMA(
             event,
             obj,
         )
+
 
 @dataclass(frozen=True)
 class DailyDEMax(DailyDEM):
@@ -124,7 +126,7 @@ class DailyDEMax(DailyDEM):
     ... )
     >>> obj = DailyDEMax.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-demax-4' [f64]
     [
@@ -138,6 +140,7 @@ class DailyDEMax(DailyDEM):
         -91.512
     ]
     """
+
     version: int = 0
     type: Literal["DailyDEMax"] = "DailyDEMax"
 
@@ -146,27 +149,23 @@ class DailyDEMax(DailyDEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDEMaxSnap"] = "DailyDEMaxSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDEMax:
+
+    def handler_object_new(self) -> HandleNewDailyDEMax:
         return HandleNewDailyDEMax()
+
+
 @dataclass(frozen=True)
 class HandleNewDailyDEMax(
-    HandleNewDailyDEM,
-    HandleNewDailyEMax
+    HandleNewDailyDEM, HandleNewDailyEMax
 ):
-
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
         obj: DailyEM,
     ) -> pl.DataFrame:
-        
-        df = df.with_columns(
-            pl.col(VALUE).alias("OLD")
-        )
+
+        df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
@@ -179,6 +178,7 @@ class HandleNewDailyDEMax(
             .otherwise(e)
             .alias(VALUE)
         )
+
 
 @dataclass(frozen=True)
 class DailyDEMid(DailyDEM):
@@ -192,7 +192,7 @@ class DailyDEMid(DailyDEM):
     ... )
     >>> obj = DailyDEMid.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-demid-4' [f64]
     [
@@ -206,6 +206,7 @@ class DailyDEMid(DailyDEM):
         -45.756
     ]
     """
+
     version: int = 0
     type: Literal["DailyDEMid"] = "DailyDEMid"
 
@@ -214,27 +215,23 @@ class DailyDEMid(DailyDEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDEMidSnap"] = "DailyDEMidSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDEMid:
+
+    def handler_object_new(self) -> HandleNewDailyDEMid:
         return HandleNewDailyDEMid()
+
+
 @dataclass(frozen=True)
 class HandleNewDailyDEMid(
-    HandleNewDailyDEM,
-    HandleNewDailyEMid
+    HandleNewDailyDEM, HandleNewDailyEMid
 ):
-
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
         obj: DailyEM,
     ) -> pl.DataFrame:
-        
-        df = df.with_columns(
-            pl.col(VALUE).alias("OLD")
-        )
+
+        df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
@@ -247,7 +244,8 @@ class HandleNewDailyDEMid(
             .otherwise(e)
             .alias(VALUE)
         )
-    
+
+
 @dataclass(frozen=True)
 class DailyDEMin(DailyDEM):
     """
@@ -260,7 +258,7 @@ class DailyDEMin(DailyDEM):
     ... )
     >>> obj = DailyDEMin.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-demin-4' [f64]
     [
@@ -274,6 +272,7 @@ class DailyDEMin(DailyDEM):
         0.0
     ]
     """
+
     version: int = 0
     type: Literal["DailyDEMin"] = "DailyDEMin"
 
@@ -282,27 +281,22 @@ class DailyDEMin(DailyDEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDEMinSnap"] = "DailyDEMinSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDEMin:
+
+    def handler_object_new(self) -> HandleNewDailyDEMin:
         return HandleNewDailyDEMin()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyDEMin(
-    HandleNewDailyDEM,
-    HandleNewDailyEMin
+    HandleNewDailyDEM, HandleNewDailyEMin
 ):
-
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
         obj: DailyEM,
     ) -> pl.DataFrame:
-        df = df.with_columns(
-            pl.col(VALUE).alias("OLD")
-        )
+        df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
@@ -315,6 +309,7 @@ class HandleNewDailyDEMin(
             .otherwise(e)
             .alias(VALUE)
         )
+
 
 @dataclass(frozen=True)
 class DailyDEPLast(DailyDEM):
@@ -325,29 +320,26 @@ class DailyDEPLast(DailyDEM):
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["DailyDEPLastSnap"] = "DailyDEPLastSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDEPLast:
+        type: Literal["DailyDEPLastSnap"] = (
+            "DailyDEPLastSnap"
+        )
+
+    def handler_object_new(self) -> HandleNewDailyDEPLast:
         return HandleNewDailyDEPLast()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyDEPLast(
-    HandleNewDailyDEM,
-    HandleNewDailyEPLast
+    HandleNewDailyDEM, HandleNewDailyEPLast
 ):
-
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
         obj: DailyEM,
     ) -> pl.DataFrame:
-        
-        df = df.with_columns(
-            pl.col(VALUE).alias("OLD")
-        )
+
+        df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
@@ -360,7 +352,7 @@ class HandleNewDailyDEPLast(
             .otherwise(e)
             .alias(VALUE)
         )
-    
+
 
 @dataclass(frozen=True)
 class DailyDERms(DailyDEM):
@@ -372,18 +364,15 @@ class DailyDERms(DailyDEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDERmsSnap"] = "DailyDERmsSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDERms:
+
+    def handler_object_new(self) -> HandleNewDailyDERms:
         return HandleNewDailyDERms()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyDERms(
-    HandleNewDailyDEM,
-    HandleNewDailyERms
+    HandleNewDailyDEM, HandleNewDailyERms
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -407,28 +396,23 @@ class DailyDERng(DailyDEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDERngSnap"] = "DailyDERngSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDERng:
+
+    def handler_object_new(self) -> HandleNewDailyDERng:
         return HandleNewDailyDERng()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyDERng(
-    HandleNewDailyDEM,
-    HandleNewDailyERng
+    HandleNewDailyDEM, HandleNewDailyERng
 ):
-
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
         obj: DailyEM,
     ) -> pl.DataFrame:
-        
-        df = df.with_columns(
-            pl.col(VALUE).alias("OLD")
-        )
+
+        df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
@@ -455,7 +439,7 @@ class DailyDEHwm(DailyDEM):
     ... )
     >>> obj = DailyDEHwm.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-dehwm-4' [f64]
     [
@@ -469,6 +453,7 @@ class DailyDEHwm(DailyDEM):
         -91.512
     ]
     """
+
     version: int = 0
     type: Literal["DailyDEHwm"] = "DailyDEHwm"
 
@@ -477,28 +462,23 @@ class DailyDEHwm(DailyDEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDEHwmSnap"] = "DailyDEHwmSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDEHwm:
+
+    def handler_object_new(self) -> HandleNewDailyDEHwm:
         return HandleNewDailyDEHwm()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyDEHwm(
-    HandleNewDailyDEM,
-    HandleNewDailyEHwm
+    HandleNewDailyDEM, HandleNewDailyEHwm
 ):
-
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
         obj: DailyEM,
     ) -> pl.DataFrame:
-        
-        df = df.with_columns(
-            pl.col(VALUE).alias("OLD")
-        )
+
+        df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
@@ -525,7 +505,7 @@ class DailyDELwm(DailyDEM):
     ... )
     >>> obj = DailyDELwm.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-delwm-4' [f64]
     [
@@ -539,6 +519,7 @@ class DailyDELwm(DailyDEM):
         -91.512
     ]
     """
+
     version: int = 0
     type: Literal["DailyDELwm"] = "DailyDELwm"
 
@@ -547,28 +528,23 @@ class DailyDELwm(DailyDEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDELwmSnap"] = "DailyDELwmSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDELwm:
+
+    def handler_object_new(self) -> HandleNewDailyDELwm:
         return HandleNewDailyDELwm()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyDELwm(
-    HandleNewDailyDEM,
-    HandleNewDailyELwm
+    HandleNewDailyDEM, HandleNewDailyELwm
 ):
-
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
         obj: DailyEM,
     ) -> pl.DataFrame:
-        
-        df = df.with_columns(
-            pl.col(VALUE).alias("OLD")
-        )
+
+        df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
@@ -581,7 +557,7 @@ class HandleNewDailyDELwm(
             .otherwise(e)
             .alias(VALUE)
         )
-    
+
 
 @dataclass(frozen=True)
 class DailyDESDev(DailyDEM):
@@ -593,18 +569,15 @@ class DailyDESDev(DailyDEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDESDevSnap"] = "DailyDESDevSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDESDev:
+
+    def handler_object_new(self) -> HandleNewDailyDESDev:
         return HandleNewDailyDESDev()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyDESDev(
-    HandleNewDailyDEM,
-    HandleNewDailyESDev
+    HandleNewDailyDEM, HandleNewDailyESDev
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -628,17 +601,15 @@ class DailyDEVar(DailyDEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDEVarSnap"] = "DailyDEVarSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDEVar:
+
+    def handler_object_new(self) -> HandleNewDailyDEVar:
         return HandleNewDailyDEVar()
+
+
 @dataclass(frozen=True)
 class HandleNewDailyDEVar(
-    HandleNewDailyDEM,
-    HandleNewDailyEVar
+    HandleNewDailyDEM, HandleNewDailyEVar
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -650,7 +621,8 @@ class HandleNewDailyDEVar(
             event,
             obj,
         )
-    
+
+
 __all__ = [
     # "DailyDEMParams",
     "DailyDEM",

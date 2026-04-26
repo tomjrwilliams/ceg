@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -38,21 +37,25 @@ from .....engine import *
 
 from .m import *
 
+
 @dataclass(frozen=True)
 class DailyDM(DailyM):
     pass
 
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class HandleNewDailyDM(
     HandleNewValueFromPl,
     HandleNewDailyFromDailyParent,
-
 ):
     pass
 
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class DailyDMA(DailyDM):
@@ -66,7 +69,7 @@ class DailyDMA(DailyDM):
     ... )
     >>> obj = DailyDMA.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-dma-4' [f64]
     [
@@ -80,6 +83,7 @@ class DailyDMA(DailyDM):
         -114.0625
     ]
     """
+
     version: int = 0
     type: Literal["DailyDMA"] = "DailyDMA"
 
@@ -88,17 +92,16 @@ class DailyDMA(DailyDM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDMASnap"] = "DailyDMASnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDMA:
+
+    def handler_object_new(self) -> HandleNewDailyDMA:
         return HandleNewDailyDMA()
+
+
 @dataclass(frozen=True)
 class HandleNewDailyDMA(
     HandleNewDailyDM,
     HandleNewDailyMA,
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -110,13 +113,13 @@ class HandleNewDailyDMA(
             event,
             obj,
         )
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyDKurt(
     HandleNewDailyDM,
     HandleNewDailyKurt,
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -128,6 +131,7 @@ class HandleNewDailyDKurt(
             event,
             obj,
         )
+
 
 @dataclass(frozen=True)
 class DailyDMax(DailyDM):
@@ -141,7 +145,7 @@ class DailyDMax(DailyDM):
     ... )
     >>> obj = DailyDMax.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-dmax-4' [f64]
     [
@@ -155,6 +159,7 @@ class DailyDMax(DailyDM):
         -203.5
     ]
     """
+
     version: int = 0
     type: Literal["DailyDMax"] = "DailyDMax"
 
@@ -163,10 +168,8 @@ class DailyDMax(DailyDM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDMaxSnap"] = "DailyDMaxSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDMax:
+
+    def handler_object_new(self) -> HandleNewDailyDMax:
         return HandleNewDailyDMax()
 
 
@@ -175,7 +178,6 @@ class HandleNewDailyDMax(
     HandleNewDailyDM,
     HandleNewDailyMax,
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -186,7 +188,8 @@ class HandleNewDailyDMax(
             df,
             event,
             obj,
-        )    
+        )
+
 
 @dataclass(frozen=True)
 class DailyDMed(DailyDM):
@@ -200,7 +203,7 @@ class DailyDMed(DailyDM):
     ... )
     >>> obj = DailyDMed.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-dmed-4' [f64]
     [
@@ -214,6 +217,7 @@ class DailyDMed(DailyDM):
         -126.375
     ]
     """
+
     version: int = 0
     type: Literal["DailyDMed"] = "DailyDMed"
 
@@ -222,18 +226,16 @@ class DailyDMed(DailyDM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDMedSnap"] = "DailyDMedSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDMed:
+
+    def handler_object_new(self) -> HandleNewDailyDMed:
         return HandleNewDailyDMed()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyDMed(
     HandleNewDailyDM,
     HandleNewDailyMed,
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -245,6 +247,7 @@ class HandleNewDailyDMed(
             event,
             obj,
         )
+
 
 @dataclass(frozen=True)
 class DailyDMid(DailyDM):
@@ -258,7 +261,7 @@ class DailyDMid(DailyDM):
     ... )
     >>> obj = DailyDMid.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-dmid-4' [f64]
     [
@@ -272,6 +275,7 @@ class DailyDMid(DailyDM):
         -101.75
     ]
     """
+
     params: DailyMidParams
 
     version: int = 0
@@ -282,12 +286,10 @@ class DailyDMid(DailyDM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDMidSnap"] = "DailyDMidSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDMid:
+
+    def handler_object_new(self) -> HandleNewDailyDMid:
         return HandleNewDailyDMid()
-    
+
     @classmethod
     def new(
         cls,
@@ -296,38 +298,34 @@ class DailyDMid(DailyDM):
         width: float | None = None,
         project: Project | None = None,
     ):
-        params=DailyMidParams(
+        params = DailyMidParams(
             window=window,
             width=width,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
+
 
 @dataclass(frozen=True)
 class HandleNewDailyDMid(
     HandleNewDailyDM,
     HandleNewDailyMid,
 ):
-
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
         obj: DailyMid,
     ) -> pl.DataFrame:
-        df = df.with_columns(
-            pl.col(VALUE).alias("OLD")
-        )
+        df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
@@ -340,7 +338,7 @@ class HandleNewDailyDMid(
             .otherwise(e)
             .alias(VALUE)
         )
-    
+
 
 @dataclass(frozen=True)
 class DailyDMin(DailyDM):
@@ -354,7 +352,7 @@ class DailyDMin(DailyDM):
     ... )
     >>> obj = DailyDMin.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-dmin-4' [f64]
     [
@@ -368,6 +366,7 @@ class DailyDMin(DailyDM):
         0.0
     ]
     """
+
     version: int = 0
     type: Literal["DailyDMin"] = "DailyDMin"
 
@@ -376,18 +375,16 @@ class DailyDMin(DailyDM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDMinSnap"] = "DailyDMinSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDMin:
+
+    def handler_object_new(self) -> HandleNewDailyDMin:
         return HandleNewDailyDMin()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyDMin(
     HandleNewDailyDM,
     HandleNewDailyMin,
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -406,16 +403,13 @@ class HandleNewDailyDPLast(
     HandleNewDailyDM,
     HandleNewDailyPLast,
 ):
-
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
         obj: DailyM,
     ) -> pl.DataFrame:
-        df = df.with_columns(
-            pl.col(VALUE).alias("OLD")
-        )
+        df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
@@ -428,7 +422,8 @@ class HandleNewDailyDPLast(
             .otherwise(e)
             .alias(VALUE)
         )
-    
+
+
 @dataclass(frozen=True)
 class DailyDQile(DailyDM):
     """
@@ -441,7 +436,7 @@ class DailyDQile(DailyDM):
     ... )
     >>> obj = DailyDQile.new(ord, window=4, quantile=.5)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-dqile-4-0.5' [f64]
     [
@@ -466,12 +461,10 @@ class DailyDQile(DailyDM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyDQileSnap"] = "DailyDQileSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyDQile:
+
+    def handler_object_new(self) -> HandleNewDailyDQile:
         return HandleNewDailyDQile()
-    
+
     @classmethod
     def new(
         cls,
@@ -480,29 +473,27 @@ class DailyDQile(DailyDM):
         quantile: float | None = None,
         project: Project | None = None,
     ):
-        params=DailyQileParams(
+        params = DailyQileParams(
             window=window,
             quantile=quantile,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
+
 
 @dataclass(frozen=True)
 class HandleNewDailyDQile(
     HandleNewDailyDM,
     HandleNewDailyQile,
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -514,14 +505,13 @@ class HandleNewDailyDQile(
             event,
             obj,
         )
-    
+
 
 @dataclass(frozen=True)
 class HandleNewDailyDRank(
     HandleNewDailyDM,
     HandleNewDailyRank,
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -534,13 +524,12 @@ class HandleNewDailyDRank(
             obj,
         )
 
-    
+
 @dataclass(frozen=True)
 class HandleNewDailyDRms(
     HandleNewDailyDM,
     HandleNewDailyRms,
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -554,22 +543,18 @@ class HandleNewDailyDRms(
         )
 
 
-    
 @dataclass(frozen=True)
 class HandleNewDailyDRng(
     HandleNewDailyDM,
     HandleNewDailyRng,
 ):
-
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
         obj: DailyRng,
     ) -> pl.DataFrame:
-        df = df.with_columns(
-            pl.col(VALUE).alias("OLD")
-        )
+        df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
@@ -583,12 +568,12 @@ class HandleNewDailyDRng(
             .alias(VALUE)
         )
 
+
 @dataclass(frozen=True)
 class HandleNewDailyDSDev(
     HandleNewDailyDM,
     HandleNewDailySDev,
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -601,13 +586,12 @@ class HandleNewDailyDSDev(
             obj,
         )
 
-    
+
 @dataclass(frozen=True)
 class HandleNewDailyDSkew(
     HandleNewDailyDM,
     HandleNewDailySkew,
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -620,14 +604,12 @@ class HandleNewDailyDSkew(
             obj,
         )
 
-    
 
 @dataclass(frozen=True)
 class HandleNewDailyDVar(
     HandleNewDailyDM,
     HandleNewDailyVar,
 ):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -639,6 +621,7 @@ class HandleNewDailyDVar(
             event,
             obj,
         )
+
 
 #  ------------------
 

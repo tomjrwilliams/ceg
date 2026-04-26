@@ -9,7 +9,7 @@ from typing import (
     Union,
     Sequence,
     get_origin,
-    overload
+    overload,
 )
 from types import UnionType
 from functools import partial
@@ -21,53 +21,68 @@ V = TypeVar("V")
 T = TypeVar("T")
 C = TypeVar("C")
 
+
 class ValueShouldBe(ValueError):
     # TODO: fields for args
     # TODO: informative error message template
     pass
 
+
 class ValueShouldBePredicate(ValueShouldBe):
     pass
+
 
 class ValueShouldBeEqual(ValueShouldBe):
     pass
 
+
 class ValueShouldBeType(ValueShouldBe):
     pass
+
 
 class ValueShouldBeNone(ValueShouldBe):
     pass
 
+
 class ValueShouldBeNotNone(ValueShouldBe):
     pass
+
 
 class ValueShouldBeNotEmpty(ValueShouldBe):
     pass
 
+
 def is_none(value: V | None) -> TypeGuard[None]:
     return value is None
+
 
 def not_none(value: V | None) -> TypeGuard[V]:
     return value is not None
 
+
 def is_empty(value: Any) -> TypeGuard[Empty]:
     return isinstance(value, Empty)
 
+
 def not_empty(value: V | Empty) -> TypeGuard[V]:
     return not is_empty(value)
+
 
 def is_type(value: V | Type[T]) -> TypeGuard[Type[T]]:
     if isinstance(value, type):
         return True
     elif get_origin(value) is UnionType:
         return True
-    return False    
+    return False
+
 
 def not_type(value: V | Type[T]) -> TypeGuard[V]:
     return not is_type(value)
 
+
 # def not_type(value: V | Type[T]) -> TypeGuard[V]:
 #     return not isinstance(value, type)
+
 
 def assert_is_instance(
     value: Any,
@@ -77,31 +92,32 @@ def assert_is_instance(
         raise ValueShouldBeType(value, t)
     return value
 
+
 def assert_is_not_none(value: V | None) -> V:
     if value is None:
         raise ValueShouldBeNotNone(value)
     return value
+
 
 def assert_is_none(value: Any | None) -> None:
     if value is not None:
         raise ValueShouldBeNone(value)
     return value
 
+
 def assert_not_empty(value: V | Empty) -> V:
     if not_empty(value):
         return value
     raise ValueShouldBeNotEmpty(value)
 
+
 def assert_comparison(
-    value: V,
-    to: C,
-    using: Callable[[V, C], bool]
+    value: V, to: C, using: Callable[[V, C], bool]
 ) -> V:
     if not using(value, to):
-        raise ValueShouldBePredicate(
-            value, to, using
-        )
+        raise ValueShouldBePredicate(value, to, using)
     return value
+
 
 def is_comparator_for(
     comp: Callable[[Any, Any], bool] | None,
@@ -109,12 +125,14 @@ def is_comparator_for(
 ) -> TypeGuard[Callable[[Any, C], bool]]:
     return comp is not None
 
+
 @overload
 def assert_is(
     value: V | None,
     type_or_value: None,
-    comparator: None=None,
+    comparator: None = None,
 ) -> None: ...
+
 
 @overload
 def assert_is(
@@ -122,13 +140,15 @@ def assert_is(
     type_or_value: None,
     comparator: Callable[[V, T], bool],
 ) -> V: ...
-    
+
+
 @overload
 def assert_is(
     value: V | None,
     type_or_value: Empty = EMPTY,
     comparator: None = None,
 ) -> V: ...
+
 
 @overload
 def assert_is(
@@ -137,12 +157,14 @@ def assert_is(
     comparator: None = None,
 ) -> T: ...
 
+
 @overload
 def assert_is(
     value: V,
     type_or_value: Type[T],
     comparator: Callable[[V, type[T]], bool],
 ) -> V: ...
+
 
 @overload
 def assert_is(
@@ -151,7 +173,9 @@ def assert_is(
     comparator: Callable[[V, T], bool] | None = None,
 ) -> V: ...
 
+
 # TODO: separate type and value kwargs, easier fo rpartial applicaiton
+
 
 def assert_is(
     value: V | None,
@@ -165,7 +189,7 @@ def assert_is(
     """
     >>> i: int = 1
     >>> i_opt: int | None = 1
-    >>> v0: None = assert_is(i, None) 
+    >>> v0: None = assert_is(i, None)
     >>> v1: int = assert_is(i_opt)
     >>> v2: float = assert_is(i_opt, float)
     >>> v3: type[int] = assert_is(int, float, issubclass)
@@ -180,10 +204,12 @@ def assert_is(
         t: Type[T] = type_or_value
         if is_comparator_for(comparator, type_or_value):
             return assert_comparison(value, t, comparator)
-        raise ValueError() # eh?
+        raise ValueError()  # eh?
     elif type_or_value is None:
         if is_comparator_for(comparator, None):
-            return assert_comparison(value, None, comparator)
+            return assert_comparison(
+                value, None, comparator
+            )
         return assert_is_none(value)
     else:
         value = assert_is_not_none(value)
@@ -193,6 +219,7 @@ def assert_is(
         elif value != v:
             raise ValueShouldBeEqual(value, v)
     return value
+
 
 # def assert_are(
 #     value: Sequence[V] | None,
@@ -206,7 +233,7 @@ def assert_is(
 #     val = all(map(
 #         partial(
 #             assert_is,
-#             type_or_value=type_or_value, 
+#             type_or_value=type_or_value,
 #             comparator=comparator,
 #         ),
 #         assert_is(value),

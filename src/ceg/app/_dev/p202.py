@@ -281,7 +281,7 @@ class Project_202(strat.StratExplorer):
                             val, strat.StratDomain
                         )
                         wm_objs.append((
-                            val.path,
+                            val.id,
                             f"{symb}-{params_key}",
                             dict(group=group)
                         ))
@@ -319,7 +319,7 @@ class Project_202(strat.StratExplorer):
                             val, strat.StratDomain
                         )
                         wt_objs.append((
-                            val.path,
+                            val.id,
                             f"{symb}-{params_key}",
                             dict(group=group)
                         ))

@@ -11,17 +11,18 @@ logger, log = logger(
 )
 # NOTE: threshold for sortino (== target return, eg. 0)
 
+
 @nb.jit()
 def backtest_rx_cum(
     rx: np.ndarray,
     null: np.ndarray,
     calendar: np.ndarray,
-    signal: np.ndarray, # not lagged yet
+    signal: np.ndarray,  # not lagged yet
     # signal_null: np.ndarray,
-    scale: np.ndarray, # not lagged yet
+    scale: np.ndarray,  # not lagged yet
     # scale_null: np.ndarray,
     rebal: np.ndarray,
-    flows: np.ndarray, # not lagged yet
+    flows: np.ndarray,  # not lagged yet
     cap: np.ndarray,
     fx: np.ndarray,
 ):
@@ -40,23 +41,20 @@ def backtest_rx_cum(
 
         # TODO: if rebal[t] = False, reset? (latest limit)
         # then have to disambiguate none from false
-        
+
         # if not signal_null[t]:
         sig = signal[t]
         # if not scale_null[t]:
         sca = scale[t]
 
-        if (
-            null[t]
-            or not calendar[t]
-        ):
+        if null[t] or not calendar[t]:
             res_cap[t] = np.nan
             res_pos[t] = np.nan
             res_pnl[t] = np.nan
             res_rx[t] = np.nan
             t += 1
             continue
-        
+
         flow = flows[t]
         pnl = (rx[t] * pos) * fx[t]
         res_rx[t] = pnl / capital
@@ -79,9 +77,10 @@ def backtest_rx_cum(
         t += 1
     return res_pos, res_rx, res_pnl, res_cap
 
+
 @nb.jit()
 def backtest_px_cum(
-    px: np.ndarray, # always abs
+    px: np.ndarray,  # always abs
     null: np.ndarray,
     calendar: np.ndarray,
     signal: np.ndarray,
@@ -95,7 +94,7 @@ def backtest_px_cum(
 ):
     res_rx = np.zeros(px.shape, dtype=px.dtype)
     live: bool = False
-    v: float = 0.
+    v: float = 0.0
     t = 0
     while t < len(px):
         if null[t]:
@@ -129,16 +128,18 @@ def backtest_px_cum(
         fx=fx,
     )
 
+
 # TODO: numba jit
+
 
 @nb.jit()
 def backtest_rx(
     rx: np.ndarray,
     null: np.ndarray,
     calendar: np.ndarray,
-    signal: np.ndarray, # not lagged yet
+    signal: np.ndarray,  # not lagged yet
     # signal_null: np.ndarray,
-    scale: np.ndarray, # not lagged yet
+    scale: np.ndarray,  # not lagged yet
     # scale_null: np.ndarray,
     rebal: np.ndarray,
     cap: np.ndarray,
@@ -201,12 +202,13 @@ def backtest_rx(
                         pos = v_cap
                     elif pos < -v_cap:
                         pos = -v_cap
-                        
+
                 reb = False
-                
+
             res_pos[t] = pos
             t += 1
     return res_pos, res_rx
+
 
 @nb.jit()
 def backtest_rx_pos(
@@ -216,13 +218,12 @@ def backtest_rx_pos(
     null_pos: np.ndarray,
 ):
     res_rx = np.zeros(rx.shape, dtype=rx.dtype)
-    
+
     has_p: bool = False
 
     p = 0
     t = 0
     while t < len(rx):
-
         if has_p:
             if not null_rx[t]:
                 res_rx[t] = rx[t] * p
@@ -241,14 +242,15 @@ def backtest_rx_pos(
         t += 1
     return res_rx
 
+
 @nb.jit()
 def backtest_px(
-    px: np.ndarray, # always abs
+    px: np.ndarray,  # always abs
     null: np.ndarray,
     calendar: np.ndarray,
-    signal: np.ndarray, # not lagged yet
+    signal: np.ndarray,  # not lagged yet
     # signal_null: np.ndarray,
-    scale: np.ndarray, # not lagged yet
+    scale: np.ndarray,  # not lagged yet
     # scale_null: np.ndarray,
     rebal: np.ndarray,
     # boolean mask for first day gt
@@ -259,7 +261,7 @@ def backtest_px(
 ):
     res_rx = np.zeros(px.shape, dtype=px.dtype)
     live: bool = False
-    v: float = 0.
+    v: float = 0.0
     t = 0
     while t < len(px):
         if null[t]:
@@ -292,6 +294,7 @@ def backtest_px(
         fx=fx,
         unit=unit,
     )
+
 
 def calendar_expr(
     calendar: str | pl.Expr | None = None,
@@ -331,12 +334,12 @@ def backtest(
 ):
     calendar = calendar_expr(calendar, px, rx)
 
-    signal = expr(signal, 1.)
-    scale = expr(scale, 1.)
-    fx = expr(fx, 1.)
-    cap = expr(cap, -1.)
+    signal = expr(signal, 1.0)
+    scale = expr(scale, 1.0)
+    fx = expr(fx, 1.0)
+    cap = expr(cap, -1.0)
     rebal = expr(rebal, True)
-    
+
     df_vs = df.with_columns(
         signal=signal,
         scale=scale,
@@ -462,6 +465,7 @@ def backtest(
     else:
         raise ValueError(dict(px=px, rx=rx))
 
+
 @overload
 def with_backtest(
     df: pl.DataFrame,
@@ -482,6 +486,7 @@ def with_backtest(
     unit: float | None = None,
 ) -> pl.DataFrame: ...
 
+
 @overload
 def with_backtest(
     df: pl.DataFrame,
@@ -501,6 +506,7 @@ def with_backtest(
     #
     unit: float | None = None,
 ) -> pl.DataFrame: ...
+
 
 def with_backtest(
     df: pl.DataFrame,
@@ -545,7 +551,7 @@ def with_backtest(
         if isinstance(px, str):
             s = null_mask(s, pl.col(px))
         return s.alias(k)
-    
+
     def _null_mask_self(k: str):
         # deals with inf etc.
         e = pl.col(k)
@@ -557,31 +563,41 @@ def with_backtest(
         # NOTE: cap here is capital
         a_pos, a_pct, a_pnl, a_cap = alias
         v_pos, v_pct, v_pnl, v_cap = v_res
-        return df.with_columns(cal).with_columns(
-            _null_mask(pl.Series(v_pos), a_pos),
-            _null_mask(pl.Series(v_pct), a_pct),
-            _null_mask(pl.Series(v_pnl), a_pnl),
-            _null_mask(pl.Series(v_cap), a_cap),
-        ).with_columns(
-            _null_mask_self(a_pos),
-            _null_mask_self(a_pct),
-            _null_mask_self(a_pnl),
-            _null_mask_self(a_cap),
+        return (
+            df.with_columns(cal)
+            .with_columns(
+                _null_mask(pl.Series(v_pos), a_pos),
+                _null_mask(pl.Series(v_pct), a_pct),
+                _null_mask(pl.Series(v_pnl), a_pnl),
+                _null_mask(pl.Series(v_cap), a_cap),
+            )
+            .with_columns(
+                _null_mask_self(a_pos),
+                _null_mask_self(a_pct),
+                _null_mask_self(a_pnl),
+                _null_mask_self(a_cap),
+            )
         )
     else:
         assert len(alias) == 2, alias
         assert len(v_res) == 2, len(v_res)
         a_pos, a_rx = alias
         v_pos, v_rx = v_res
-        return df.with_columns(cal).with_columns(
-            _null_mask(pl.Series(v_pos), a_pos),
-            _null_mask(pl.Series(v_rx), a_rx),
-        ).with_columns(
-            _null_mask_self(a_pos),
-            _null_mask_self(a_rx),
+        return (
+            df.with_columns(cal)
+            .with_columns(
+                _null_mask(pl.Series(v_pos), a_pos),
+                _null_mask(pl.Series(v_rx), a_rx),
+            )
+            .with_columns(
+                _null_mask_self(a_pos),
+                _null_mask_self(a_rx),
+            )
         )
 
+
 # ---
+
 
 def rx_mu(
     rx: str | pl.Expr,
@@ -593,7 +609,7 @@ def rx_mu(
     min_samples: int = 2,
     threshold: float | None = None,
 ):
-    
+
     params = (window, alpha, span)
     rx = rx if isinstance(rx, pl.Expr) else pl.col(rx)
     if threshold is not None:
@@ -615,7 +631,8 @@ def rx_mu(
         )
     else:
         return rx.mean()
-    
+
+
 def rx_rms(
     rx: str | pl.Expr,
     #
@@ -628,18 +645,21 @@ def rx_rms(
 ):
     rx = rx if isinstance(rx, pl.Expr) else pl.col(rx)
     if threshold is not None:
-        rx = pl.when(
-            rx > threshold
-        ).then(None).otherwise(rx - threshold)
+        rx = (
+            pl.when(rx > threshold)
+            .then(None)
+            .otherwise(rx - threshold)
+        )
     rx_2 = rx.pow(2)
     return rx_mu(
-        rx_2, 
+        rx_2,
         window=window,
         alpha=alpha,
         span=span,
         min_samples=min_samples,
     ).sqrt()
-    
+
+
 def rx_vol(
     rx: str | pl.Expr,
     #
@@ -653,9 +673,11 @@ def rx_vol(
     params = (window, alpha, span)
     rx = rx if isinstance(rx, pl.Expr) else pl.col(rx)
     if threshold is not None:
-        rx = pl.when(
-            rx > threshold
-        ).then(None).otherwise(rx - threshold)
+        rx = (
+            pl.when(rx > threshold)
+            .then(None)
+            .otherwise(rx - threshold)
+        )
     if window is not None:
         assert span is None and alpha is None, params
         return rx.rolling_std(
@@ -673,7 +695,8 @@ def rx_vol(
         )
     else:
         return rx.std()
-    
+
+
 def rx_sharpe(
     rx: str | pl.Expr,
     window: int | None = None,
@@ -681,7 +704,7 @@ def rx_sharpe(
     span: float | None = None,
     ann: int = 252,
     min_samples: int = 2,
-    threshold: float | None = None, # for sortino
+    threshold: float | None = None,  # for sortino
     rms: bool = False,
     vol: str | None = None,
 ) -> pl.Expr:
@@ -710,7 +733,6 @@ def rx_hwm(
     rx: str | pl.Expr,
     #
     window: int | None = None,
-
     min_samples: int = 2,
     pct: bool = False,
 ):
@@ -734,11 +756,11 @@ def rx_hwm(
         e = rx.cum_sum()
         return e.cum_max()
 
+
 def rx_dd(
     rx: str | pl.Expr,
     #
     window: int | None = None,
-
     min_samples: int = 2,
     pct: bool = False,
 ):
@@ -754,11 +776,11 @@ def rx_dd(
     else:
         return (rx.cum_sum() - hwm) * -1
 
+
 def rx_dd_max(
     rx: str | pl.Expr,
     #
     window: int | None = None,
-
     min_samples: int = 2,
     pct: bool = False,
 ):
@@ -769,6 +791,7 @@ def rx_dd_max(
         min_samples=min_samples,
         pct=pct,
     ).max()
+
 
 def rx_calmar(
     rx: str | pl.Expr,
@@ -798,7 +821,9 @@ def rx_calmar(
     )
     return (mu * ann) / dd
 
+
 #  ---
+
 
 def with_rx_mu(
     df: pl.DataFrame,
@@ -822,6 +847,7 @@ def with_rx_mu(
     )
     return df.with_columns(e.alias(alias))
 
+
 def with_rx_rms(
     df: pl.DataFrame,
     rx: str | pl.Expr,
@@ -844,6 +870,7 @@ def with_rx_rms(
     )
     return df.with_columns(e.alias(alias))
 
+
 def with_rx_vol(
     df: pl.DataFrame,
     rx: str | pl.Expr,
@@ -865,6 +892,7 @@ def with_rx_vol(
         threshold=threshold,
     )
     return df.with_columns(e.alias(alias))
+
 
 def with_rx_sharpe(
     df: pl.DataFrame,
@@ -890,6 +918,7 @@ def with_rx_sharpe(
     )
     return df.with_columns(e.alias(alias))
 
+
 def with_rx_hwm(
     df: pl.DataFrame,
     rx: str | pl.Expr,
@@ -904,6 +933,7 @@ def with_rx_hwm(
     )
     return df.with_columns(e.alias(alias))
 
+
 def with_rx_dd(
     df: pl.DataFrame,
     rx: str | pl.Expr,
@@ -917,6 +947,7 @@ def with_rx_dd(
         min_samples=min_samples,
     )
     return df.with_columns(e.alias(alias))
+
 
 def with_rx_calmar(
     df: pl.DataFrame,
@@ -940,10 +971,12 @@ def with_rx_calmar(
     )
     return df.with_columns(e.alias(alias))
 
+
 # TODO: specific window drawdowns
 # ie. none mask outside the window, then cum prod / sum
 
 f_round = round
+
 
 def perf_row(
     df: pl.DataFrame,
@@ -955,7 +988,7 @@ def perf_row(
     with_pos: bool = True,
     with_keys: list[str] | None = None,
     sharpe_vols: dict[str, str | None] | None = None,
-    **kwargs
+    **kwargs,
 ):
     # if isinstance(repr, int) and round is None:
     #     round = repr
@@ -966,9 +999,8 @@ def perf_row(
         rx = "rx"
     elif k is None:
         assert (
-            (pos is not None or not with_pos)
-            and rx is not None
-        ), dict(
+            pos is not None or not with_pos
+        ) and rx is not None, dict(
             k=k,
             pos=pos,
             rx=rx,
@@ -980,9 +1012,7 @@ def perf_row(
     # assert pos in df.schema, df.schema
     assert rx in df.schema, df.schema
 
-    df = df.with_columns(
-        pl.col(rx).fill_nan(None)
-    )
+    df = df.with_columns(pl.col(rx).fill_nan(None))
     if pos is not None and pos in df.schema:
         df = df.with_columns(
             pl.col(pos).fill_nan(None),
@@ -994,41 +1024,19 @@ def perf_row(
         sharpe_vols = {"shrp": None}
 
     perf = df.select(
-        rx_mu(rx=rx)
-        .mul(252)
-        .alias("mu")
-        .item(),
-        rx_vol(rx=rx)
-        .mul(16)
-        .alias("sd")
-        .item(),
-        rx_rms(rx=rx)
-        .mul(16)
-        .alias("rms")
-        .item(),
-        pl.col(rx)
-        .skew()
-        .alias("skew")
-        .item(),
+        rx_mu(rx=rx).mul(252).alias("mu").item(),
+        rx_vol(rx=rx).mul(16).alias("sd").item(),
+        rx_rms(rx=rx).mul(16).alias("rms").item(),
+        pl.col(rx).skew().alias("skew").item(),
         *[
-            rx_sharpe(
-                rx=rx,
-                vol=rx_vol
-            )
+            rx_sharpe(rx=rx, vol=rx_vol)
             .alias(sharpe_key)
             .item()
-            for sharpe_key, rx_vol
-            in sharpe_vols.items()
+            for sharpe_key, rx_vol in sharpe_vols.items()
         ],
-        rx_sharpe(rx=rx, threshold=0)
-        .alias("sort")
-        .item(),
-        rx_dd_max(rx=rx)
-        .alias("dd")
-        .item(),
-        rx_calmar(rx=rx)
-        .alias("calm")
-        .item(),
+        rx_sharpe(rx=rx, threshold=0).alias("sort").item(),
+        rx_dd_max(rx=rx).alias("dd").item(),
+        rx_calmar(rx=rx).alias("calm").item(),
         # *([
     ).row(0, named=True)
 
@@ -1039,18 +1047,9 @@ def perf_row(
             r_pos_sd,
             r_pos_skew,
         ) = df.select(
-            pl.col(pos)
-            .mean()
-            .alias("p_mu")
-            .item(),
-            pl.col(pos)
-            .std()
-            .alias("s_sd")
-            .item(),
-            pl.col(pos)
-            .skew()
-            .alias("p_skew")
-            .item(),
+            pl.col(pos).mean().alias("p_mu").item(),
+            pl.col(pos).std().alias("s_sd").item(),
+            pl.col(pos).skew().alias("p_skew").item(),
             # ]
             # if row_sig else [
             #     pl.lit(1.).alias("pos_mu").item(),
@@ -1059,9 +1058,9 @@ def perf_row(
             # ])
         ).row(0, named=False)
         pos_r = dict(
-            p_mu = r_pos_mu,
-            p_sd = r_pos_sd,
-            p_skew = r_pos_skew,
+            p_mu=r_pos_mu,
+            p_sd=r_pos_sd,
+            p_skew=r_pos_skew,
         )
     else:
         pos_r = {}
@@ -1071,12 +1070,12 @@ def perf_row(
     if with_keys:
         r = {
             **r,
-            **df.select((
-                pl.col(_k)
-                .first()
-                .item()
-                for _k in with_keys
-            )).row(0, named=True)
+            **df.select(
+                (
+                    pl.col(_k).first().item()
+                    for _k in with_keys
+                )
+            ).row(0, named=True),
         }
 
     if round:

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -36,6 +35,7 @@ from ......engine import *
 from ..ident import *
 
 #  ------------------
+
 
 @dataclass(frozen=True)
 class FutDailyContractTags(BarDailyTags):
@@ -75,10 +75,10 @@ class FutDailyContractTags(BarDailyTags):
 #         adjust: str | None = None,
 #         fx: str | None = None,
 #         source: str | None = None,
-#         path = "con",
+#         id="con",
 #     ):
 #         return cls(
-#             path=f"{parent.path}-{path}",
+#             id=f"{parent.id}-{path}",
 #             parent=parent,
 #             symbol=symbol,
 #             expiry=expiry,
@@ -100,6 +100,4 @@ class FutDailyContractTags(BarDailyTags):
 #         # TODO: as for ordinal, but specific expiry
 #         return []
 
-__all__ = [
-    "FutDailyContractTags"
-]
+__all__ = ["FutDailyContractTags"]

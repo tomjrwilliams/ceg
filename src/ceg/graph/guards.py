@@ -188,12 +188,14 @@ class NotNaNRef(GuardInterface[N]):
         graph: GraphInterface,
     ) -> Event | None:
         if event.ref.i == self.ref.i:
-            v = event.ref.history(graph).last_before(event.t)
+            v = event.ref.history(graph).last_before(
+                event.t
+            )
             if v is None:
                 return None
-            if isinstance(v, (float, np.ndarray)) and np.isnan(
-                v
-            ):
+            if isinstance(
+                v, (float, np.ndarray)
+            ) and np.isnan(v):
                 return None
             return self.set_prev(
                 event._replace(ref=ref, prev=None), event
@@ -259,7 +261,9 @@ class LoopUntilDate(GuardInterface[N]):
         until: dt.date,
         date: Ref.Scalar_Date,
     ) -> LoopUntilDate:
-        return LoopUntilDate(GuardMutable(), step, until, date)
+        return LoopUntilDate(
+            GuardMutable(), step, until, date
+        )
 
     def init(
         self,
@@ -388,7 +392,6 @@ class MonthStart(ByDateInterface[N]):
 
 @dataclass(frozen=True)
 class MonthEnd(ByDateInterface[N]):
-
     def next(
         self,
         event: Event,
@@ -409,7 +412,9 @@ class MonthEnd(ByDateInterface[N]):
             # if all_series(
             #     graph, params.keys(), lambda e: e.t.last == event.t
             # ):
-            return self.set_prev(event._replace(ref=ref), event)
+            return self.set_prev(
+                event._replace(ref=ref), event
+            )
         return None
 
 
@@ -476,7 +481,6 @@ class ByValueInterface(GuardInterface[N]):
 
 @dataclass(frozen=True)
 class SignChange(ByValueInterface[N]):
-
     def next(
         self,
         event: Event,
@@ -484,19 +488,28 @@ class SignChange(ByValueInterface[N]):
         node: N,
         graph: GraphInterface,
     ) -> Event | None:
-        if self.last is not None and self.last != event.ref.i:
+        if (
+            self.last is not None
+            and self.last != event.ref.i
+        ):
             # TODO: only fire on the last param (?) so we know all are ready? only works if all fire on all t?
             return None
-        vs = self.value.history(graph).last_n_before(2, event.t)
+        vs = self.value.history(graph).last_n_before(
+            2, event.t
+        )
         v0 = vs[-1]
         v1 = vs[0]
         # assume we dont emit nan
         if np.isnan(v0) or np.isnan(v1):
             return None
         elif v0 > 0 and v1 < 0:
-            return self.set_prev(event._replace(ref=ref), event)
+            return self.set_prev(
+                event._replace(ref=ref), event
+            )
         elif v1 > 0 and v0 < 0:
-            return self.set_prev(event._replace(ref=ref), event)
+            return self.set_prev(
+                event._replace(ref=ref), event
+            )
         return None
 
 

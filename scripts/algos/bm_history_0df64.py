@@ -29,14 +29,18 @@ for exp_len in expon_len:
                 cls = History.D0_F64
                 acc = 0
                 for _ in range(RUNS):
-                    obj = cls.new(vs[0], req, limit=int(2**lim))
+                    obj = cls.new(
+                        vs[0], req, limit=int(2**lim)
+                    )
                     t = time.perf_counter_ns()
                     for i, v in enumerate(vs):
                         obj.append(v, i)
                     acc += (
                         time.perf_counter_ns() - t
                     ) / 1_000_000
-                res[variant + f"_{lim}"] = round(acc / RUNS, 4)
+                res[variant + f"_{lim}"] = round(
+                    acc / RUNS, 4
+                )
         r = dict(
             length=10**exp_len,
             req=2**exp_req,

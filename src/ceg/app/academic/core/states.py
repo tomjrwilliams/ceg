@@ -9,26 +9,27 @@ class N:
     agents: int
     products: int
 
-class Results(Protocol):
 
+class Results(Protocol):
     @classmethod
     def load(cls, fp: str) -> Results: ...
+
 
 @dataclass(frozen=True)
 class State:
     n_agents: int
     n_products: int
-    technologies: F64_2D # products, products
-    rels: F64_2D # agents, agents
-    functions: F64_2D # agents, products
-    prices: F64_2D # agents, products
-    inventory: F64_2D # agents, products
-    inflows: F64_2D # agents, products
-    outflows: F64_2D # agents, products
-    production: F64_2D # agents, products
-    orders: F64_3D # products, agents, agents
-    deliveries: F64_3D # products, agents, agents
-    cash: F64_1D # agents
+    technologies: F64_2D  # products, products
+    rels: F64_2D  # agents, agents
+    functions: F64_2D  # agents, products
+    prices: F64_2D  # agents, products
+    inventory: F64_2D  # agents, products
+    inflows: F64_2D  # agents, products
+    outflows: F64_2D  # agents, products
+    production: F64_2D  # agents, products
+    orders: F64_3D  # products, agents, agents
+    deliveries: F64_3D  # products, agents, agents
+    cash: F64_1D  # agents
 
     t: int = 0
 
@@ -109,18 +110,15 @@ class State:
             cash=np.zeros(A, float),
         )
 
+        state = state.update(functions=f_functions(state))
         state = state.update(
-            functions = f_functions(state)
-        )
-        state = state.update(
-            prices = f_prices(state),
+            prices=f_prices(state),
         ).update(
-            inventory = f_inventory(state),
+            inventory=f_inventory(state),
         )
-        state = state.update(
-            cash=f_cash(state)
-        )
-        
+        state = state.update(cash=f_cash(state))
+
         return state
+
 
 __all__ = ["State"]

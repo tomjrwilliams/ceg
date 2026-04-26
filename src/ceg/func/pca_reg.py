@@ -24,7 +24,9 @@ def unit_norm_beta(
     if ws is None:
         f_loss = lambda x: np.mean(np.square(np.dot(vs, x)))
     else:
-        f_loss = lambda x: np.sum(np.square(np.dot(vs, x)) * ws)
+        f_loss = lambda x: np.sum(
+            np.square(np.dot(vs, x)) * ws
+        )
 
     f = lambda x: f_norm(x) - f_loss(x)
 
@@ -60,7 +62,9 @@ def compare_pc(vs, factors):
         print("pc", i, pc)
         print("pc norm", i, np.dot(pc, pc))
 
-    unit_beta = unit_norm_beta(vs, exp_weights(vs.shape[0], 16))
+    unit_beta = unit_norm_beta(
+        vs, exp_weights(vs.shape[0], 16)
+    )
     print("unit beta", unit_beta)
     print(
         "unit norm",
@@ -69,7 +73,9 @@ def compare_pc(vs, factors):
 
     for f in range(factors.shape[1]):
         beta = np.round(
-            np.linalg.lstsq(vs, factors[:, f], rcond=None)[0],
+            np.linalg.lstsq(vs, factors[:, f], rcond=None)[
+                0
+            ],
             3,
         )
         print("beta", f, beta)

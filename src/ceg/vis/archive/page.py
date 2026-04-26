@@ -5,6 +5,7 @@ import math
 import numpy as np
 import polars as pl
 from ...apis.st import cache, library
+
 st = library()
 
 from frozendict import frozendict
@@ -85,7 +86,6 @@ class DataFrame(NamedTuple):
 
 
 class Transformation:
-
     def apply(
         self,
         page: Page,
@@ -107,7 +107,6 @@ class DynamicKw(NamedTuple):
 
 
 class Dynamic(DynamicKw, Page):
-
     @classmethod
     def new(
         cls,

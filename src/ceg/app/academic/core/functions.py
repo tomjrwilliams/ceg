@@ -7,10 +7,11 @@ from .states import State
 # TODO: tall
 # TODO: for now, we assume constant!
 
+
 def df_wide(
     v: F64_2D,
     agents: list[str] | None = None,
-    products: list[str] | None=None,
+    products: list[str] | None = None,
     agent: str = "a",
     product: str = "p",
 ) -> pd.DataFrame:
@@ -26,11 +27,11 @@ def df_wide(
         agents = enumerated_labels(agent, a, justify=3)
     return pd.DataFrame(
         data={
-            name: v[:, i]
-            for i, name in enumerate(products)
+            name: v[:, i] for i, name in enumerate(products)
         },
-        index=agents
+        index=agents,
     )
+
 
 def init_constant(
     n_agents: int,
@@ -39,11 +40,14 @@ def init_constant(
 ) -> Callable[[State], F64_2D]:
     assert n_agents == v.shape[0]
     assert n_products == v.shape[1]
+
     def f(state: State) -> F64_2D:
         assert state.n_agents == n_agents
         assert state.n_products == n_products
         return v
+
     return f
+
 
 # TODO:
 

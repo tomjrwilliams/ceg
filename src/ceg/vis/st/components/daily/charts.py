@@ -8,7 +8,6 @@ from typing import (
     Literal,
     overload,
     cast,
-
 )
 from pathlib import Path
 import datetime as dt
@@ -30,12 +29,14 @@ from ..dates import *
 from ..dfs import *
 
 from ..... import apis
+
 st = apis.st.library()
 
 from .....apis import t
 from .....apis import perf
 
 from .explorer import *
+
 
 @dataclass(frozen=True)
 class DailyLinePlot(ExploreDailyComponent):
@@ -49,11 +50,11 @@ class DailyLinePlot(ExploreDailyComponent):
     # TODO: downsample params?
 
     def render(self) -> DailyLinePlot:
-        
+
         df = self.df
         if not len(df):
             return self
-        
+
         exp = self.explorer
         df = self.render_date_filter(df)
 
@@ -67,7 +68,9 @@ class DailyLinePlot(ExploreDailyComponent):
                 .add(1)
                 .cum_prod()
                 .over(exp.label_key)
-                .pipe(apis.pl.null_mask, pl.col(exp.value_key))
+                .pipe(
+                    apis.pl.null_mask, pl.col(exp.value_key)
+                )
                 .alias(exp.value_key)
             )
         elif self.norm == "pct" and self.cum:
@@ -77,7 +80,9 @@ class DailyLinePlot(ExploreDailyComponent):
                 .add(1)
                 .cum_prod()
                 .over(exp.label_key)
-                .pipe(apis.pl.null_mask, pl.col(exp.value_key))
+                .pipe(
+                    apis.pl.null_mask, pl.col(exp.value_key)
+                )
                 .alias(exp.value_key)
             )
         elif self.cum:
@@ -85,7 +90,9 @@ class DailyLinePlot(ExploreDailyComponent):
                 pl.col(exp.value_key)
                 .cum_sum()
                 .over(exp.label_key)
-                .pipe(apis.pl.null_mask, pl.col(exp.value_key))
+                .pipe(
+                    apis.pl.null_mask, pl.col(exp.value_key)
+                )
                 .alias(exp.value_key)
             )
         elif self.norm is None:
@@ -102,8 +109,9 @@ class DailyLinePlot(ExploreDailyComponent):
         )
 
         st.plotly_chart(fig)
-        
+
         return self
+
 
 @dataclass(frozen=True)
 class DailyLinePlotPct(DailyLinePlot):
@@ -114,12 +122,14 @@ class DailyLinePlotPct(DailyLinePlot):
 class DailyLinePlotCum(DailyLinePlot):
     cum: bool | None = True
 
+
 @dataclass(frozen=True)
 class DailyLinePlotCumPct(
     DailyLinePlotPct, DailyLinePlotCum
 ):
     cum: bool | None = True
     norm: str | None = "pct"
+
 
 @dataclass(frozen=True)
 class DailyHistogram(ExploreDailyComponent):
@@ -133,11 +143,11 @@ class DailyHistogram(ExploreDailyComponent):
     marginal: str | None = "box"
 
     def render(self) -> DailyHistogram:
-        
+
         df = self.df
         if not len(df):
             return self
-        
+
         # import plotly.figure_factory as ff
 
         # # Add histogram data
@@ -169,8 +179,9 @@ class DailyHistogram(ExploreDailyComponent):
         )
 
         st.plotly_chart(fig)
-        
+
         return self
+
 
 EXPLORER_COMPONENTS["line"] = DailyLinePlot
 EXPLORER_COMPONENTS["line_pct"] = DailyLinePlotPct

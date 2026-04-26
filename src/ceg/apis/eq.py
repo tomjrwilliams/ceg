@@ -3,6 +3,7 @@ import numpy as np
 
 from .pl import *
 
+
 def with_splits(
     df: pl.DataFrame,
     raw: str = "raw",
@@ -14,23 +15,19 @@ def with_splits(
     e_raw_pct = pl.col(f"_{raw}_pct")
     e_split_pct = pl.col(f"_{split}_pct")
     df = df.with_columns(
-        e_raw
-        .fill_nan(None)
+        e_raw.fill_nan(None)
         .forward_fill()
         .pct_change()
         .pipe(null_mask, e_raw)
         .alias(f"_{raw}_pct"),
-        e_split
-        .fill_nan(None)
+        e_split.fill_nan(None)
         .forward_fill()
         .pct_change()
         .pipe(null_mask, e_split)
         .alias(f"_{split}_pct"),
     )
     df = df.with_columns(
-        (
-            (e_split_pct + 1) / (e_raw_pct + 1)
-        ).alias(alias)
+        ((e_split_pct + 1) / (e_raw_pct + 1)).alias(alias)
     )
     return df.with_columns(
         pl.when(e_raw_pct != e_split_pct)
@@ -42,6 +39,7 @@ def with_splits(
         f"_{split}_pct",
     )
 
+
 # TODO: numba
 def calc_div(
     ref: np.ndarray,
@@ -50,17 +48,17 @@ def calc_div(
 ):
     res = np.zeros(ref.shape, dtype=ref.dtype) * np.nan
 
-    p_ref: float = 0.
-    p_adj: float = 0.
+    p_ref: float = 0.0
+    p_adj: float = 0.0
 
-    cum_adj: float = 1.
+    cum_adj: float = 1.0
 
     for t in range(ref.shape[0]):
         if not mask[t]:
             continue
 
-        v_ref: float = ref[t] # type: ignore
-        v_adj: float = adj[t] # type: ignore
+        v_ref: float = ref[t]  # type: ignore
+        v_adj: float = adj[t]  # type: ignore
 
         if p_ref > 0:
             v_adj = v_adj / cum_adj
@@ -71,7 +69,6 @@ def calc_div(
             diff = np.round(pct_ref - pct_adj, decimals=4)
 
             if diff != 0:
-
                 div = pct_adj - pct_ref
                 res[t] = div
 
@@ -82,6 +79,7 @@ def calc_div(
         p_adj = v_adj
 
     return res
+
 
 def with_divs(
     df: pl.DataFrame,
@@ -95,19 +93,25 @@ def with_divs(
     v_ref = df.get_column(ref).to_numpy()
     v_adj = df.get_column(pct).to_numpy()
 
-    v_mask = df.select(
-        pl.col(raw).is_not_null().cast(pl.Int32).alias("v")
-    ).get_column("v").to_numpy()
+    v_mask = (
+        df.select(
+            pl.col(raw)
+            .is_not_null()
+            .cast(pl.Int32)
+            .alias("v")
+        )
+        .get_column("v")
+        .to_numpy()
+    )
 
     divs = calc_div(v_ref, v_adj, v_mask)
 
     df = df.with_columns(
         pl.Series(alias, values=divs)
-    ).with_columns(
-        pl.col(alias).fill_nan(None)
-    )
+    ).with_columns(pl.col(alias).fill_nan(None))
 
     return df
+
 
 def with_price(
     df: pl.DataFrame,
@@ -119,16 +123,13 @@ def with_price(
     ratio = "_ratio"
 
     df = df.pipe(
-        with_splits,
-        raw=raw,
-        split=split,
-        alias=ratio
+        with_splits, raw=raw, split=split, alias=ratio
     )
-    
+
     e_raw = pl.col(raw)
     e_split = pl.col(split)
     e_ratio = pl.col(ratio)
-    
+
     df = df.with_columns(
         e_ratio.fill_nan(None)
         .fill_null(1)
@@ -141,6 +142,7 @@ def with_price(
         .alias(alias)
     ).drop(ratio)
 
+
 def with_full(
     df: pl.DataFrame,
     raw: str = "raw",
@@ -151,16 +153,9 @@ def with_full(
     divs = "_divs"
     price = "_price"
     df = df.pipe(
-        with_price,
-        raw=raw,
-        split=split,
-        alias=price
+        with_price, raw=raw, split=split, alias=price
     ).pipe(
-        with_divs,
-        raw=raw,
-        split=split,
-        pct=pct,
-        alias=divs
+        with_divs, raw=raw, split=split, pct=pct, alias=divs
     )
     df = df.with_columns(
         pl.col(divs)
@@ -174,6 +169,4 @@ def with_full(
         (pl.col(price) * pl.col(divs))
         .pipe(null_mask, pl.col(raw))
         .alias(alias)
-    ).drop(
-        divs, price
-    )
+    ).drop(divs, price)

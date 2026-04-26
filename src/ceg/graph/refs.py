@@ -25,7 +25,6 @@ Data = tuple[History.Any | tuple[History.Any, ...], ...]
 
 
 class GraphInterface(Protocol):
-
     @property
     def data(self) -> Data: ...
 
@@ -153,7 +152,6 @@ R = TypeVar("R", bound=RefInterface)
 
 @dataclass(frozen=True)
 class Ref_D0_Date(RefInterface):
-
     def select(self, last: bool | int) -> Ref_D0_Date:
         return self._select(last)
 
@@ -182,7 +180,6 @@ class Ref_D0_Date(RefInterface):
 
 @dataclass(frozen=True)
 class Ref_D0_F64(RefInterface):
-
     def select(self, last: bool | int) -> Ref_D0_F64:
         return self._select(last)
 
@@ -216,7 +213,6 @@ class Ref_D0_F64(RefInterface):
 
 @dataclass(frozen=True)
 class Ref_D1_Date(RefInterface):
-
     def select(self, last: bool | int) -> Ref_D1_Date:
         return self._select(last)
 
@@ -242,7 +238,6 @@ class Ref_D1_Date(RefInterface):
 
 @dataclass(frozen=True)
 class Ref_D1_F64(RefInterface):
-
     def select(self, last: bool | int) -> Ref_D1_F64:
         return self._select(last)
 
@@ -271,7 +266,6 @@ class Ref_D1_F64(RefInterface):
 
 @dataclass(frozen=True)
 class Ref_D2_F64(RefInterface):
-
     def select(self, last: bool | int) -> Ref_D2_F64:
         return self._select(last)
 
@@ -300,7 +294,6 @@ class Ref_D2_F64(RefInterface):
 
 @dataclass(frozen=True)
 class Ref_D1_F64_D2_F64(RefInterface):
-
     def select(self, last: bool | int) -> Ref_D1_F64_D2_F64:
         return self._select(last)
 
@@ -357,7 +350,6 @@ class Ref_D1_F64_D2_F64(RefInterface):
 
 @dataclass(frozen=True)
 class Ref_D0_F64_3(RefInterface):
-
     def select(self, last: bool | int) -> Ref_D0_F64_3:
         return self._select(last)
 
@@ -438,7 +430,6 @@ class Ref_D0_F64_3(RefInterface):
 
 @dataclass(frozen=True)
 class Ref_D0_F64_4(RefInterface):
-
     def select(self, last: bool | int) -> Ref_D0_F64_4:
         return self._select(last)
 
@@ -606,13 +597,17 @@ class Ref:
         elif isinstance(ref, Ref_D2_F64) and required == 1:
             return Last.D2_F64.new(v, required, 1)
         #
-        elif isinstance(ref, Ref_D1_F64_D2_F64) and required > 1:
+        elif (
+            isinstance(ref, Ref_D1_F64_D2_F64)
+            and required > 1
+        ):
             return (
                 History.D1_F64.new(v, required, limit),
                 History.D2_F64.new(v, required, limit),
             )
         elif (
-            isinstance(ref, Ref_D1_F64_D2_F64) and required == 1
+            isinstance(ref, Ref_D1_F64_D2_F64)
+            and required == 1
         ):
             return (
                 Last.D1_F64.new(v, required, 1),
@@ -626,7 +621,9 @@ class Ref:
                 History.D0_F64.new(v[1], required, limit),
                 History.D0_F64.new(v[2], required, limit),
             )
-        elif isinstance(ref, Ref_D0_F64_3) and required == 1:
+        elif (
+            isinstance(ref, Ref_D0_F64_3) and required == 1
+        ):
             assert isinstance(v, tuple), v
             return (
                 Last.D0_F64.new(v[0], required, 1),
@@ -641,7 +638,9 @@ class Ref:
                 History.D0_F64.new(v[2], required, limit),
                 History.D0_F64.new(v[3], required, limit),
             )
-        elif isinstance(ref, Ref_D0_F64_4) and required == 1:
+        elif (
+            isinstance(ref, Ref_D0_F64_4) and required == 1
+        ):
             assert isinstance(v, tuple), v
             return (
                 Last.D0_F64.new(v[0], required, 1),

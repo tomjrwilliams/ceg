@@ -1,4 +1,3 @@
-
 from typing import Callable
 import polars as pl
 import numpy as np
@@ -10,6 +9,7 @@ from ...validation import assert_is
 from ..utils import *
 
 # ----------------------------------------
+
 
 @nb.jit()
 def calc_rx_grid_update(
@@ -25,7 +25,7 @@ def calc_rx_grid_update(
 ):
     if rx_grid_chg == 0:
         raise ValueError(rx_grid_chg)
-    
+
     if re_grid:
         rx_grid_last = rx_cum
     elif rx_grid_chg > 0:
@@ -64,6 +64,7 @@ def calc_rx_grid_update(
         # rx_grid_btm,
     )
 
+
 @nb.jit()
 def calc_rx_grid_chg(
     rx_cum: float,
@@ -71,9 +72,8 @@ def calc_rx_grid_chg(
     rx_grid_dn: float,
     rx_grid_width: float,
 ):
-    
-    if rx_cum >= rx_grid_up:
 
+    if rx_cum >= rx_grid_up:
         rx_grid_chg = 1
         while rx_cum >= rx_grid_up:
             rx_grid_up += rx_grid_width
@@ -82,16 +82,16 @@ def calc_rx_grid_chg(
         return rx_grid_chg
 
     elif rx_cum <= rx_grid_dn:
-
         rx_grid_chg = -1
         while rx_cum <= rx_grid_dn:
             rx_grid_dn -= rx_grid_width
             rx_grid_chg -= 1
 
         return rx_grid_chg
-        
+
     else:
         return 0
+
 
 @nb.jit()
 def calc_metrics_grid(
@@ -124,13 +124,12 @@ def calc_metrics_grid(
     rx_grid_top = 0
     rx_grid_btm = 0
 
-    start =-1
+    start = -1
     rx_cum = 0
 
     t = 0
     while t < n_t:
         if nd_null[t]:
-
             nd_rx_grid_len[t] = np.nan
             nd_rx_grid_chg[t] = np.nan
             nd_rx_grid_top[t] = np.nan
@@ -138,7 +137,7 @@ def calc_metrics_grid(
 
             nd_rx_grid_net[t] = np.nan
             nd_rx_grid_grs[t] = np.nan
-            
+
             t += 1
             continue
 
@@ -209,7 +208,8 @@ def calc_metrics_grid(
         nd_rx_grid_net,
         nd_rx_grid_grs,
     )
-    
+
+
 @nb.jit()
 def basket_metrics_grid(
     nd_rx: np.ndarray,
@@ -256,15 +256,14 @@ def basket_metrics_grid(
         nd_rx_grid_grs,
     )
 
+
 def metrics_grid_df(
     df: pl.DataFrame,
     rx_grid_width: float,
     re_grid: bool,
 ):
-    (
-        nd_rx, nd_null, nd_active,v_null_expr, all_null
-    ) = cols_with_null_map(
-        df, drop = ["date"]
+    (nd_rx, nd_null, nd_active, v_null_expr, all_null) = (
+        cols_with_null_map(df, drop=["date"])
     )
     (
         nd_rx_grid_len,
@@ -280,7 +279,7 @@ def metrics_grid_df(
         rx_grid_width,
         bool(re_grid),
     )
-    
+
     return df.pipe(
         repack_to_df,
         f=None,
@@ -296,6 +295,7 @@ def metrics_grid_df(
             "rx_grid_grs": nd_rx_grid_grs,
         },
     )
+
 
 # ----------------------------------------
 

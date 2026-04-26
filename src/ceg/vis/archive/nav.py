@@ -1,9 +1,10 @@
 from typing import Callable, Any, NamedTuple
 from frozendict import frozendict
 from ...apis.st import cache, library
+
 st = library()
 
-from streamlit.navigation.page import StreamlitPage
+# from streamlit.navigation.page import StreamlitPage
 
 Shared = frozendict[str, Any]
 

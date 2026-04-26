@@ -6,6 +6,7 @@ import numba as nb
 from ..pl import is_null, join_dfs
 from ..validation import assert_is
 
+
 @nb.jit()
 def calc_hwm(
     v: np.ndarray,
@@ -18,7 +19,7 @@ def calc_hwm(
     res = np.empty(n, dtype=v.dtype)
     acc: float = 0
     alpha_comp = 1 - alpha
-    hwm: float = 0.
+    hwm: float = 0.0
     while i < n:
         if not is_null[i]:
             vv = v[i]
@@ -31,6 +32,7 @@ def calc_hwm(
         i += 1
     return res
 
+
 # TODO: rename unpack_with_null_map
 def cols_with_null_map(
     df: pl.DataFrame,
@@ -41,13 +43,10 @@ def cols_with_null_map(
     v_expr: list[pl.Expr] = []
     v_active_expr: list[pl.Expr] = []
     for k in (
-        cols if cols is not None
-        else df.drop(*drop).schema
+        cols if cols is not None else df.drop(*drop).schema
     ):
         v_null_expr.append(
-            pl.col(k)
-            .pipe(is_null)
-            .alias(f"{k}_null")
+            pl.col(k).pipe(is_null).alias(f"{k}_null")
         )
         v_expr.append(
             pl.when(v_null_expr[-1])
@@ -62,21 +61,20 @@ def cols_with_null_map(
             .cum_sum()
             .gt(0)
         )
-    all_null = df.with_columns(
-        pl.all_horizontal(
-            pl.exclude(*drop)
-            .fill_nan(None)
-            .is_null()
-        ).alias("all_null")
-    ).get_column("all_null").to_numpy()
-    v_null = df.select(
-        *v_null_expr
-    ).to_numpy()
-    v_active = df.select(
-        *v_active_expr
-    ).to_numpy()
+    all_null = (
+        df.with_columns(
+            pl.all_horizontal(
+                pl.exclude(*drop).fill_nan(None).is_null()
+            ).alias("all_null")
+        )
+        .get_column("all_null")
+        .to_numpy()
+    )
+    v_null = df.select(*v_null_expr).to_numpy()
+    v_active = df.select(*v_active_expr).to_numpy()
     v_rx = df.select(*v_expr).to_numpy()
     return v_rx, v_null, v_active, v_null_expr, all_null
+
 
 def null_fill_consecutive(
     df: pl.DataFrame,
@@ -91,19 +89,14 @@ def null_fill_consecutive(
         *[
             pl.when(vn)
             .then(None)
-            .when((ve == 0).and_(
-                ve.shift() == 0
-            ))
+            .when((ve == 0).and_(ve.shift() == 0))
             .then(None)
             .otherwise(ve)
             .alias(k)
-            for ve, vn, k in zip(
-                v_expr,
-                v_null,
-                ks
-            )
-        ]
+            for ve, vn, k in zip(v_expr, v_null, ks)
+        ],
     )
+
 
 def repack_to_df_(
     df: pl.DataFrame,
@@ -130,13 +123,14 @@ def repack_to_df_(
         ],
         *[
             f(
-                pl.Series(f"{prefix}_{i}", values[:, i])
-                .fill_nan(None)
-            )            
-            .alias(f"{prefix}_{i}")
+                pl.Series(
+                    f"{prefix}_{i}", values[:, i]
+                ).fill_nan(None)
+            ).alias(f"{prefix}_{i}")
             for i in range(values.shape[1])
         ],
     )
+
 
 def repack_to_df(
     df: pl.DataFrame,
@@ -153,20 +147,19 @@ def repack_to_df(
         | dict[str, Callable[..., pl.DataFrame]]
         | None
     ) = None,
-    **k_vals: np.ndarray | tuple[
+    **k_vals: np.ndarray
+    | tuple[
         np.ndarray,
         list[pl.Expr] | None,
         Callable[[pl.Series], pl.Series] | None,
         Callable[..., pl.DataFrame] | None,
-        dict
+        dict,
     ],
 ):
     res = []
     for k, vals in k_vals.items():
         if isinstance(vals, tuple):
-            (
-                vals_nd, null_, f_, f_pipe_, with_kw
-            ) = vals
+            (vals_nd, null_, f_, f_pipe_, with_kw) = vals
         else:
             vals_nd = vals
             null_ = null
@@ -180,11 +173,13 @@ def repack_to_df(
             k,
             with_cols=["date"],
             with_null=(
-                null_ if not isinstance(null_, dict)
+                null_
+                if not isinstance(null_, dict)
                 else null_.get(k, None)
             ),
             f=(
-                f_ if not isinstance(f_, dict)
+                f_
+                if not isinstance(f_, dict)
                 else f_.get(k, None)
             ),
         )
@@ -193,25 +188,20 @@ def repack_to_df(
 
         if f_pipe_ is not None:
             val_df = f_pipe_(val_df, **with_kw)
-        
+
         res.append(val_df)
 
     # TODO: align will throw if null cols passed
 
     return assert_is(
-        join_dfs(
-            res,
-            align=True,
-            on="date"
-        )
+        join_dfs(res, align=True, on="date")
     ).sort(by="date"), [
-        (k, i)
-        for k in k_vals.keys()
-        for i in range(n_x)
+        (k, i) for k in k_vals.keys() for i in range(n_x)
     ]
 
+
 __all__ = [
-    "calc_hwm", # TODO: move somehwere else?
+    "calc_hwm",  # TODO: move somehwere else?
     "cols_with_null_map",
     "null_fill_consecutive",
     "repack_to_df",

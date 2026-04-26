@@ -60,3 +60,12 @@ from .sql.lite import (
     SQLiteQueue,
     SQLiteQueueConfig,
 )
+
+from .redis import (
+    RedisKeyValConfig,
+    RedisKeyVal,
+    RedisKeyChunkConfig,
+    RedisKeyChunk,
+    # RedisQueue,
+    # RedisQueueConfig,
+)

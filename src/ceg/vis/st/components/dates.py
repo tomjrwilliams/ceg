@@ -8,7 +8,6 @@ from typing import (
     Literal,
     overload,
     cast,
-
 )
 from pathlib import Path
 import datetime as dt
@@ -16,6 +15,7 @@ import numpy as np
 import polars as pl
 
 from .... import apis
+
 st = apis.st.library()
 
 from dataclasses import replace
@@ -45,15 +45,15 @@ class DateRange(Component):
     def version(self) -> VersionVariable:
         key = self.key if self.sync is None else self.sync
         return VersionVariable(f"{key}_version")
-    
+
     @property
     def input_0(self) -> StateVariable:
         return StateVariable(f"{self.key}_input_0")
-    
+
     @property
     def input_1(self) -> StateVariable:
         return StateVariable(f"{self.key}_input_1")
-    
+
     @property
     def slider(self) -> StateVariable:
         return StateVariable(f"{self.key}_slider")
@@ -64,7 +64,7 @@ class DateRange(Component):
         return VersionedVariable(
             f"{key}_date_0", self.version
         )
-    
+
     @property
     def date_1(self) -> VersionedVariable:
         key = self.key if self.sync is None else self.sync
@@ -80,7 +80,7 @@ class DateRange(Component):
             self.version.incr()
             self.date_0.set(self.input_0.get())
             self.date_1.set(self.input_1.get())
-        
+
         def on_change_slider():
             self.version.incr()
             d0, d1 = self.slider.get()
@@ -90,7 +90,7 @@ class DateRange(Component):
         if not self.date_0.exists():
             self.date_0.set(d0)
             self.date_1.set(d1)
-            
+
         c1, c2 = st.columns(2)
 
         with c1:
@@ -99,7 +99,7 @@ class DateRange(Component):
                 self.input_labels[0],
                 self.date_0.get(d0),
                 on_change=on_change_input,
-                key=self.input_0.key
+                key=self.input_0.key,
             )
         with c2:
             d1_i = st.empty()
@@ -107,9 +107,9 @@ class DateRange(Component):
                 self.input_labels[1],
                 self.date_1.get(d1),
                 on_change=on_change_input,
-                key=self.input_1.key
+                key=self.input_1.key,
             )
-        
+
         slider = st.empty()
         slider.slider(
             self.slider_label,
@@ -117,7 +117,7 @@ class DateRange(Component):
             d1,
             (self.date_0.get(d0), self.date_1.get(d1)),
             on_change=on_change_slider,
-            key=self.slider.key
+            key=self.slider.key,
         )
 
         return self

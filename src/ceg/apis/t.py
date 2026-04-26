@@ -1,5 +1,12 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Iterable, TypeVar, cast, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Iterable,
+    TypeVar,
+    cast,
+    overload,
+)
 
 # TODO: typed replace
 from dataclasses import replace
@@ -28,9 +35,11 @@ KeyO = TypeVar("KeyO", covariant=False)
 ValO = TypeVar("ValO", covariant=False)
 ValT = TypeVar("ValT", covariant=False)
 
+
 def not_none(v: T | None) -> T:
     assert v is not None, v
     return v
+
 
 def only_index_not_none(
     *vs: Any | None, strict: bool = True
@@ -57,7 +66,9 @@ class ndarray(np.ndarray):
         return cls(v)
 
     @classmethod
-    def validate(cls, v: Any, info: core_schema.ValidationInfo):
+    def validate(
+        cls, v: Any, info: core_schema.ValidationInfo
+    ):
         if isinstance(v, np.ndarray):
             return v
         elif isinstance(v, Iterable):
@@ -79,8 +90,9 @@ class ndarray(np.ndarray):
 
 
 import polars
-class pl:
 
+
+class pl:
     class Series(polars.Series):
         """
         pydantic enhanced pl.Series wrapper
@@ -91,7 +103,9 @@ class pl:
             return cls(v)
 
         @classmethod
-        def validate(cls, v: Any, info: core_schema.ValidationInfo):
+        def validate(
+            cls, v: Any, info: core_schema.ValidationInfo
+        ):
             if isinstance(v, pl.Series):
                 return v
             # elif isinstance(v, Iterable):
@@ -101,7 +115,9 @@ class pl:
 
         @classmethod
         def __get_pydantic_core_schema__(
-            cls, source_type: Any, handler: GetCoreSchemaHandler
+            cls,
+            source_type: Any,
+            handler: GetCoreSchemaHandler,
         ) -> CoreSchema:
             return core_schema.chain_schema(
                 [
@@ -110,6 +126,7 @@ class pl:
                     ),
                 ]
             )
+
     class DataFrame(polars.DataFrame):
         """
         pydantic enhanced pl.DataFrame wrapper
@@ -118,15 +135,19 @@ class pl:
         @classmethod
         def cast(cls, v: polars.DataFrame) -> pl.DataFrame:
             return cls(v)
-        
+
         @classmethod
-        def cast_opt(cls, v: polars.DataFrame | None) -> pl.DataFrame | None:
+        def cast_opt(
+            cls, v: polars.DataFrame | None
+        ) -> pl.DataFrame | None:
             if v is None:
                 return v
             return cls(v)
 
         @classmethod
-        def validate(cls, v: Any, info: core_schema.ValidationInfo):
+        def validate(
+            cls, v: Any, info: core_schema.ValidationInfo
+        ):
             if isinstance(v, pl.DataFrame):
                 return v
             # elif isinstance(v, Iterable):
@@ -136,7 +157,9 @@ class pl:
 
         @classmethod
         def __get_pydantic_core_schema__(
-            cls, source_type: Any, handler: GetCoreSchemaHandler
+            cls,
+            source_type: Any,
+            handler: GetCoreSchemaHandler,
         ) -> CoreSchema:
             return core_schema.chain_schema(
                 [
@@ -145,20 +168,24 @@ class pl:
                     ),
                 ]
             )
-        
+
+
 class frozen:
-    
     class dict(frozendict[KeyO, ValO]):
         """
         pydantic enhanced frozendict
         """
 
         @classmethod
-        def cast(cls, v: frozendict[KeyO, ValO]) -> frozen.dict[KeyO, ValO]:
+        def cast(
+            cls, v: frozendict[KeyO, ValO]
+        ) -> frozen.dict[KeyO, ValO]:
             return cls(v)
 
         @classmethod
-        def validate(cls, v: Any, info: core_schema.ValidationInfo):
+        def validate(
+            cls, v: Any, info: core_schema.ValidationInfo
+        ):
             if isinstance(v, frozendict):
                 return v
             elif isinstance(v, dict):
@@ -168,7 +195,9 @@ class frozen:
 
         @classmethod
         def __get_pydantic_core_schema__(
-            cls, source_type: Any, handler: GetCoreSchemaHandler
+            cls,
+            source_type: Any,
+            handler: GetCoreSchemaHandler,
         ) -> CoreSchema:
             return core_schema.chain_schema(
                 [
@@ -177,4 +206,3 @@ class frozen:
                     ),
                 ]
             )
-      

@@ -1,13 +1,13 @@
-
 import pandas as pd
 
 from .types import *
 from . import states, State
 
+
 def df_tall(
     v: F64_3D,
     agents: list[str] | None = None,
-    products: list[str] | None=None,
+    products: list[str] | None = None,
     agent: str = "a",
     product: str = "p",
 ) -> pl.DataFrame:
@@ -31,14 +31,15 @@ def df_tall(
             "time": pl.Int32,
             "agent": t_agents,
             "product": t_products,
-        }
+        },
     )
+
 
 # assume single t
 def df_wide(
     v: F64_2D,
     agents: list[str] | None = None,
-    products: list[str] | None=None,
+    products: list[str] | None = None,
     agent: str = "a",
     product: str = "p",
 ) -> pd.DataFrame:
@@ -54,10 +55,9 @@ def df_wide(
         agents = enumerated_labels(agent, a, justify=3)
     return pd.DataFrame(
         data={
-            name: v[:, i]
-            for i, name in enumerate(products)
+            name: v[:, i] for i, name in enumerate(products)
         },
-        index=agents
+        index=agents,
     )
 
 
@@ -69,9 +69,7 @@ def offset_deliveries(state: State) -> F64_2D:
     is_ouput = state.functions > 0
 
     units_in_inventory: F64_2D = np.where(
-        is_input,
-        state.inventory,
-        np.nan
+        is_input, state.inventory, np.nan
     ) / np.where(
         is_input,
         -1 * state.functions,
@@ -83,14 +81,8 @@ def offset_deliveries(state: State) -> F64_2D:
     )
 
     units_delivered: F64_2D = np.where(
-        is_ouput,
-        deliveries,
-        np.nan
-    ) / np.where(
-        is_ouput,
-        state.functions,
-        1
-    )
+        is_ouput, deliveries, np.nan
+    ) / np.where(is_ouput, state.functions, 1)
 
     # max?
     units_required: F64_1D = np.nanmax(
@@ -98,9 +90,7 @@ def offset_deliveries(state: State) -> F64_2D:
     )
 
     prod: F64_1D = np.clip(
-        units_required, 
-        a_min=None,
-        a_max=units_available
+        units_required, a_min=None, a_max=units_available
     )
 
     prod_io: F64_2D = prod * state.functions

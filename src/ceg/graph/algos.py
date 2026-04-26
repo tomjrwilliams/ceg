@@ -16,7 +16,7 @@ V = TypeVar("V")
 
 
 def tuple_append_none(
-    v: tuple[T | None, ...]
+    v: tuple[T | None, ...],
 ) -> tuple[T | None, ...]:
     return v + (None,)
 
@@ -28,7 +28,9 @@ def frozendict_append_tuple(
 
 
 def fold_star(acc, f: Callable, it):
-    return functools.reduce(lambda ac, v: f(ac, *v), it, acc)
+    return functools.reduce(
+        lambda ac, v: f(ac, *v), it, acc
+    )
 
 
 def set_tuple(
@@ -38,7 +40,9 @@ def set_tuple(
     if i > len(t):
         t = (
             t
-            + tuple((default for _ in range(i - len(t) - 1)))
+            + tuple(
+                (default for _ in range(i - len(t) - 1))
+            )
             + (v,)
         )
     # elif t[i] is v or t[i] == v:

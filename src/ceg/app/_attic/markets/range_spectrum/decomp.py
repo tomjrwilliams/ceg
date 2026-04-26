@@ -43,7 +43,7 @@ def lines(
         .with_universe(data.bars.UNIVERSE)
         .with_functions(
             cast(
-                app.model.Collection,
+                app.model.Container,
                 frozendict(
                     {
                         "date": func.dates.daily.loop,
@@ -136,10 +136,12 @@ def lines(
                     func="stack",
                     **{
                         f"v{i}": f"v{i}:ref={ident}-H-max-{sp}"
-                        for i, sp in enumerate(reversed(span))
+                        for i, sp in enumerate(
+                            reversed(span)
+                        )
                     },
                     **{
-                        f"v{i+len(span)}": f"v{i+len(span)}:ref={ident}-L-min-{sp}"
+                        f"v{i + len(span)}": f"v{i + len(span)}:ref={ident}-L-min-{sp}"
                         for i, sp in enumerate(span)
                     },
                 ),

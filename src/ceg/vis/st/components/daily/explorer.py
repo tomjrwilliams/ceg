@@ -9,7 +9,6 @@ from typing import (
     Literal,
     overload,
     cast,
-
 )
 from pathlib import Path
 import datetime as dt
@@ -34,6 +33,7 @@ from ..dfs import *
 from ..text import *
 
 from ..... import apis
+
 st = apis.st.library()
 
 from .....apis import assert_is, t, logs, perf
@@ -42,6 +42,7 @@ logger, log = logs.logger(
     __file__,
     streams=dict(formatter=True),
 )
+
 
 @dataclass(frozen=True)
 class ExploreDaily(Component):
@@ -56,7 +57,7 @@ class ExploreDaily(Component):
     value_key: str = "value"
     label_key: str = "label"
     group_key: str = "group"
-    
+
     def check_df(self, df: pl.DataFrame) -> pl.DataFrame:
         if self.date_key in df:
             pass
@@ -66,7 +67,7 @@ class ExploreDaily(Component):
             # TODO: throw only if daily_series
             # raise ValueError((self, df.schema))
             pass
-        
+
         if self.value_key in df:
             pass
         elif "value" in df:
@@ -75,22 +76,22 @@ class ExploreDaily(Component):
             # TODO: throw only if daily_series
             # raise ValueError((self, df.schema))
             pass
-           
+
         return df
+
 
 ROW_CACHE: dict[str, dict[str, pl.DataFrame]] = {}
 
-def row_to_df(
-    g: Graph, r: dict
-) -> pl.DataFrame | None:
+
+def row_to_df(g: Graph, r: dict) -> pl.DataFrame | None:
     return obj_to_daily_ts(g, **r)
+
 
 def row_to_alias(r: dict) -> str:
     return (
-        r["label"] 
-        if r["label"] is not None
-        else r["obj"]
+        r["label"] if r["label"] is not None else r["obj"]
     )
+
 
 def obj_to_daily_ts(
     g: Graph, **kwargs: str
@@ -101,35 +102,32 @@ def obj_to_daily_ts(
     # assert "obj" in kwargs, kwargs
     obj = kwargs.pop("obj")
 
-    log("INFO")( loading_obj=obj)
+    log("INFO")(loading_obj=obj)
 
     if obj is None:
         raise ValueError(kwargs)
-    
+
     # # if graph in DOMAINS:
     # g = context.get(Graph, name=graph)
     # else:
     #     dom = graph_funcs[graph](DOMAIN_SYNC)
     #     DOMAINS[graph] = dom
 
-    o = g.get(obj, t = None)
-    
+    o = g.get(obj, t=None)
+
     # if hasattr(o, "explorer_df"):
     #     return o.explorer_df(d) # type: ignore
-    
+
     t = kwargs.get("type", "daily_series")
 
     if isinstance(o, UseRootDataFrameStorage):
-
         val_kv = o.value_key_val()
         snap_kv = o.snap_key_val()
 
-        snap = snap_kv.get(o.path, Daily.Snap)
+        snap = snap_kv.get(o.id, Daily.Snap)
         assert snap is not None, (type(o), o)
 
-        v = val_kv.get(
-            o.path, ValuePlDataFrame
-        )
+        v = val_kv.get(o.id, ValuePlDataFrame)
         assert v is not None, (type(o), o)
 
         df = v.df
@@ -139,21 +137,20 @@ def obj_to_daily_ts(
 
         for k in ["group"]:
             if k in kwargs:
-                df = df.with_columns(pl.lit(kwargs[k]).alias(k))
+                df = df.with_columns(
+                    pl.lit(kwargs[k]).alias(k)
+                )
 
         return df
-    
-    elif isinstance(o, Daily):
 
+    elif isinstance(o, Daily):
         val_kv = o.value_key_val()
         snap_kv = o.snap_key_val()
 
-        snap = snap_kv.get(o.path, Daily.Snap)
+        snap = snap_kv.get(o.id, Daily.Snap)
         assert snap is not None, (type(o), o)
 
-        v = val_kv.get(
-            o.path, ValuePlSeries
-        )
+        v = val_kv.get(o.id, ValuePlSeries)
         assert v is not None, (type(o), o)
 
         d0, d1 = assert_is(snap.first), assert_is(snap.last)
@@ -161,40 +158,41 @@ def obj_to_daily_ts(
         try:
             df = v.to_df(
                 alias="value",
-                pipe=lambda e: e.fill_nan(None)
+                pipe=lambda e: e.fill_nan(None),
             )
             df = df.with_columns(
-                pl.lit(o.path).alias("key"),
-                pl.date_range(d0, d1).alias("date")
+                pl.lit(o.id).alias("key"),
+                pl.date_range(d0, d1).alias("date"),
             )
         except:
-            raise ValueError((
-                snap, df
-            ))
-        
+            raise ValueError((snap, df))
+
         params = kwargs.pop("params")
         # TODO: if params is not None (eg. transform, etc.)
 
         for k in ["group"]:
             if k in kwargs:
-                df = df.with_columns(pl.lit(kwargs[k]).alias(k))
+                df = df.with_columns(
+                    pl.lit(kwargs[k]).alias(k)
+                )
         return df
-    
+
     raise ValueError((obj, kwargs))
+
 
 GRAPH_SYNC: dict[str, bool] = {}
 PAGE_LOAD: dict[str | None, bool] = {}
 
+
 def load_page(
-    name: str | None,
-    Project,
-    reset: bool = False
+    name: str | None, Project, reset: bool = False
 ):
     # TODO: root, etc. etc.
     PAGE_LOAD[name] = True
     project = Project.load(target=name)
     if reset:
         project.reset()
+
 
 @apis.st.cache()
 def get_data(
@@ -214,37 +212,42 @@ def get_data(
         else:
             g = context.get(Graph, name=graph)
 
-        log("INFO")( page=parent_key, df=df_key)
-        
+        log("INFO")(page=parent_key, df=df_key)
+
         r_to_df_alias = lambda r: (
             row_to_df(g, r),
             row_to_alias(r),
         )
-        
+
         r_df_aliases = [
-            (r_df, alias) for (r_df, alias) in map(
-                r_to_df_alias, 
+            (r_df, alias)
+            for (r_df, alias) in map(
+                r_to_df_alias,
                 df.iter_rows(named=True),
-            ) if r_df is not None
+            )
+            if r_df is not None
         ]
 
         if len(r_df_aliases):
-            return pl.concat([
-                r_df.with_columns(
-                    pl.lit(alias)
-                    .alias(label_key)
-                )
-                for r_df, alias in r_df_aliases
-            ], how = "diagonal_relaxed")
-        
+            return pl.concat(
+                [
+                    r_df.with_columns(
+                        pl.lit(alias).alias(label_key)
+                    )
+                    for r_df, alias in r_df_aliases
+                ],
+                how="diagonal_relaxed",
+            )
+
         return None
+
 
 @dataclass(frozen=True)
 class ExploreFromRows(Component):
     key: str
     cache: str
     schema: dict[str, Type[pl.DataType]]
-    
+
     label_key: str = "label"
 
     dynamic: bool = False
@@ -255,6 +258,7 @@ class ExploreFromRows(Component):
 
     def check_df(self, df: pl.DataFrame):
         return df
+
 
 @dataclass(frozen=True)
 class ExploreDailyFromRows(
@@ -269,7 +273,7 @@ class ExploreDailyFromRows(
         )
 
     def get_graph(self):
-        
+
         graph_comp = self.gen_graph()
         if self.dynamic:
             graph = graph_comp.render()
@@ -277,12 +281,12 @@ class ExploreDailyFromRows(
         else:
             d = assert_is(graph_comp.load(set=False))
         return d
-    
+
     def handle_env(self):
-        
+
         args_fp = Path("./src/ceg/app/dev/ARGS.json")
         if args_fp.exists():
-            with args_fp.open('r') as f:
+            with args_fp.open("r") as f:
                 args = json.load(f)
         else:
             args = {}
@@ -302,7 +306,7 @@ class ExploreDailyFromRows(
         for k in regen:
             log("INFO")(regen=k)
             fp = f"./__local__/db/{k}.db"
-            
+
             if Path(fp).exists():
                 os.remove(fp)
 
@@ -321,20 +325,22 @@ class ExploreDailyFromRows(
             self.child_key("data"),
             f"{self.cache}/rows.parquet",
             schema=self.schema,
-            widths = {
+            widths={
                 "viz": 50,
                 "obj": 300,
                 "label": 200,
                 "group": 100,
                 "params": 200,
                 # TODO: take this from caller
-            }
+            },
         )
         if self.dynamic:
             rows = rows_comp.render()
             rows_df = rows.df
         else:
-            rows_df = rows_comp.merge_schema(rows_comp.load())
+            rows_df = rows_comp.merge_schema(
+                rows_comp.load()
+            )
 
         if rows_df is None:
             return self
@@ -353,13 +359,13 @@ class ExploreDailyFromRows(
                 "params": pl.String,
                 # TODO: take this from caller
             },
-            widths = {
+            widths={
                 self.partition: 50,
                 "name": 100,
                 "type": 200,
                 "params": 600,
                 # TODO: take this from caller
-            }
+            },
         )
 
         if self.dynamic:
@@ -369,7 +375,7 @@ class ExploreDailyFromRows(
             vizs_df = vizs_comp.merge_schema(
                 vizs_comp.load()
             )
-    
+
         if vizs_df is None:
             # or throw?
             return self
@@ -378,7 +384,7 @@ class ExploreDailyFromRows(
             return self
 
         viz_configs = {
-            k: v 
+            k: v
             for (k,), v in vizs_df.partition_by(
                 self.partition,
                 as_dict=True,
@@ -400,23 +406,26 @@ class ExploreDailyFromRows(
         # )
 
         viz_rows = {
-            viz_names.get(
-                part, part
-            ): partn_df
-            for (part,), partn_df 
-            in sorted(
+            viz_names.get(part, part): partn_df
+            for (part,), partn_df in sorted(
                 rows_df.filter(
                     pl.col(self.partition).is_not_null()
-                ).partition_by(
+                )
+                .partition_by(
                     self.partition,
                     as_dict=True,
-                ).items(),
-                key = lambda part_part_df: part_part_df[0] 
+                )
+                .items(),
+                key=lambda part_part_df: part_part_df[0],
             )
             if part is not None
-            and len(assert_is(viz_configs.get(
-                viz_names.get(part, part)
-            )))
+            and len(
+                assert_is(
+                    viz_configs.get(
+                        viz_names.get(part, part)
+                    )
+                )
+            )
         }
 
         part = st.segmented_control(
@@ -424,7 +433,7 @@ class ExploreDailyFromRows(
             options=list(viz_rows.keys()),
             selection_mode="single",
             key=f"{self.key}_viz_sel",
-            label_visibility="hidden"
+            label_visibility="hidden",
         )
 
         if part is None:
@@ -432,14 +441,14 @@ class ExploreDailyFromRows(
 
         # for part, part_df in viz_rows:
 
-            # if part is None:
-            #     continue
+        # if part is None:
+        #     continue
 
         part_df = viz_rows[part]
 
         if part not in ROW_CACHE[self.key]:
             ROW_CACHE[self.key][part] = part_df
-                
+
         config_df = assert_is(viz_configs.get(part))
 
         # if config_df is None or not len(config_df):
@@ -448,7 +457,7 @@ class ExploreDailyFromRows(
         # else:
 
         # TODO: warning if len gt 1
-        
+
         config = config_df.row(0, named=True)
         config.pop("viz", None)
         viz_name = config.pop("name", None)
@@ -464,7 +473,7 @@ class ExploreDailyFromRows(
         #     part_key = "viz"
         # else:
         part_key = f"viz_{part}"
-    
+
         data: pl.DataFrame | None = get_data(
             self.key,
             part,
@@ -474,22 +483,21 @@ class ExploreDailyFromRows(
 
         if data is None:
             return self
-    
+
         data = assert_is(data, pl.DataFrame)
 
         # TODO: you almost need to ask the viz for conditional filters for data load
         # and then use them to filter the objects before requesting the data
-        # so put back the per series cache, remove the viz level 
+        # so put back the per series cache, remove the viz level
 
-        if (
-            self.group_key in data.schema 
-            and not len(data.filter(
+        if self.group_key in data.schema and not len(
+            data.filter(
                 pl.col(self.group_key).is_not_null()
-            ))
+            )
         ):
             data = data.drop(self.group_key)
-        
-        log("INFO")( loading_viz=part)
+
+        log("INFO")(loading_viz=part)
 
         try:
             obj = comp_cls(
@@ -499,22 +507,21 @@ class ExploreDailyFromRows(
                 # sync=self.key if sync else None,
                 sync=None,
                 **({} if config is None else config),
-                **comp_cls.parse_params(viz_params)
+                **comp_cls.parse_params(viz_params),
             ).render()
-            log("INFO")( ready=part)
+            log("INFO")(ready=part)
         except StopException:
             pass
         except:
             raise ValueError(data.schema)
-                
+
         return self
 
+
 StopException = (
-    st.runtime # type: ignore
-    .scriptrunner_utils
-    .exceptions
-    .StopException
+    st.runtime.scriptrunner_utils.exceptions.StopException  # type: ignore
 )
+
 
 @dataclass(frozen=True)
 class ExploreDailyComponent(Component):
@@ -525,7 +532,7 @@ class ExploreDailyComponent(Component):
 
     def render_date_filter(self, df: pl.DataFrame):
         return df
-        
+
         # exp = self.explorer
 
         # d = pl.col(exp.date_key)
@@ -550,6 +557,7 @@ class ExploreDailyComponent(Component):
     @classmethod
     def parse_params(cls, s: str | None) -> dict:
         return {}
+
 
 EXPLORER_COMPONENTS: dict[
     str | None, Type[ExploreDailyComponent]

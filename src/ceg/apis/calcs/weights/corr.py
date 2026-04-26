@@ -1,4 +1,3 @@
-
 from typing import Callable
 import polars as pl
 import numpy as np
@@ -11,6 +10,7 @@ from ...pl import *
 from ..utils import *
 
 # ----------------------------------------
+
 
 @nb.jit()
 def corr_init(n_x: int):
@@ -51,12 +51,13 @@ def corr_init(n_x: int):
 
     return i_x, i_y, order
 
+
 @nb.jit()
 def unpack_diagonal(
     nd_corr: np.ndarray,
     n_t: int,
     n_x: int,
-    diag: float=1.,
+    diag: float = 1.0,
 ):
     res = np.ones((n_t, n_x, n_x)) * diag
 
@@ -67,17 +68,18 @@ def unpack_diagonal(
         while x < n_x:
             y = 1 + x
             while y < n_x:
-                v = nd_corr[t][i]  
+                v = nd_corr[t][i]
                 res[t][x][y] = v
                 res[t][y][x] = v
                 i += 1
                 y += 1
-            
+
             # i += 1
             x += 1
         t += 1
-    
+
     return res
+
 
 # @nb.jit()
 # def swap_places(
@@ -100,6 +102,7 @@ def unpack_diagonal(
 #     i_place[place_i] = place_self
 
 #     return i_order, i_place
+
 
 @nb.jit()
 def calc_corr_ewm(
@@ -134,11 +137,11 @@ def calc_corr_ewm(
     ... )).to_numpy()
     >>> nd_rx = df.to_numpy()
     >>> nd_corr, nd_order, nd_places, nd_null = calc_corr_ewm(
-    ...     nd_rx, 
-    ...     nd_null, 
-    ...     nd_active, 
-    ...     0.1, 
-    ...     len(df), 
+    ...     nd_rx,
+    ...     nd_null,
+    ...     nd_active,
+    ...     0.1,
+    ...     len(df),
     ...     len(ks)
     ... )
     >>> unpack = unpack_diagonal
@@ -159,15 +162,9 @@ def calc_corr_ewm(
     nd_corr = np.zeros(
         (n_t, n_i),
     )
-    nd_order = np.zeros(
-        (n_t, n_i), dtype=np.uint
-    )
-    nd_places = np.zeros(
-        (n_t, n_i), dtype=np.uint
-    )
-    res_null = np.zeros(
-        (n_t, n_i), dtype=np.bool
-    )
+    nd_order = np.zeros((n_t, n_i), dtype=np.uint)
+    nd_places = np.zeros((n_t, n_i), dtype=np.uint)
+    res_null = np.zeros((n_t, n_i), dtype=np.bool)
 
     r_mu = np.zeros((n_x,))
     r_var = np.zeros((n_x,)) * np.nan
@@ -176,17 +173,15 @@ def calc_corr_ewm(
 
     r_corr = np.zeros(i_order.shape) * np.nan
     # r_prod_mu = np.zeros(i_order.shape) * np.nan
-    
+
     n_first = np.zeros((n_x,)) - 1
 
     decay = 1 - window
     t: int = 0
 
     while t < n_t:
-
         x = 0
         while x < n_x:
-
             if not nd_active[t][x]:
                 res_mu[t][x] = np.nan
                 res_vol[t][x] = np.nan
@@ -203,13 +198,11 @@ def calc_corr_ewm(
                     r_mu[x] = rx
                     r_var[x] = rx * rx
                 else:
-                    r_mu[x] = (
-                        (decay * r_mu[x])
-                        + (window * rx)
+                    r_mu[x] = (decay * r_mu[x]) + (
+                        window * rx
                     )
-                    r_var[x] = (
-                        (decay * r_var[x])
-                        + (window * (rx * rx))
+                    r_var[x] = (decay * r_var[x]) + (
+                        window * (rx * rx)
                     )
 
             res_mu[t][x] = r_mu[x]
@@ -223,7 +216,7 @@ def calc_corr_ewm(
                 while nd_active[tt][x] and tt >= 0:
                     res_vol[tt][x] = x_vol
                     tt -= 1
-                
+
             else:
                 res_vol[t][x] = x_vol
 
@@ -235,7 +228,6 @@ def calc_corr_ewm(
         n_null = 0
 
         while x < n_x:
-
             y = x + 1
 
             while y < n_x:
@@ -244,7 +236,7 @@ def calc_corr_ewm(
                 ):
                     res_null[t][i] = True
 
-                    place = n_i - (1+ n_null)
+                    place = n_i - (1 + n_null)
 
                     i_order, i_place = shuffle_places(
                         i_order,
@@ -264,14 +256,12 @@ def calc_corr_ewm(
 
                 if x == y:
                     raise ValueError((x, y))
-                
+
                 if not (
-                    nd_null[t][x]
-                    or nd_null[t][y]
+                    nd_null[t][x] or nd_null[t][y]
                     # or np.isnan(nd_rx[t][x])
                     # or np.isnan(nd_rx[t][y])
                 ):
-
                     d_x = nd_rx[t][x]
                     #  - r_mu[x]
                     d_y = nd_rx[t][y]
@@ -282,17 +272,16 @@ def calc_corr_ewm(
                     if np.isnan(r_cov[i]):
                         rx_cov = d_prod
                     else:
-                        rx_cov = (
-                            (decay * r_cov[i])
-                            + (window * d_prod)
+                        rx_cov = (decay * r_cov[i]) + (
+                            window * d_prod
                         )
 
                     if not np.isnan(rx_cov):
                         r_cov[i] = rx_cov
-                    
+
                     if not (
                         np.isnan(rx_cov)
-                        or r_var[x] <= 0 
+                        or r_var[x] <= 0
                         or r_var[y] <= 0
                     ):
                         rx_corr = rx_cov / (
@@ -339,7 +328,7 @@ def calc_corr_ewm(
 
             # i += 1 # sure?
             x += 1
-        
+
         i = 0
         while i < n_i:
             nd_order[t][i] = i_order[i]
@@ -365,11 +354,10 @@ def calc_corr_ewm(
         i_y,
     )
 
+
 @nb.jit()
 def warm_ffill(
-    vs: np.ndarray,
-    v1: np.ndarray,
-    warm: int = 180
+    vs: np.ndarray, v1: np.ndarray, warm: int = 180
 ):
 
     res = np.zeros(vs.shape)
@@ -381,7 +369,7 @@ def warm_ffill(
         t = 0
         started = -1
         last_v = np.nan
-        
+
         while t < vs.shape[0]:
             if started == -1:
                 last_v1 = v1[t][x]
@@ -405,9 +393,12 @@ def warm_ffill(
 
             t += 1
         x += 1
-    
+
     return res
+
+
 # , res_1
+
 
 @nb.jit()
 def shuffle_places(
@@ -424,23 +415,14 @@ def shuffle_places(
         res = i_order, i_place
     elif place < place_self:
         res = shuffle_left(
-            i_order,
-            i_place,
-            n_i,
-            i,
-            place,
-            n_null
+            i_order, i_place, n_i, i, place, n_null
         )
     else:
-        res= shuffle_right(
-            i_order,
-            i_place,
-            n_i,
-            i,
-            place,
-            n_null
+        res = shuffle_right(
+            i_order, i_place, n_i, i, place, n_null
         )
     return res
+
 
 @nb.jit()
 def shuffle_left(
@@ -472,7 +454,7 @@ def shuffle_left(
 
     while p < place_self:
         p = int(p)
-        
+
         place_i: int = int(i_order[p])
 
         i_order[p] = prev_i
@@ -484,8 +466,9 @@ def shuffle_left(
 
     i_order[int(p)] = int(prev_i)
     i_place[int(prev_i)] = int(p)
-    
+
     return i_order, i_place
+
 
 @nb.jit()
 def shuffle_right(
@@ -524,7 +507,7 @@ def shuffle_right(
 
     while p > place_self:
         p = int(p)
-        
+
         place_i: int = int(i_order[p])
 
         i_order[p] = prev_i
@@ -536,8 +519,9 @@ def shuffle_right(
 
     i_order[int(p)] = int(prev_i)
     i_place[int(prev_i)] = int(p)
-    
+
     return i_order, i_place
+
 
 @nb.jit()
 def insert_place(
@@ -556,7 +540,7 @@ def insert_place(
         while p < n_i - n_null:
             p_i = i_order[p]
             p_v = row_vs[p_i]
-            
+
             if v > p_v or np.isnan(p_v):
                 return shuffle_places(
                     i_order,
@@ -581,7 +565,7 @@ def insert_place(
         while p < place:
             p_i = i_order[p]
             p_v = row_vs[p_i]
-            
+
             if v > p_v and not np.isnan(p_v):
                 return shuffle_places(
                     i_order,
@@ -598,7 +582,7 @@ def insert_place(
         while p > place:
             p_i = i_order[p]
             p_v = row_vs[p_i]
-            
+
             if v < p_v and not np.isnan(p_v):
                 return shuffle_places(
                     i_order,
@@ -612,6 +596,5 @@ def insert_place(
 
     return i_order, i_place
 
-__all__ = [
-    "calc_corr_ewm"
-]
+
+__all__ = ["calc_corr_ewm"]

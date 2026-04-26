@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -32,8 +31,8 @@ import polars as pl
 
 from ....engine import (
     Graph,
-    Object, # needed bc weird pydantic subclassing
-    Dependency, # needed bc weird pydantic subclassing
+    Object,  # needed bc weird pydantic subclassing
+    Dependency,  # needed bc weird pydantic subclassing
     Project,
     Config,
     ObjectParser,
@@ -62,7 +61,6 @@ K = TypeVar("K")
 
 @dataclass(frozen=True)
 class StrategyGraph(Graph):
-
     @dataclass(frozen=True)
     class object_parser(ObjectParser):
         obj: (
@@ -80,10 +78,14 @@ class StrategyGraph(Graph):
             | DailyBtRx
             | DailyAggregate
             | DailyEMA
-            | DailyZ | DailyEZ
-            | DailyRZ | DailyERZ
-            | DailyZW | DailyEZW
-            | DailyRZW | DailyERZW
+            | DailyZ
+            | DailyEZ
+            | DailyRZ
+            | DailyERZ
+            | DailyZW
+            | DailyEZW
+            | DailyRZW
+            | DailyERZW
             | DailyDEMax
             | DailyDEMin
             | DailyDEMA
@@ -100,7 +102,7 @@ class StrategyGraph(Graph):
             | DailyPfolioNotionalCap
             | DailyDDRegime
             | DailyEWmThold
-            | Collection
+            | Container
             | DailyAggregateDeriv
             | Strategies
             | DailyBtWeights
@@ -128,17 +130,21 @@ class StrategyGraph(Graph):
             | DailyAggregate.Snap
             | DailyAggregateDeriv.Snap
             | DailyEMA.Snap
-            | DailyZ.Snap | DailyEZ.Snap
-            | DailyRZ.Snap | DailyERZ.Snap
-            | DailyZW.Snap | DailyEZW.Snap
-            | DailyRZW.Snap | DailyERZW.Snap
+            | DailyZ.Snap
+            | DailyEZ.Snap
+            | DailyRZ.Snap
+            | DailyERZ.Snap
+            | DailyZW.Snap
+            | DailyEZW.Snap
+            | DailyRZW.Snap
+            | DailyERZW.Snap
             | DailyDEMin.Snap
             | DailyDEMax.Snap
             | DailyDEMA.Snap
             | EcoDailyObservation.Snap
-            | Collection.Snap
+            | Container.Snap
             | DailyAggregate.Snap
-            | Collection.Snap
+            | Container.Snap
             | DailyBtPerf.Snap
             | DailyTF.Snap
             | DailyPfolioPos.Snap
@@ -158,6 +164,4 @@ class StrategyGraph(Graph):
         )
 
 
-__all__ = [
-    "StrategyGraph"
-]
+__all__ = ["StrategyGraph"]

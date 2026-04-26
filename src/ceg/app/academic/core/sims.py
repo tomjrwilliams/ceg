@@ -4,8 +4,8 @@ from .types import *
 from .states import State
 from .results import Results
 
-class Sim(Protocol):
 
+class Sim(Protocol):
     @property
     def state(self) -> State: ...
 
@@ -14,11 +14,12 @@ class Sim(Protocol):
 
     def step(self, *args, done: bool = False) -> Sim: ...
 
+
 @dataclass(frozen=True)
 class OrderDriven:
     state: State
     results: Results
-    
+
     def step(
         self,
         f_order: Callable[[State], F64_3D],
@@ -29,9 +30,7 @@ class OrderDriven:
         state = self.state
 
         # make deliveries given last round of orders
-        state = state.update(
-            deliveries=f_deliver(state)
-        )
+        state = state.update(deliveries=f_deliver(state))
 
         # TODO: does this double count?
 
@@ -49,22 +48,16 @@ class OrderDriven:
             )
         )
 
+        state = state.update(production=f_produce(state))
         state = state.update(
-            production=f_produce(state)
+            inventory=state.inventory + state.production
         )
+
         state = state.update(
-            inventory = state.inventory + state.production
-        )
-        
-        state = state.update(
-            cash=state.cash + np.sum(
-                (
-                    state.outflows
-                    * state.prices
-                ) + (
-                    state.inflows
-                    * state.prices
-                ),
+            cash=state.cash
+            + np.sum(
+                (state.outflows * state.prices)
+                + (state.inflows * state.prices),
                 axis=(1,),
             )
         )
@@ -72,18 +65,15 @@ class OrderDriven:
         # we change prices here so they're known at the point orders are made
         # only the inventory holder changes prices here (based on total orders to them)
         # in a shared price model, it's rather total orders vs total available to offer
-        state = state.update(
-            prices=f_price(state)
-        )
+        state = state.update(prices=f_price(state))
 
-        state = state.update(
-            orders=f_order(state)
-        )
+        state = state.update(orders=f_order(state))
 
         results = self.results.acc(state)
 
-        state = replace(state, t = state.t + 1)
+        state = replace(state, t=state.t + 1)
 
         return OrderDriven(state, results)
+
 
 __all__ = ["Sim", "OrderDriven"]

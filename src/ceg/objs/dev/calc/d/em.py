@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -50,6 +49,7 @@ logger, log = logs.logger(
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class DailyEMParams(DailyParams):
     chunk: int = 32
@@ -66,7 +66,7 @@ class DailyEMParams(DailyParams):
     # only back-end layout
     # NOTE: likewise for back-end type: np vs pq etc.
 
-    def build_path(
+    def build_id(
         self,
         cls: Type[DailyEM],
     ):
@@ -87,20 +87,23 @@ class DailyEMParams(DailyParams):
             params = f"{alpha}"
         else:
             raise ValueError((span, alpha))
-        return f"{cls.SUFFIX}-" + params + (
-            "-ann" if ann else ""
-        ) + (
-            "-cum" if cum else ""
+        return (
+            f"{cls.SUFFIX}-"
+            + params
+            + ("-ann" if ann else "")
+            + ("-cum" if cum else "")
         )
+
 
 def calc_alpha(span):
     return 2 / (span + 1)
+
 
 @dataclass(frozen=True)
 class DailyEM(DailyWithDailyParent, DailyChunked):
     parent: Object | str
     # tags: DailyTags
-    
+
     params: DailyEMParams
 
     project: Project | None = None
@@ -111,7 +114,7 @@ class DailyEM(DailyWithDailyParent, DailyChunked):
 
     SUFFIX: ClassVar[str] = "EM"
     # NOTE: to override
-    
+
     def calc_alpha(self) -> float:
         res = (
             self.params.alpha
@@ -127,32 +130,32 @@ class DailyEM(DailyWithDailyParent, DailyChunked):
     def new(
         cls,
         parent: Daily,
-        span: float | None=None,
-        alpha: float | None=None,
+        span: float | None = None,
+        alpha: float | None = None,
         ann: bool = False,
         cum: bool = False,
         project: Project | None = None,
     ) -> DailyEM:
-        params=DailyEMParams(
+        params = DailyEMParams(
             span=span,
             alpha=alpha,
             ann=ann,
             cum=cum,
         )
         assert cls.SUFFIX != "EM", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
-    
+
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class HandleNewDailyEM(
@@ -160,7 +163,9 @@ class HandleNewDailyEM(
 ):
     pass
 
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class DailyEMA(DailyEM):
@@ -174,7 +179,7 @@ class DailyEMA(DailyEM):
     ... )
     >>> obj = DailyEMA.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-ema-4' [f64]
     [
@@ -197,15 +202,13 @@ class DailyEMA(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyEMASnap"] = "DailyEMASnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyEMA:
+
+    def handler_object_new(self) -> HandleNewDailyEMA:
         return HandleNewDailyEMA()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyEMA(HandleNewDailyEM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -225,15 +228,14 @@ class HandleNewDailyEMA(HandleNewDailyEM):
         obj: DailyEM,
     ) -> pl.Expr:
         params = obj.params
-        return (
-            pl.col(VALUE).ewm_mean(
-                span=params.span,
-                alpha=params.alpha,
-                min_samples=1, # TODO: or more?
-                ignore_nulls=True,
-            )
+        return pl.col(VALUE).ewm_mean(
+            span=params.span,
+            alpha=params.alpha,
+            min_samples=1,  # TODO: or more?
+            ignore_nulls=True,
         )
-    
+
+
 @dataclass(frozen=True)
 class DailyEMax(DailyEM):
     """
@@ -246,7 +248,7 @@ class DailyEMax(DailyEM):
     ... )
     >>> obj = DailyEMax.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-emax-4' [f64]
     [
@@ -269,15 +271,13 @@ class DailyEMax(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyEMaxSnap"] = "DailyEMaxSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyEMax:
+
+    def handler_object_new(self) -> HandleNewDailyEMax:
         return HandleNewDailyEMax()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyEMax(HandleNewDailyEM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -289,7 +289,7 @@ class HandleNewDailyEMax(HandleNewDailyEM):
             event,
             obj,
         )
-        
+
     def _calc_df(
         self,
         df: pl.DataFrame,
@@ -301,17 +301,18 @@ class HandleNewDailyEMax(HandleNewDailyEM):
         v = s.fill_null(0).to_numpy()
         is_null = s.is_null().to_numpy()
         res = calc_max(v, is_null, alpha=obj.calc_alpha())
-        return pl.DataFrame({
-            "OLD": s,
-            VALUE: res
-        }).with_columns(
+        return pl.DataFrame(
+            {"OLD": s, VALUE: res}
+        ).with_columns(
             pl.when(pl.col("OLD").is_null())
             .then(None)
             .otherwise(VALUE)
             .alias(VALUE)
         )
 
+
 import numba as nb
+
 
 @nb.jit()
 def calc_max(
@@ -353,7 +354,7 @@ class DailyEMid(DailyEM):
     ... )
     >>> obj = DailyEMid.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-emid-4' [f64]
     [
@@ -376,16 +377,13 @@ class DailyEMid(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyEMidSnap"] = "DailyEMidSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyEMid:
+
+    def handler_object_new(self) -> HandleNewDailyEMid:
         return HandleNewDailyEMid()
 
 
 @dataclass(frozen=True)
 class HandleNewDailyEMid(HandleNewDailyEM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -397,7 +395,7 @@ class HandleNewDailyEMid(HandleNewDailyEM):
             event,
             obj,
         )
-        
+
     def _calc_df(
         self,
         df: pl.DataFrame,
@@ -409,19 +407,20 @@ class HandleNewDailyEMid(HandleNewDailyEM):
         is_null = s.is_null().to_numpy()
         mx = calc_max(v, is_null, alpha=obj.calc_alpha())
         mn = calc_min(v, is_null, alpha=obj.calc_alpha())
-        return pl.DataFrame({
-            "OLD": s,
-            "max": mx,
-            "min": mn,
-        }).with_columns(
+        return pl.DataFrame(
+            {
+                "OLD": s,
+                "max": mx,
+                "min": mn,
+            }
+        ).with_columns(
             pl.when(pl.col("OLD").is_null())
             .then(None)
-            .otherwise(
-                (pl.col("max") + pl.col("min")) / 2
-            )
+            .otherwise((pl.col("max") + pl.col("min")) / 2)
             .alias(VALUE)
         )
-    
+
+
 @dataclass(frozen=True)
 class DailyEMin(DailyEM):
     """
@@ -434,7 +433,7 @@ class DailyEMin(DailyEM):
     ... )
     >>> obj = DailyEMin.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-emin-4' [f64]
     [
@@ -457,15 +456,13 @@ class DailyEMin(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyEMinSnap"] = "DailyEMinSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyEMin:
+
+    def handler_object_new(self) -> HandleNewDailyEMin:
         return HandleNewDailyEMin()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyEMin(HandleNewDailyEM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -477,7 +474,7 @@ class HandleNewDailyEMin(HandleNewDailyEM):
             event,
             obj,
         )
-        
+
     def _calc_df(
         self,
         df: pl.DataFrame,
@@ -488,17 +485,18 @@ class HandleNewDailyEMin(HandleNewDailyEM):
         v = s.fill_null(0).to_numpy()
         is_null = s.is_null().to_numpy()
         res = calc_min(v, is_null, alpha=obj.calc_alpha())
-        return pl.DataFrame({
-            "OLD": s,
-            VALUE: res
-        }).with_columns(
+        return pl.DataFrame(
+            {"OLD": s, VALUE: res}
+        ).with_columns(
             pl.when(pl.col("OLD").is_null())
             .then(None)
             .otherwise(VALUE)
             .alias(VALUE)
         )
 
+
 import numba as nb
+
 
 @nb.jit()
 def calc_min(
@@ -528,7 +526,6 @@ def calc_min(
 
 @dataclass(frozen=True)
 class DailyEMOscParams(DailyEMParams):
-    
     chunk: int = 32
     # TODO: db?
 
@@ -543,7 +540,7 @@ class DailyEMOscParams(DailyEMParams):
 
     cum: bool = False
 
-    def build_path(
+    def build_id(
         self,
         cls: Type[DailyEM],
         span: float | None = None,
@@ -561,11 +558,14 @@ class DailyEMOscParams(DailyEMParams):
         activation = self.activation
         log = self.log
         cum = self.cum
-        
+
         fast = (
-            1 if span is None and alpha is None
-            else span if alpha is None
-            else alpha if span is None
+            1
+            if span is None and alpha is None
+            else span
+            if alpha is None
+            else alpha
+            if span is None
             else None
         )
         assert fast is not None, fast
@@ -579,7 +579,9 @@ class DailyEMOscParams(DailyEMParams):
         if cum:
             res = f"{res}-cum"
         return res
+
     # TODO: norm parametrisation (eg. window / exp etc.)
+
 
 @dataclass(frozen=True)
 class DailyEOsc(DailyEM):
@@ -594,7 +596,7 @@ class DailyEOsc(DailyEM):
     >>> obj = DailyEOsc.new(ord, fast=4, slow=12, vol=8)
     >>> unit = DailyEOsc.new(ord, fast=4, slow=12, vol=8, activation="tanh")
     >>> Graph().with_objs(obj, unit).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-eosc-4-12-8' [f64]
     [
@@ -607,7 +609,7 @@ class DailyEOsc(DailyEM):
         -0.02915
         -0.430837
     ]
-    >>> unit.value_key_val().get(unit.path).tail(8)
+    >>> unit.value_key_val().get(unit.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-eosc-4-12-8-tanh' [f64]
     [
@@ -621,6 +623,7 @@ class DailyEOsc(DailyEM):
         -0.40602
     ]
     """
+
     parent: (
         str
         | Daily
@@ -641,7 +644,6 @@ class DailyEOsc(DailyEM):
     type: Literal["DailyEOsc"] = "DailyEOsc"
 
     SUFFIX: ClassVar[str] = "eosc"
-    
 
     @classmethod
     def new(
@@ -664,7 +666,7 @@ class DailyEOsc(DailyEM):
         vol: int | None = None,
         activation: str | None = None,
         log: bool = False,
-        cum: bool= False,
+        cum: bool = False,
         #
         project: Project | None = None,
     ):
@@ -676,7 +678,7 @@ class DailyEOsc(DailyEM):
             span = fast
         else:
             alpha = fast
-        params=DailyEMOscParams(
+        params = DailyEMOscParams(
             span=span,
             alpha=alpha,
             slow=slow,
@@ -686,13 +688,11 @@ class DailyEOsc(DailyEM):
             cum=cum,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
@@ -701,18 +701,13 @@ class DailyEOsc(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyEOscSnap"] = "DailyEOscSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyEOsc:
+
+    def handler_object_new(self) -> HandleNewDailyEOsc:
         return HandleNewDailyEOsc()
 
 
 @dataclass(frozen=True)
-class HandleNewDailyEOsc(
-    HandleNewDailyFromDailyParentPl
-):
-
+class HandleNewDailyEOsc(HandleNewDailyFromDailyParentPl):
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -722,10 +717,13 @@ class HandleNewDailyEOsc(
         # log("INFO")( "start osc")
         params = obj.params
         parent = obj.get_parent()
-        if isinstance(parent, (
-            FutDailyRx,
-            EqDailyRx,
-        )):
+        if isinstance(
+            parent,
+            (
+                FutDailyRx,
+                EqDailyRx,
+            ),
+        ):
             if isinstance(parent, FutDailyRx):
                 tags = parent.get_parent().tags
                 adjust = tags.adjust
@@ -733,19 +731,18 @@ class HandleNewDailyEOsc(
                 adjust = "pct"
             rx = pl.col(VALUE)
             if adjust == "pct":
-                px = (1 + rx).cum_prod().pipe(
-                    null_mask, rx
-                )
+                px = (1 + rx).cum_prod().pipe(null_mask, rx)
             elif adjust == "abs":
-                px = rx.cum_sum().pipe(
-                    null_mask, rx
-                )
+                px = rx.cum_sum().pipe(null_mask, rx)
             else:
                 raise ValueError(obj)
-        elif isinstance(parent, (
-            FutDailyOrdinal,
-            EqDailyEtf,
-        )):
+        elif isinstance(
+            parent,
+            (
+                FutDailyOrdinal,
+                EqDailyEtf,
+            ),
+        ):
             if isinstance(parent, FutDailyOrdinal):
                 tags = parent.tags
                 adjust = tags.adjust
@@ -753,29 +750,38 @@ class HandleNewDailyEOsc(
                 adjust = "pct"
             px = pl.col(VALUE)
             if adjust == "pct":
-                rx = px.forward_fill().pct_change().pipe(
-                    null_mask, px
+                rx = (
+                    px.forward_fill()
+                    .pct_change()
+                    .pipe(null_mask, px)
                 )
             elif adjust == "abs":
-                rx = px.forward_fill().diff().pipe(
-                    null_mask, px
+                rx = (
+                    px.forward_fill()
+                    .diff()
+                    .pipe(null_mask, px)
                 )
             else:
                 raise ValueError(obj)
         elif isinstance(parent, Daily):
             if params.cum:
                 rx = pl.col(VALUE)
-                px = rx.fill_nan(None).cum_sum().pipe(
-                    null_mask, rx
+                px = (
+                    rx.fill_nan(None)
+                    .cum_sum()
+                    .pipe(null_mask, rx)
                 )
             else:
                 px = pl.col(VALUE)
-                rx = px.fill_nan(None).forward_fill().diff().pipe(
-                    null_mask, px
+                rx = (
+                    px.fill_nan(None)
+                    .forward_fill()
+                    .diff()
+                    .pipe(null_mask, px)
                 )
         else:
             raise ValueError((obj, parent))
-        
+
         df = df.select(VALUE=pl.col(VALUE), px=px, rx=rx)
         px = pl.col("px")
         rx = pl.col("rx")
@@ -784,18 +790,20 @@ class HandleNewDailyEOsc(
             px = rx
 
         px_fast = assert_is(
-            px 
+            px
             if (
-                params.span is None
-                and params.alpha is None
-            ) or params.span == 1
+                params.span is None and params.alpha is None
+            )
+            or params.span == 1
             else px.ewm_mean(
-                span=params.span, min_samples=2,
+                span=params.span,
+                min_samples=2,
                 ignore_nulls=True,
             )
             if params.span is not None
             else px.ewm_mean(
-                alpha=params.alpha, min_samples=2,
+                alpha=params.alpha,
+                min_samples=2,
                 ignore_nulls=True,
             )
             if params.alpha is not None
@@ -805,12 +813,14 @@ class HandleNewDailyEOsc(
             None
             if params.slow is None
             else px.rolling_mean(
-                len(df), min_samples=2,
+                len(df),
+                min_samples=2,
                 # ignore_nulls=True,
             )
             if params.slow == 0
             else px.ewm_mean(
-                span=params.slow, min_samples=2,
+                span=params.slow,
+                min_samples=2,
                 ignore_nulls=True,
             )
         )
@@ -823,20 +833,26 @@ class HandleNewDailyEOsc(
 
         rx_vol = (
             rx.rolling_std(
-                len(df), min_samples=2,
+                len(df),
+                min_samples=2,
                 # ignore_nulls=True,
             )
             if params.vol is None
             else px.ewm_std(
-                span=params.vol, min_samples=2,
+                span=params.vol,
+                min_samples=2,
                 ignore_nulls=True,
             )
         )
 
         e = (
-            ((px_fast - (
-                0 if px_slow is None else px_slow
-            )) / rx_vol)
+            (
+                (
+                    px_fast
+                    - (0 if px_slow is None else px_slow)
+                )
+                / rx_vol
+            )
             .fill_nan(None)
             .pipe(null_mask, pl.col(VALUE))
         )
@@ -847,13 +863,20 @@ class HandleNewDailyEOsc(
         e = pl.col(VALUE)
 
         if px_slow is not None:
-            e_norm = e.pow(2).rolling_mean(
-                window_size=len(df),
-                min_samples=10
-            ).sqrt().fill_nan(None)
-            e = e/e_norm
+            e_norm = (
+                e.pow(2)
+                .rolling_mean(
+                    window_size=len(df), min_samples=10
+                )
+                .sqrt()
+                .fill_nan(None)
+            )
+            e = e / e_norm
 
-        if params.activation is None or params.activation == "":
+        if (
+            params.activation is None
+            or params.activation == ""
+        ):
             pass
         elif params.activation == "tanh":
             e = e.tanh()
@@ -881,7 +904,7 @@ class DailyELwm(DailyEM):
     ... )
     >>> obj = DailyELwm.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-elwm-4' [f64]
     [
@@ -904,15 +927,13 @@ class DailyELwm(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyELwmSnap"] = "DailyELwmSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyELwm:
+
+    def handler_object_new(self) -> HandleNewDailyELwm:
         return HandleNewDailyELwm()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyELwm(HandleNewDailyEM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -924,7 +945,7 @@ class HandleNewDailyELwm(HandleNewDailyEM):
             event,
             obj,
         )
-        
+
     def _calc_df(
         self,
         df: pl.DataFrame,
@@ -937,15 +958,15 @@ class HandleNewDailyELwm(HandleNewDailyEM):
             s = s.fill_nan(None).cum_sum()
         v = s.fill_null(0).to_numpy()
         res = calc_lwm(v, is_null, alpha=obj.calc_alpha())
-        return pl.DataFrame({
-            "OLD": s,
-            VALUE: res
-        }).with_columns(
+        return pl.DataFrame(
+            {"OLD": s, VALUE: res}
+        ).with_columns(
             pl.when(pl.col("OLD").is_null())
             .then(None)
             .otherwise(VALUE)
             .alias(VALUE)
         )
+
 
 @dataclass(frozen=True)
 class DailyEHwm(DailyEM):
@@ -959,7 +980,7 @@ class DailyEHwm(DailyEM):
     ... )
     >>> obj = DailyEHwm.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-ehwm-4' [f64]
     [
@@ -982,15 +1003,13 @@ class DailyEHwm(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyEHwmSnap"] = "DailyEHwmSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyEHwm:
+
+    def handler_object_new(self) -> HandleNewDailyEHwm:
         return HandleNewDailyEHwm()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyEHwm(HandleNewDailyEM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -1002,7 +1021,7 @@ class HandleNewDailyEHwm(HandleNewDailyEM):
             event,
             obj,
         )
-        
+
     def _calc_df(
         self,
         df: pl.DataFrame,
@@ -1015,10 +1034,9 @@ class HandleNewDailyEHwm(HandleNewDailyEM):
             s = s.fill_nan(None).cum_sum()
         v = s.fill_null(0).to_numpy()
         res = calc_hwm(v, is_null, alpha=obj.calc_alpha())
-        return pl.DataFrame({
-            "OLD": s,
-            VALUE: res
-        }).with_columns(
+        return pl.DataFrame(
+            {"OLD": s, VALUE: res}
+        ).with_columns(
             pl.when(pl.col("OLD").is_null())
             .then(None)
             .otherwise(VALUE)
@@ -1027,6 +1045,7 @@ class HandleNewDailyEHwm(HandleNewDailyEM):
 
 
 import numba as nb
+
 
 @nb.jit()
 def calc_lwm(
@@ -1040,7 +1059,7 @@ def calc_lwm(
     res = np.empty(n, dtype=v.dtype)
     acc: float = 0
     alpha_comp = 1 - alpha
-    lwm: float = 0.
+    lwm: float = 0.0
     while i < n:
         if not is_null[i]:
             vv = v[i]
@@ -1052,7 +1071,6 @@ def calc_lwm(
             res[i] = lwm
         i += 1
     return res
-
 
 
 @dataclass(frozen=True)
@@ -1067,7 +1085,7 @@ class DailyEPLast(DailyEM):
     ... )
     >>> obj = DailyEPLast.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-eplast-4' [f64]
     [
@@ -1090,15 +1108,13 @@ class DailyEPLast(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyEPLastSnap"] = "DailyEPLastSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyEPLast:
+
+    def handler_object_new(self) -> HandleNewDailyEPLast:
         return HandleNewDailyEPLast()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyEPLast(HandleNewDailyEM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -1110,7 +1126,7 @@ class HandleNewDailyEPLast(HandleNewDailyEM):
             event,
             obj,
         )
-        
+
     def _calc_df(
         self,
         df: pl.DataFrame,
@@ -1126,24 +1142,25 @@ class HandleNewDailyEPLast(HandleNewDailyEM):
             is_null,
             alpha=obj.calc_alpha(),
             l=100,
-            norm = False, # TODO: parametrise in path?
+            norm=False,  # TODO: parametrise in path?
         )
 
-        return pl.DataFrame({
-            "OLD": s,
-            VALUE: res
-        }).with_columns(
+        return pl.DataFrame(
+            {"OLD": s, VALUE: res}
+        ).with_columns(
             pl.when(pl.col("OLD").is_null())
             .then(None)
             .otherwise(VALUE)
             .alias(VALUE)
         )
 
+
 import numba as nb
 
 # rolling window, indicator series of gt last
 # then exp decay over binary series?
 # so actually needs sliding window of weights
+
 
 @nb.jit()
 def calc_p_last(
@@ -1161,11 +1178,9 @@ def calc_p_last(
 
     j = 0
 
-    alpha_l = alpha ** l
+    alpha_l = alpha**l
     while j < l:
-        ws[j] = (
-            (1 - alpha) / (1 - alpha_l)
-        ) * (alpha ** j)
+        ws[j] = ((1 - alpha) / (1 - alpha_l)) * (alpha**j)
         j += 1
 
     w_sum = np.sum(ws)
@@ -1190,9 +1205,10 @@ def calc_p_last(
                 ij = i - j
                 if not is_null[ij]:
                     vv = (
-                        0 
+                        0
                         if v[ij] < loc[i]
-                        else 0.5 if v[ij] == loc[i]
+                        else 0.5
+                        if v[ij] == loc[i]
                         else 1
                     )
                     w = ws[k]
@@ -1200,7 +1216,7 @@ def calc_p_last(
                     w_acc += w
                     k += 1
                 j += 1
-            
+
             if w_acc > 0:
                 scale = w_sum / w_acc
                 acc *= scale
@@ -1215,7 +1231,8 @@ def calc_p_last(
         i += 1
 
     return res
-    
+
+
 @dataclass(frozen=True)
 class DailyERms(DailyEM):
     """
@@ -1228,7 +1245,7 @@ class DailyERms(DailyEM):
     ... )
     >>> obj = DailyERms.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rx-erms-4' [f64]
     [
@@ -1251,15 +1268,13 @@ class DailyERms(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyERmsSnap"] = "DailyERmsSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyERms:
+
+    def handler_object_new(self) -> HandleNewDailyERms:
         return HandleNewDailyERms()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyERms(HandleNewDailyEM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1280,16 +1295,25 @@ class HandleNewDailyERms(HandleNewDailyEM):
     ) -> pl.Expr:
         params = obj.params
         ann = 1 if not params.ann else 16
+        min_samples=max(
+            [8, int(assert_is(params.span) / 64)]
+        )
+        i_range = pl.int_range(0, len(df))
+        e = pl.col(VALUE)
+        e_global = e.pow(2).mean().sqrt().mul(ann)
+        e_warm = pl.when(i_range < min_samples).then(e_global).otherwise(e)
         return (
-            pl.col(VALUE).pow(2).ewm_mean(
+            e_warm.pow(2)
+            .ewm_mean(
                 span=params.span,
                 alpha=params.alpha,
-                min_samples=max([
-                    8, int(assert_is(params.span)/64)
-                ]), # TODO: or more?
                 ignore_nulls=True,
-            ).sqrt() * ann
+                min_samples=1,
+            )
+            .sqrt()
+            .mul(ann)
         )
+
 
 @dataclass(frozen=True)
 class DailyERng(DailyEM):
@@ -1303,7 +1327,7 @@ class DailyERng(DailyEM):
     ... )
     >>> obj = DailyERng.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-erng-4' [f64]
     [
@@ -1326,15 +1350,13 @@ class DailyERng(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyERngSnap"] = "DailyERngSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyERng:
+
+    def handler_object_new(self) -> HandleNewDailyERng:
         return HandleNewDailyERng()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyERng(HandleNewDailyEM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -1346,7 +1368,7 @@ class HandleNewDailyERng(HandleNewDailyEM):
             event,
             obj,
         )
-        
+
     def _calc_df(
         self,
         df: pl.DataFrame,
@@ -1358,18 +1380,20 @@ class HandleNewDailyERng(HandleNewDailyEM):
         is_null = s.is_null().to_numpy()
         mx = calc_max(v, is_null, alpha=obj.calc_alpha())
         mn = calc_min(v, is_null, alpha=obj.calc_alpha())
-        return pl.DataFrame({
-            "OLD": s,
-            "max": mx,
-            "min": mn,
-        }).with_columns(
+        return pl.DataFrame(
+            {
+                "OLD": s,
+                "max": mx,
+                "min": mn,
+            }
+        ).with_columns(
             pl.when(pl.col("OLD").is_null())
             .then(None)
-            .otherwise(
-                pl.col("max") - pl.col("min")
-            )
+            .otherwise(pl.col("max") - pl.col("min"))
             .alias(VALUE)
         )
+
+
 @dataclass(frozen=True)
 class DailyESDev(DailyEM):
     """
@@ -1382,7 +1406,7 @@ class DailyESDev(DailyEM):
     ... )
     >>> obj = DailyESDev.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rx-esdev-4' [f64]
     [
@@ -1405,15 +1429,13 @@ class DailyESDev(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyESDevSnap"] = "DailyESDevSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyESDev:
+
+    def handler_object_new(self) -> HandleNewDailyESDev:
         return HandleNewDailyESDev()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyESDev(HandleNewDailyEM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1433,14 +1455,13 @@ class HandleNewDailyESDev(HandleNewDailyEM):
         obj: DailyEM,
     ) -> pl.Expr:
         params = obj.params
-        return (
-            pl.col(VALUE).ewm_std(
-                span=params.span,
-                alpha=params.alpha,
-                min_samples=1, # TODO: or more?
-                ignore_nulls=True,
-            )
+        return pl.col(VALUE).ewm_std(
+            span=params.span,
+            alpha=params.alpha,
+            min_samples=1,  # TODO: or more?
+            ignore_nulls=True,
         )
+
 
 @dataclass(frozen=True)
 class DailyEVar(DailyEM):
@@ -1454,7 +1475,7 @@ class DailyEVar(DailyEM):
     ... )
     >>> obj = DailyEVar.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rx-evar-4' [f64]
     [
@@ -1477,15 +1498,13 @@ class DailyEVar(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyEVarSnap"] = "DailyEVarSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyEVar:
+
+    def handler_object_new(self) -> HandleNewDailyEVar:
         return HandleNewDailyEVar()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyEVar(HandleNewDailyEM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1505,14 +1524,13 @@ class HandleNewDailyEVar(HandleNewDailyEM):
         obj: DailyEM,
     ) -> pl.Expr:
         params = obj.params
-        return (
-            pl.col(VALUE).ewm_var(
-                span=params.span,
-                alpha=params.alpha,
-                min_samples=1, # TODO: or more?
-                ignore_nulls=True,
-            )
+        return pl.col(VALUE).ewm_var(
+            span=params.span,
+            alpha=params.alpha,
+            min_samples=1,  # TODO: or more?
+            ignore_nulls=True,
         )
+
 
 @dataclass(frozen=True)
 class DailyEZ(DailyEM):
@@ -1526,7 +1544,7 @@ class DailyEZ(DailyEM):
     ... )
     >>> obj = DailyEZ.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-ez-4' [f64]
     [
@@ -1549,15 +1567,13 @@ class DailyEZ(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyEZSnap"] = "DailyEZSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyEZ:
+
+    def handler_object_new(self) -> HandleNewDailyEZ:
         return HandleNewDailyEZ()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyEZ(HandleNewDailyEM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1577,26 +1593,20 @@ class HandleNewDailyEZ(HandleNewDailyEM):
         obj: DailyEM,
     ) -> pl.Expr:
         params = obj.params
-        mu = (
-            pl.col(VALUE).ewm_mean(
-                span=params.span,
-                alpha=params.alpha,
-                min_samples=1, # TODO: or more?
-                ignore_nulls=True,
-            )
+        mu = pl.col(VALUE).ewm_mean(
+            span=params.span,
+            alpha=params.alpha,
+            min_samples=1,  # TODO: or more?
+            ignore_nulls=True,
         )
-        sig = (
-            pl.col(VALUE)
-            .ewm_std(
-                span=params.span,
-                alpha=params.alpha,
-                min_samples=1, # TODO: or more?
-                ignore_nulls=True,
-            )
+        sig = pl.col(VALUE).ewm_std(
+            span=params.span,
+            alpha=params.alpha,
+            min_samples=1,  # TODO: or more?
+            ignore_nulls=True,
         )
-        return (
-            (pl.col(VALUE) - mu) / sig
-        ).fill_nan(None)
+        return ((pl.col(VALUE) - mu) / sig).fill_nan(None)
+
 
 @dataclass(frozen=True)
 class DailyEZW(DailyEM):
@@ -1610,7 +1620,7 @@ class DailyEZW(DailyEM):
     ... )
     >>> obj = DailyEZW.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-ezw-4' [f64]
     [
@@ -1633,15 +1643,13 @@ class DailyEZW(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyEZWSnap"] = "DailyEZWSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyEZW:
+
+    def handler_object_new(self) -> HandleNewDailyEZW:
         return HandleNewDailyEZW()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyEZW(HandleNewDailyEM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1661,13 +1669,11 @@ class HandleNewDailyEZW(HandleNewDailyEM):
         obj: DailyEM,
     ) -> pl.Expr:
         params = obj.params
-        mu = (
-            pl.col(VALUE).ewm_mean(
-                span=params.span,
-                alpha=params.alpha,
-                min_samples=1, # TODO: or more?
-                ignore_nulls=True,
-            )
+        mu = pl.col(VALUE).ewm_mean(
+            span=params.span,
+            alpha=params.alpha,
+            min_samples=1,  # TODO: or more?
+            ignore_nulls=True,
         )
         sig = (
             pl.col(VALUE)
@@ -1677,13 +1683,12 @@ class HandleNewDailyEZW(HandleNewDailyEM):
             .ewm_std(
                 span=params.span,
                 alpha=params.alpha,
-                min_samples=1, # TODO: or more?
+                min_samples=1,  # TODO: or more?
                 ignore_nulls=True,
             )
         )
-        return (
-            (pl.col(VALUE) - mu) / sig
-        ).fill_nan(None)
+        return ((pl.col(VALUE) - mu) / sig).fill_nan(None)
+
 
 @dataclass(frozen=True)
 class DailyERZParams(DailyEMParams):
@@ -1696,7 +1701,7 @@ class DailyERZParams(DailyEMParams):
     symmetric: bool = True
     rescale: bool = False
 
-    def build_path(
+    def build_id(
         self,
         cls: Type[DailyEM],
     ):
@@ -1719,19 +1724,14 @@ class DailyERZParams(DailyEMParams):
             params = f"{alpha}"
         else:
             raise ValueError((span, alpha))
-        return f"{cls.SUFFIX}-" + params + (
-            ""
-            if width is None
-            else f"-{width}"
-        ) + (
-            "-sym"
-            if symmetric
-            else ""
-        ) + (
-            "-norm"
-            if rescale
-            else ""
+        return (
+            f"{cls.SUFFIX}-"
+            + params
+            + ("" if width is None else f"-{width}")
+            + ("-sym" if symmetric else "")
+            + ("-norm" if rescale else "")
         )
+
 
 @dataclass(frozen=True)
 class DailyERZ(DailyEM):
@@ -1745,7 +1745,7 @@ class DailyERZ(DailyEM):
     ... )
     >>> obj = DailyERZ.new(ord, span=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-erz-4-0.5' [f64]
     [
@@ -1770,24 +1770,22 @@ class DailyERZ(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyERZSnap"] = "DailyERZSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyERZ:
+
+    def handler_object_new(self) -> HandleNewDailyERZ:
         return HandleNewDailyERZ()
 
     @classmethod
     def new(
         cls,
         parent: Daily,
-        span: float | None=None,
-        alpha: float | None=None,
+        span: float | None = None,
+        alpha: float | None = None,
         width: float = 0.5,
         symmetric: bool = False,
         rescale: bool = False,
         project: Project | None = None,
     ) -> DailyEM:
-        params=DailyERZParams(
+        params = DailyERZParams(
             span=span,
             alpha=alpha,
             width=width,
@@ -1795,21 +1793,19 @@ class DailyERZ(DailyEM):
             rescale=rescale,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyERZ(HandleNewDailyEM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -1821,7 +1817,7 @@ class HandleNewDailyERZ(HandleNewDailyEM):
             event,
             obj,
         )
-        
+
     def _calc_df(
         self,
         df: pl.DataFrame,
@@ -1833,9 +1829,7 @@ class HandleNewDailyERZ(HandleNewDailyEM):
         assert params.width == 0.5, params
 
         if params.rescale:
-            scale = apis.stats.iqr_ratio(
-                width=params.width
-            )
+            scale = apis.stats.iqr_ratio(width=params.width)
         else:
             scale = 1
 
@@ -1848,13 +1842,15 @@ class HandleNewDailyERZ(HandleNewDailyEM):
 
         v_ex = pl.col("OLD")
 
-        df = pl.DataFrame({
-            "OLD": s,
-            "max": mx,
-            "min": mn,
-        }).with_columns(
+        df = pl.DataFrame(
+            {
+                "OLD": s,
+                "max": mx,
+                "min": mn,
+            }
+        ).with_columns(
             (pl.col("max") - pl.col("min"))
-            .mul(1/2)
+            .mul(1 / 2)
             .mul(scale)
             .alias("rng")
         )
@@ -1864,13 +1860,12 @@ class HandleNewDailyERZ(HandleNewDailyEM):
         else:
             mid = v_ex.ewm_mean(
                 alpha=obj.calc_alpha(),
-                min_samples=1, # TODO: or more?
+                min_samples=1,  # TODO: or more?
                 ignore_nulls=True,
             )
 
         df = df.with_columns(
-            ((v_ex - mid) / pl.col("rng"))
-            .alias(VALUE)
+            ((v_ex - mid) / pl.col("rng")).alias(VALUE)
         )
         return df.with_columns(
             pl.when(v_ex.is_null())
@@ -1879,6 +1874,7 @@ class HandleNewDailyERZ(HandleNewDailyEM):
             .fill_nan(None)
             .alias(VALUE)
         )
+
 
 @dataclass(frozen=True)
 class DailyERZW(DailyERZ):
@@ -1904,16 +1900,13 @@ class DailyERZW(DailyERZ):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyERZWSnap"] = "DailyERZWSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyERZW:
+
+    def handler_object_new(self) -> HandleNewDailyERZW:
         return HandleNewDailyERZW()
-    
+
 
 @dataclass(frozen=True)
 class HandleNewDailyERZW(HandleNewDailyEM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -1925,7 +1918,7 @@ class HandleNewDailyERZW(HandleNewDailyEM):
             event,
             obj,
         )
-        
+
     def _calc_df(
         self,
         df: pl.DataFrame,
@@ -1934,23 +1927,22 @@ class HandleNewDailyERZW(HandleNewDailyEM):
     ) -> pl.DataFrame:
         params = obj.params
         raise ValueError((obj))
-    
+
 
 @dataclass(frozen=True)
 class DailyEBetaParams(DailyEMParams):
-
     # span = corr
 
-    rms: str | float = 1.
+    rms: str | float = 1.0
 
     bench: str = ""
     alias: str | None = None
-    bench_rms: str | float = 1.
+    bench_rms: str | float = 1.0
 
-    rms_scale: float = 1.
-    bench_scale: float = 1.
+    rms_scale: float = 1.0
+    bench_scale: float = 1.0
 
-    def build_path(
+    def build_id(
         self,
         cls: Type[DailyEM],
     ):
@@ -1976,22 +1968,27 @@ class DailyEBetaParams(DailyEMParams):
         else:
             raise ValueError((span, alpha))
         if alias is None:
-            suffix = "-".join(map(str, [
-                rms,
-                rms_scale,
-                bench,
-                bench_rms,
-                bench_scale,
-            ]))
+            suffix = "-".join(
+                map(
+                    str,
+                    [
+                        rms,
+                        rms_scale,
+                        bench,
+                        bench_rms,
+                        bench_scale,
+                    ],
+                )
+            )
         else:
             suffix = alias
-        return (
-            f"{cls.SUFFIX}-" + params + suffix
-        ).replace(".0", "")
+        return (f"{cls.SUFFIX}-" + params + suffix).replace(
+            ".0", ""
+        )
+
 
 @dataclass(frozen=True)
 class DailyEBeta(DailyEM):
-
     params: DailyEBetaParams
 
     version: int = 0
@@ -2002,54 +1999,50 @@ class DailyEBeta(DailyEM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyEBetaSnap"] = "DailyEBetaSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyEBeta:
+
+    def handler_object_new(self) -> HandleNewDailyEBeta:
         return HandleNewDailyEBeta()
-    
+
     @classmethod
     def new(
         cls,
         parent: Daily,
-        span: float | None=None,
-        alpha: float | None=None,
-        rms: str | float = 1.,
+        span: float | None = None,
+        alpha: float | None = None,
+        rms: str | float = 1.0,
         bench: str = "",
         alias: str | None = None,
-        bench_rms: str | float = 1.,
-        rms_scale: float = 1.,
-        bench_scale: float = 1.,
+        bench_rms: str | float = 1.0,
+        rms_scale: float = 1.0,
+        bench_scale: float = 1.0,
         project: Project | None = None,
         ann: bool = False,
     ) -> DailyEM:
-        params=DailyEBetaParams(
+        params = DailyEBetaParams(
             # TODO: ann
             span=span,
             alpha=alpha,
-            rms = rms,
+            rms=rms,
             alias=alias,
-            bench = bench,
-            bench_rms = bench_rms,
-            rms_scale = rms_scale,
-            bench_scale = bench_scale,
+            bench=bench,
+            bench_rms=bench_rms,
+            rms_scale=rms_scale,
+            bench_scale=bench_scale,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyEBeta(HandleNewDailyEM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -2061,7 +2054,7 @@ class HandleNewDailyEBeta(HandleNewDailyEM):
             event,
             obj,
         )
-        
+
     def _calc_df(
         self,
         df: pl.DataFrame,
@@ -2071,7 +2064,7 @@ class HandleNewDailyEBeta(HandleNewDailyEM):
         params = obj.params
         bench = daily_pl_df(
             context.get().get(params.bench, Daily),
-            alias="bench"
+            alias="bench",
         )
         dfs = [df, bench]
         # if isinstance(params.rms, str):
@@ -2089,13 +2082,12 @@ class HandleNewDailyEBeta(HandleNewDailyEM):
         if isinstance(params.bench_rms, str):
             bench_rms = daily_pl_df(
                 context.get().get(params.bench_rms, Daily),
-                alias="bench_rms"
+                alias="bench_rms",
             )
             dfs.append(bench_rms)
         else:
             df = df.with_columns(
-                pl.lit(params.bench_rms)
-                .alias("bench_rms")
+                pl.lit(params.bench_rms).alias("bench_rms")
             )
         df = apis.pl.join_dfs(dfs, align=True, on="date")
         df = df.with_columns(
@@ -2109,13 +2101,13 @@ class HandleNewDailyEBeta(HandleNewDailyEM):
         rx_mu = pl.col(VALUE).ewm_mean(
             span=params.span,
             alpha=params.alpha,
-            min_samples=2, # TODO: or more?
+            min_samples=2,  # TODO: or more?
             ignore_nulls=True,
         )
         bench_mu = pl.col("bench").ewm_mean(
             span=params.span,
             alpha=params.alpha,
-            min_samples=2, # TODO: or more?
+            min_samples=2,  # TODO: or more?
             ignore_nulls=True,
         )
         cov = (
@@ -2124,7 +2116,7 @@ class HandleNewDailyEBeta(HandleNewDailyEM):
             .ewm_mean(
                 span=params.span,
                 alpha=params.alpha,
-                min_samples=2, # TODO: or more?
+                min_samples=2,  # TODO: or more?
                 ignore_nulls=True,
             )
         )
@@ -2140,9 +2132,8 @@ class HandleNewDailyEBeta(HandleNewDailyEM):
         return df.select(
             "date",
             beta.pipe(
-                apis.pl.null_mask,
-                pl.col(VALUE)
-            ).alias(VALUE)
+                apis.pl.null_mask, pl.col(VALUE)
+            ).alias(VALUE),
         )
 
 
@@ -2156,11 +2147,11 @@ class DailyEWmTholdParams(DailyEMParams):
 
     field: str = "len"
 
-    threshold: float = -2.
-    reset: float = 1.
+    threshold: float = -2.0
+    reset: float = 1.0
 
-    reentry: float | None = 1.
-    rethreshold: float = 1.
+    reentry: float | None = 1.0
+    rethreshold: float = 1.0
 
     log: bool = True
 
@@ -2168,24 +2159,36 @@ class DailyEWmTholdParams(DailyEMParams):
     def format_args(
         cls,
         field: str = "len",
-        threshold: float = -2.,
-        reset: float = 1.,
-        reentry: bool | float | None = None, # 2.
-        rethreshold: float = 1.,
+        threshold: float = -2.0,
+        reset: float = 1.0,
+        reentry: bool | float | None = None,  # 2.
+        rethreshold: float = 1.0,
         log: bool = True,
     ):
-        return field + (
-            f"_{threshold}_{reset}"
+        return (
+            field
             + (
-                "re" if reentry == True else f"_{reentry}" if reentry is not None else ""
-            ) + (
-                f"_{rethreshold}" if reentry is not None else ""
+                f"_{threshold}_{reset}"
+                + (
+                    "re"
+                    if reentry == True
+                    else f"_{reentry}"
+                    if reentry is not None
+                    else ""
+                )
+                + (
+                    f"_{rethreshold}"
+                    if reentry is not None
+                    else ""
+                )
             )
-        ).replace("-", "n").replace("_", "-").replace(".0", "") + (
-            "-log" if log else ""
+            .replace("-", "n")
+            .replace("_", "-")
+            .replace(".0", "")
+            + ("-log" if log else "")
         )
-    
-    def build_path(
+
+    def build_id(
         self,
         cls: Type[DailyEM],
     ):
@@ -2212,7 +2215,9 @@ class DailyEWmTholdParams(DailyEMParams):
         else:
             raise ValueError((span, alpha))
         return (
-            f"{cls.SUFFIX}-" + params + self.format_args(
+            f"{cls.SUFFIX}-"
+            + params
+            + self.format_args(
                 field,
                 threshold,
                 reset,
@@ -2222,9 +2227,9 @@ class DailyEWmTholdParams(DailyEMParams):
             )
         ).replace(".0", "")
 
+
 @dataclass(frozen=True)
 class DailyEWmThold(DailyEM):
-
     params: DailyEWmTholdParams
 
     version: int = 0
@@ -2238,31 +2243,30 @@ class DailyEWmThold(DailyEM):
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["DailyEWmTholdSnap"] = "DailyEWmTholdSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyEWmThold:
+        type: Literal["DailyEWmTholdSnap"] = (
+            "DailyEWmTholdSnap"
+        )
+
+    def handler_object_new(self) -> HandleNewDailyEWmThold:
         return HandleNewDailyEWmThold()
-    
-    
+
     @classmethod
     def new(
         cls,
         parent: Daily,
-        span: float | None=None,
-        alpha: float | None=None,
+        span: float | None = None,
+        alpha: float | None = None,
         field: str = "len",
-        threshold: float = -2.,
-        reset: float = 1.,
-        reentry: bool | float | None = None, # 2.
-        rethreshold: float = 1.,
+        threshold: float = -2.0,
+        reset: float = 1.0,
+        reentry: bool | float | None = None,  # 2.
+        rethreshold: float = 1.0,
         log: bool = True,
         project: Project | None = None,
     ) -> DailyEM:
         if reentry and isinstance(reentry, bool):
             reentry = abs(threshold)
-        params=DailyEWmTholdParams(
+        params = DailyEWmTholdParams(
             span=span,
             alpha=alpha,
             field=field,
@@ -2273,22 +2277,19 @@ class DailyEWmThold(DailyEM):
             log=log,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
-    
+
 
 @dataclass(frozen=True)
 class HandleNewDailyEWmThold(HandleNewDailyEM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -2300,7 +2301,7 @@ class HandleNewDailyEWmThold(HandleNewDailyEM):
             event,
             obj,
         )
-        
+
     def _calc_df(
         self,
         df: pl.DataFrame,
@@ -2314,31 +2315,37 @@ class HandleNewDailyEWmThold(HandleNewDailyEM):
             s = s.fill_nan(None).forward_fill().diff()
         v = s.fill_null(0).to_numpy()
         res = calc_wm_thold(
-            v, 
-            is_null, 
+            v,
+            is_null,
             alpha=obj.calc_alpha(),
             threshold=obj.params.threshold,
             reset=obj.params.reset,
             reentry=obj.params.reentry,
             rethreshold=obj.params.rethreshold,
-            field=assert_is({
-                "len": 0,
-                "net": 1,
-                "grs": 2,
-            }.get(obj.params.field, None)),
+            field=assert_is(
+                {
+                    "len": 0,
+                    "net": 1,
+                    "grs": 2,
+                }.get(obj.params.field, None)
+            ),
             log=obj.params.log,
         )
-        return pl.DataFrame({
-            "OLD": s,
-            VALUE: pl.Series(VALUE, res).fill_nan(None)
-        }).with_columns(
+        return pl.DataFrame(
+            {
+                "OLD": s,
+                VALUE: pl.Series(VALUE, res).fill_nan(None),
+            }
+        ).with_columns(
             pl.when(pl.col("OLD").is_null())
             .then(None)
             .otherwise(VALUE)
             .alias(VALUE)
         )
-    
+
+
 from .....apis.calcs import calc_metrics_ewm
+
 
 @nb.jit()
 def calc_wm_thold(
@@ -2347,14 +2354,16 @@ def calc_wm_thold(
     alpha: float,
     threshold: float,
     reset: float,
-    reentry: float | None, # = 2.
+    reentry: float | None,  # = 2.
     rethreshold: float,
     field: int,
     log: bool,
 ):
     span = (2 / alpha) - 1
     assert alpha == (2 / (span + 1)), (
-        alpha, (2/ (span + 1)), span
+        alpha,
+        (2 / (span + 1)),
+        span,
     )
 
     n_t = v.shape[0]
@@ -2376,9 +2385,7 @@ def calc_wm_thold(
         nd_lwm_grs,
         nd_osc_15,
         nd_osc_30,
-    ) = calc_metrics_ewm(
-        n_t, v, is_null, span
-    )
+    ) = calc_metrics_ewm(n_t, v, is_null, span)
 
     if field == 0:
         nd_hwm = nd_hwm_len
@@ -2425,7 +2432,7 @@ def calc_wm_thold(
                 v_hwm = 0
             if v_lwm < 0:
                 v_lwm = 0
-        
+
         if log:
             if v_hwm < 0:
                 v_hwm = -1 * (
@@ -2453,7 +2460,7 @@ def calc_wm_thold(
         if wm_count == 0:
             wm_min_cumsum = v_wm_min * v_wm_min
         else:
-            wm_min_cumsum += (v_wm_min * v_wm_min)
+            wm_min_cumsum += v_wm_min * v_wm_min
 
         wm_count += 1
         wm_min_rms = math.sqrt(wm_min_cumsum / wm_count)
@@ -2473,16 +2480,13 @@ def calc_wm_thold(
             reentry_rms = reentry * v_rms
 
         if threshold == 0:
-            v_res = (
-                v_lwm_abs - v_hwm_abs
-            ) / v_rms
+            v_res = (v_lwm_abs - v_hwm_abs) / v_rms
 
         elif threshold < 0:
-            
             in_dd = v_hwm_abs > threshold_rms
-            in_re_dd = v_hwm_abs > (hwm_entry + (
-                v_rms * rethreshold
-            ))
+            in_re_dd = v_hwm_abs > (
+                hwm_entry + (v_rms * rethreshold)
+            )
 
             if (
                 re_enter
@@ -2490,46 +2494,36 @@ def calc_wm_thold(
                 and v_lwm_abs > reentry_rms
                 and not in_re_dd
             ):
-                v_res = (
-                    v_lwm_abs - reentry_rms
-                ) / v_rms
+                v_res = (v_lwm_abs - reentry_rms) / v_rms
                 hwm_entry = v_hwm_abs
-            elif (
-                re_enter
-                and in_dd
-                and in_re_dd
-            ):
-                v_res = -1 * (
-                    v_hwm_abs - reset_rms
-                ) / v_rms
+            elif re_enter and in_dd and in_re_dd:
+                v_res = -1 * (v_hwm_abs - reset_rms) / v_rms
             elif in_dd:
-                v_res = -1 * (
-                    v_hwm_abs - reset_rms
-                ) / v_rms
+                v_res = -1 * (v_hwm_abs - reset_rms) / v_rms
             # elif not in_dd:
             #     pass
             elif v_res < 0 and v_hwm_abs < reset_rms:
-                v_res = (threshold_rms - v_hwm_abs)/v_rms
+                v_res = (threshold_rms - v_hwm_abs) / v_rms
                 hwm_entry = 0
             elif v_res < 0 and v_hwm_abs >= reset_rms:
-                v_res = -1 * (
-                    v_hwm_abs - reset_rms
-                ) / v_rms
+                v_res = -1 * (v_hwm_abs - reset_rms) / v_rms
             elif v_res >= 0:
-                v_res = (threshold_rms - v_hwm_abs)/v_rms
+                v_res = (threshold_rms - v_hwm_abs) / v_rms
             elif np.isnan(v_res):
-                v_res = (threshold_rms - v_hwm_abs)/v_rms
+                v_res = (threshold_rms - v_hwm_abs) / v_rms
 
             else:
-                raise ValueError((
-                    t,
-                    v_hwm_abs,
-                    v_lwm_abs,
-                    threshold_rms,
-                    reset_rms,
-                    in_dd,
-                    v_res,
-                ))
+                raise ValueError(
+                    (
+                        t,
+                        v_hwm_abs,
+                        v_lwm_abs,
+                        threshold_rms,
+                        reset_rms,
+                        in_dd,
+                        v_res,
+                    )
+                )
         else:
             raise ValueError(threshold)
 
@@ -2538,8 +2532,10 @@ def calc_wm_thold(
 
     return res
 
+
 __all__ = [
-    "P", "O",
+    "P",
+    "O",
     "DailyEMParams",
     "DailyEM",
     "HandleNewDailyEM",
@@ -2583,5 +2579,5 @@ __all__ = [
     "calc_wm_thold",
     "HandleNewDailyEBeta",
     "DailyEBeta",
-    "DailyEOsc"
+    "DailyEOsc",
 ]

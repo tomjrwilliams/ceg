@@ -10,24 +10,24 @@ from typing import (
 from dataclasses import dataclass, replace
 
 from ...core import (
-    KeyVal, 
-    KeyValConfig, 
+    KeyVal,
+    KeyValConfig,
     ExampleKeyVal,
-    # _, 
-    KeyO, 
-    ValO, 
-    ValT
+    # _,
+    KeyO,
+    ValO,
+    ValT,
 )
 from .... import sqlite
 
 # TODO: env variable
 import os
+
 TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
 
 
 @dataclass(frozen=True)
 class SQLiteKeyValConfig(KeyValConfig):
-
     db: str
     name: str
     # if plural, dict, then overload on string literals when subclass (?)
@@ -37,7 +37,9 @@ class SQLiteKeyValConfig(KeyValConfig):
 
 ID = TypeVar("ID", bound=int)
 KeyI = TypeVar("KeyI", bound=int | str)
-ValI = TypeVar("ValI", bound=bool | int | float | str | bytes)
+ValI = TypeVar(
+    "ValI", bound=bool | int | float | str | bytes
+)
 
 
 @dataclass(frozen=True)
@@ -54,7 +56,9 @@ class SQLiteKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
 
     chunked: int | None = None  # indicates chunk size
 
-    CONFIG: ClassVar[Type[SQLiteKeyValConfig]] = SQLiteKeyValConfig
+    CONFIG: ClassVar[Type[SQLiteKeyValConfig]] = (
+        SQLiteKeyValConfig
+    )
 
     @classmethod
     def new(
@@ -86,7 +90,7 @@ class SQLiteKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
                 unique=("key",),
             ).create(self.config.db)
         except Exception as e:
-            raise ValueError((e, self))
+            raise ValueError(self) from e
 
         # TODO: composite pkey?
         # if the type_key_i is a tuple?
@@ -107,7 +111,7 @@ class SQLiteKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
         self,
         key: KeyI,
     ) -> None | int:
-    
+
         table = self.config.table
         assert table is not None, self
 
@@ -128,7 +132,7 @@ class SQLiteKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
         return id
 
     def lookup(self, id: int) -> KeyI:
-        
+
         table = self.config.table
         assert table is not None, self
 
@@ -142,7 +146,7 @@ class SQLiteKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
 
         assert len(res) == 1
         key_i = res[0][f"{self.config.name}.key"]
-        
+
         assert isinstance(key_i, self.type_key_i), key_i
         return key_i
 
@@ -233,11 +237,11 @@ class SQLiteKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
 
         return id
 
+
 @final
 @dataclass(frozen=True)
 class ExampleSQLiteKeyVal(
-    ExampleKeyVal,
-    SQLiteKeyVal[int, str, int, str, float]
+    ExampleKeyVal, SQLiteKeyVal[int, str, int, str, float]
 ):
     """
     >>> j, k, l, updated = ("j", "k", "l", [])
@@ -254,6 +258,7 @@ class ExampleSQLiteKeyVal(
     >>> assert (1, 2.0) == kv.iget(k)
     >>> assert updated == [(k, 2.0)]
     """
+
     config: SQLiteKeyValConfig = SQLiteKeyValConfig(
         db=TEST_DB, name="ExampleKeyVal"
     )

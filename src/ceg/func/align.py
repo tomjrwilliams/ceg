@@ -59,11 +59,15 @@ class align_d0_date(Node.D0_Date):
 
     @staticmethod
     def new(v: Ref.Scalar_Date, to: Ref.Any, tx=10e-6):
-        return align_d0_date("align_d0_date", v=v, to=to, tx=tx)
+        return align_d0_date(
+            "align_d0_date", v=v, to=to, tx=tx
+        )
 
     def __call__(self, event: Event, graph: Graph):
         if event.prev is None:
-            return self.v.history(graph).last_before(event.t)
+            return self.v.history(graph).last_before(
+                event.t
+            )
         return self.v.history(graph).last_between(
             event.prev.t + self.tx, event.t, strict=False
         )
@@ -107,12 +111,16 @@ class align_d0_f64(Node.D0_F64):
 
     @staticmethod
     def new(v: Ref.Scalar_F64, to: Ref.Any, tx=10e-6):
-        return align_d0_f64("align_d0_f64", v=v, to=to, tx=tx)
+        return align_d0_f64(
+            "align_d0_f64", v=v, to=to, tx=tx
+        )
 
     def __call__(self, event: Event, graph: Graph):
         if event.prev is None:
             try:
-                return self.v.history(graph).last_before(event.t)
+                return self.v.history(graph).last_before(
+                    event.t
+                )
             except:
                 return np.nan
         return self.v.history(graph).last_between(
@@ -163,7 +171,6 @@ class lag_d0_date(Node.Scalar_Date):
 
 
 class align:
-
     d0_date = align_d0_date
     scalar_date = align_d0_date
 
@@ -172,7 +179,6 @@ class align:
 
 
 class lag:
-
     d0_date = lag_d0_date
     scalar_date = lag_d0_date
 

@@ -7,7 +7,7 @@ name = "ceg"
 dynamic = ["version"]
 description = 'cyclic event graph'
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13.12,<3.14"
 license = "MIT"
 keywords = []
 authors = [
@@ -16,12 +16,29 @@ authors = [
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-  "ibapi @ file:../TWS API/source/pythonclient",
+  "boto3>=1.42.78",
+  "frozendict>=2.4.7",
+  "google-api-python-client>=2.193.0",
+  "google-auth>=2.49.1",
+  "google-auth-oauthlib>=1.3.0",
+  "matplotlib>=3.10.8",
+  "numba>=0.64.0",
+  "numpy>=2.4.3",
+  # "ibapi @ file:../TWS API/source/pythonclient",
+  "plotext>=5.3.2",
+  "plotly>=6.6.0",
+  "polars>=1.39.3",
+  "pydantic>=2.12.5",
+  "pytest-order>=1.3.0",
+  "redis>=7.4.0",
+  "requests>=2.33.0",
+  "scipy>=1.17.1",
+  "streamlit>=1.55.0",
 ]
 
 [project.urls]
@@ -32,12 +49,12 @@ Source = "https://github.com/tomjrwilliams/ceg"
 [tool.hatch.version]
 path = "src/ceg/__about__.py"
 
-[tool.hatch.envs.types]
-extra-dependencies = [
-  "mypy>=1.0.0",
-]
-[tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:src/ceg tests}"
+# [tool.hatch.envs.types]
+# extra-dependencies = [
+#   "mypy>=1.0.0",
+# ]
+# [tool.hatch.envs.types.scripts]
+# check = "mypy --install-types --non-interactive {args:src/ceg tests}"
 
 [tool.coverage.run]
 source_pkgs = ["ceg", "tests"]
@@ -61,4 +78,11 @@ exclude_lines = [
 [tool.pytest.ini_options]
 filterwarnings = [
   'ignore::DeprecationWarning:dateutil',
+]
+
+[dependency-groups]
+dev = [
+    "pylance>=3.0.1",
+    "pytest>=9.0.2",
+    "ruff>=0.15.7",
 ]

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 from typing import (
     TYPE_CHECKING,
@@ -11,6 +10,7 @@ from pathlib import Path
 import polars as pl
 
 from dataclasses import replace
+
 if TYPE_CHECKING:
     from dataclasses import dataclass
 else:
@@ -20,12 +20,15 @@ from pydantic import (
     TypeAdapter,
     BaseModel,
     Field,
-    field_validator
+    field_validator,
 )
 
 import requests
 
-from . import FRED_API
+try:
+    from . import FRED_API
+except:
+    FRED_API = None
 
 from .. import cal
 
@@ -40,18 +43,13 @@ def get_text(
     query = query or {}
     query["file_type"] = "json"
     query["api_key"] = FRED_API.KEY
-    return requests.get(
-        url,
-        params=query
-    ).text
+    return requests.get(url, params=query).text
+
 
 def validate_datetime(s: str):
     if len(s) == 22:
         s = s[:-3]
-    return dt.datetime.strptime(
-        s, "%Y-%m-%d %H:%M:%S"
-    )
-
+    return dt.datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
 
 
 @dataclass(frozen=True)
@@ -72,10 +70,11 @@ class SeriesDataItem:
     popularity: int
     notes: str
 
-    @field_validator('last_updated', mode='before')
+    @field_validator("last_updated", mode="before")
     @classmethod
     def parse_birthdate(cls, value):
         return validate_datetime(value)
+
 
 @dataclass(frozen=True)
 class SeriesData:
@@ -89,10 +88,12 @@ class SeriesData:
     def parse(cls, text: str) -> SeriesData:
         return TypeAdapter(cls).validate_json(text)
 
+
 @dataclass(frozen=True)
 class Series:
     id: str
     data: SeriesData
+
 
 def get_series(id: str) -> Series:
     # """
@@ -101,13 +102,16 @@ def get_series(id: str) -> Series:
     try:
         return Series(
             id,
-            data=SeriesData.parse(get_text(
-                "series",
-                dict(series_id=id),
-            ))
+            data=SeriesData.parse(
+                get_text(
+                    "series",
+                    dict(series_id=id),
+                )
+            ),
         )
     except:
         raise ValueError(id)
+
 
 @dataclass(frozen=True)
 class VintageDatesData:
@@ -124,31 +128,36 @@ class VintageDatesData:
     def parse(cls, text: str) -> VintageDatesData:
         return TypeAdapter(cls).validate_json(text)
 
+
 @dataclass(frozen=True)
 class VintageDates:
     id: str
     data: VintageDatesData
 
+
 # dates when the series values changed
 def get_vintage_dates(
     id: str,
     sort_order: str = "desc",
-    offset: int=0,
+    offset: int = 0,
 ) -> VintageDates:
     # """
     # >>> get_vintage_dates("BAMLH0A0HYM2")
     # """
     return VintageDates(
         id,
-        VintageDatesData.parse(get_text(
-            "series/vintagedates",
-            dict(
-                series_id=id,
-                sort_order=sort_order,
-                offset=offset,
-            ),
-        ))
+        VintageDatesData.parse(
+            get_text(
+                "series/vintagedates",
+                dict(
+                    series_id=id,
+                    sort_order=sort_order,
+                    offset=offset,
+                ),
+            )
+        ),
     )
+
 
 @dataclass(frozen=True)
 class ObservationDataItem:
@@ -157,12 +166,13 @@ class ObservationDataItem:
     date: dt.date
     value: float | None
 
-    @field_validator('value', mode='before')
+    @field_validator("value", mode="before")
     @classmethod
     def parse_value(cls, value):
         if value == ".":
             return None
         return float(value)
+
 
 @dataclass(frozen=True)
 class ObservationData:
@@ -179,7 +189,7 @@ class ObservationData:
     offset: int
     limit: int
     observations: list[ObservationDataItem]
-    
+
     @classmethod
     def parse(cls, text: str) -> ObservationData:
         try:
@@ -189,20 +199,23 @@ class ObservationData:
                 text[:300] + "..." + text[-300:]
             )
 
+
 @dataclass(frozen=True)
 class Observations:
     id: str
     data: ObservationData
+
 
 # 1 = Observations by Real-Time Period
 # 2 = Observations by Vintage Date, All Observations
 # 3 = Observations by Vintage Date, New and Revised Observations Only
 # 4 = Observations, Initial Release Only
 
+
 def get_observations(
     id: str,
     sort_order: str = "desc",
-    offset: int=0,
+    offset: int = 0,
     output_type: int = 1,
     ending: dt.date | None = None,
     limit: int | None = None,
@@ -220,15 +233,14 @@ def get_observations(
     if limit is not None:
         query["limit"] = limit
     if vintage_dates is not None:
-        query["vintage_dates"] = [ # type: ignore
+        query["vintage_dates"] = [  # type: ignore
             d.strftime("%Y-%m-%d") for d in vintage_dates
         ]
     return Observations(
         id,
-        ObservationData.parse(get_text(
-            "series/observations",
-            query=query
-        ))
+        ObservationData.parse(
+            get_text("series/observations", query=query)
+        ),
     )
 
 
@@ -251,6 +263,7 @@ class Spec:
     popularity: int
     # notes: str
 
+
 def load_spec(
     id: str,
     cache: str,
@@ -263,7 +276,7 @@ def load_spec(
     fp = Path(cache) / f"{id}_spec.json"
 
     if fp.exists():
-        with fp.open('rb') as f:
+        with fp.open("rb") as f:
             spec = ta.validate_json(f.read())
     else:
         spec = None
@@ -273,7 +286,7 @@ def load_spec(
             return spec
         elif spec.refreshed > now - refresh:
             return spec
-    
+
     s = get_series(id).data.items[0]
     spec = Spec(
         refreshed=now,
@@ -291,15 +304,17 @@ def load_spec(
         popularity=s.popularity,
     )
     fp.parent.mkdir(parents=True, exist_ok=True)
-    with fp.open('wb+') as f:
+    with fp.open("wb+") as f:
         f.write(ta.dump_json(spec))
     return spec
+
 
 @dataclass(frozen=True)
 class DataItem:
     date: dt.date
     value: float | None
     asof: dt.date | None = None
+
 
 @dataclass(frozen=True)
 class Data:
@@ -317,14 +332,16 @@ class Data:
 
     values: list[DataItem]
 
+
 COUNT = 0
+
 
 def load_data(
     id: str,
     cache: str,
     refresh: dt.timedelta | None = dt.timedelta(days=1),
     asof: str | None = None,
-    starting: dt.date = dt.date(1995, 1, 1)
+    starting: dt.date = dt.date(1995, 1, 1),
 ):
     global COUNT
 
@@ -338,9 +355,9 @@ def load_data(
         f_name = f"{f_name}_{asof}"
 
     fp = Path(cache) / f"{f_name}.json"
-    
+
     if fp.exists():
-        with fp.open('rb') as f:
+        with fp.open("rb") as f:
             data = ta.validate_json(f.read())
     else:
         data = None
@@ -350,7 +367,7 @@ def load_data(
             return data
         elif data.refreshed > now - refresh:
             return data
-    
+
     if asof is None:
         obs = get_observations(id).data
         data = Data(
@@ -371,30 +388,34 @@ def load_data(
             ],
         )
     else:
-        spec = load_spec(
-            id, cache=cache, refresh=refresh
-        )
+        spec = load_spec(id, cache=cache, refresh=refresh)
         assert starting is not None, (starting, asof)
         ending = dt.date.today()
 
-        asof_dates = pl.select(
-            pl.date_range(starting, ending)
-            .alias("date")
-        ).filter(
-            cal.rebalance_mask(asof)
-        ).get_column("date").to_list()
+        asof_dates = (
+            pl.select(
+                pl.date_range(starting, ending).alias(
+                    "date"
+                )
+            )
+            .filter(cal.rebalance_mask(asof))
+            .get_column("date")
+            .to_list()
+        )
 
-        asof_dates_data = [] if data is None else [
-            dv.asof
-            for dv in data.values
-        ]
+        asof_dates_data = (
+            []
+            if data is None
+            else [dv.asof for dv in data.values]
+        )
         asof_dates_req = [
-            d for d in asof_dates
+            d
+            for d in asof_dates
             if d not in asof_dates_data
         ]
 
         acc: list[DataItem] = []
-        
+
         values = [] if data is None else data.values
 
         obs = None
@@ -404,7 +425,7 @@ def load_data(
                 print("RATE LIMIT EXCEEDED, SLEEPING")
                 time.sleep(60)
             else:
-                time.sleep(1/20)
+                time.sleep(1 / 20)
             try:
                 obs = get_observations(
                     id,
@@ -422,14 +443,16 @@ def load_data(
                     break
                 else:
                     raise e
-            acc.extend([
-                DataItem(
-                    i.date,
-                    i.value,
-                    asof=d,
-                )
-                for i in reversed(obs.observations)
-            ])
+            acc.extend(
+                [
+                    DataItem(
+                        i.date,
+                        i.value,
+                        asof=d,
+                    )
+                    for i in reversed(obs.observations)
+                ]
+            )
 
         values.extend(reversed(acc))
 
@@ -453,12 +476,13 @@ def load_data(
                 limit=obs.limit,
                 values=values,
             )
-    
+
     fp.parent.mkdir(parents=True, exist_ok=True)
-    with fp.open('wb+') as f:
+    with fp.open("wb+") as f:
         f.write(ta.dump_json(data))
 
     return data
+
 
 def load_time_series(
     id: str,
@@ -485,35 +509,49 @@ def load_time_series(
             lag = dt.timedelta(days=0)
         d0 = values[-1].date
         d1 = values[0].date
-        df = pl.DataFrame({
-            "date": [d.date + lag for d in values],
-            id: [d.value for d in values],
-        }).reverse().group_by(
-            pl.col("date"),
-            maintain_order=True,
-        ).agg(
-            pl.col(id).first()
-        ).filter(
-            pl.col("date") >= d0,
-            pl.col("date") <= d1
+        df = (
+            pl.DataFrame(
+                {
+                    "date": [d.date + lag for d in values],
+                    id: [d.value for d in values],
+                }
+            )
+            .reverse()
+            .group_by(
+                pl.col("date"),
+                maintain_order=True,
+            )
+            .agg(pl.col(id).first())
+            .filter(
+                pl.col("date") >= d0, pl.col("date") <= d1
+            )
         )
     else:
         data = load_data(
-            id if not RELEASE_ALIAS
+            id
+            if not RELEASE_ALIAS
             else RELEASE_DATES.get(id, id),
-            cache, refresh=refresh, asof=asof
+            cache,
+            refresh=refresh,
+            asof=asof,
         )
         values = data.values
-        df = pl.DataFrame({
-            "date": [d.date for d in values],
-            # id: [d.value for d in values],
-            "asof": [d.asof for d in values],
-        }).group_by(
-            pl.col("date"),
-            maintain_order=True,
-        ).agg(
-            pl.col("asof").first(),
-            # pl.col(id).first(),
+        df = (
+            pl.DataFrame(
+                {
+                    "date": [d.date for d in values],
+                    # id: [d.value for d in values],
+                    "asof": [d.asof for d in values],
+                }
+            )
+            .group_by(
+                pl.col("date"),
+                maintain_order=True,
+            )
+            .agg(
+                pl.col("asof").first(),
+                # pl.col(id).first(),
+            )
         )
         df_today = load_time_series(
             id,
@@ -523,7 +561,7 @@ def load_time_series(
             lag=None,
             asof=None,
         )
-        
+
         d0 = df_today.select(pl.col("date").min()).item()
         d1 = df_today.select(pl.col("date").max()).item()
 
@@ -531,20 +569,22 @@ def load_time_series(
             pl.col("date") >= d0,
             pl.col("date") <= d1,
         )
-        df = df.join(
-            df_today,
-            how="left",
-            on="date",
-            maintain_order="left_right",
-            coalesce=True,
-        ).group_by(
-            pl.col("asof"),
-            maintain_order=True,
-        ).agg(
-            pl.col(id).first(),
-            pl.col("date").first()
-        ).select(pl.col("asof").alias("date"), id)
-        
+        df = (
+            df.join(
+                df_today,
+                how="left",
+                on="date",
+                maintain_order="left_right",
+                coalesce=True,
+            )
+            .group_by(
+                pl.col("asof"),
+                maintain_order=True,
+            )
+            .agg(pl.col(id).first(), pl.col("date").first())
+            .select(pl.col("asof").alias("date"), id)
+        )
+
         dates = df.get_column("date")
 
         if lag is not None:
@@ -574,6 +614,7 @@ def load_time_series(
         )
     return df
 
+
 RELEASE_ALIAS = False
 RELEASE_DATES = {
     "US_IP_AUTO": "INDPRO",
@@ -593,90 +634,66 @@ ALIASES = {
     "IV_EM": "VXEEMCLS",
     "IV_R2000": "RVXCLS",
     "IV_DJIA": "VXDCLS",
-
     # LOANS
-
-    "US_OVERDUE_30D_90D": "QBPLNTLN3089DU", # overdue
+    "US_OVERDUE_30D_90D": "QBPLNTLN3089DU",  # overdue
     "US_OVERDUE_90D": "QBPLNTLNNACSTAT",
     "US_OVERDUE_NONACCRUAL": "QBPLNTLNNACSTAT",
     "US_OVERDUE_CHARGEOFF": "QBPLNTLNTCGOFF",
     "US_OVERDUE_NONCURRENT": "QBPLNTLNNCUR",
-
     # chargeoff rate also available
     # delinquency rate also available
-
-    "US_CHAREOFF_TOTL": "NCOALLACB", # 2011 release
+    "US_CHAREOFF_TOTL": "NCOALLACB",  # 2011 release
     "US_CHARGEOFF_CORP": "NCOALLCIACB",
     "US_CHARGEOFF_CONS": "NCOALLCACB",
     "US_CHARGEOFF_CONS_CC": "NCOALLCCACB",
     "US_CHARGEOFF_RE": "NCOALLSREACB",
-
     "US_LOANS_TOTL": "QBPBSTASTLN",
     "US_LOANS_CORP": "QBPBSTASCOMLN",
     "US_LOANS_RE": "QBPBSTASLNREAL",
     "uS_LOANS_RE_CONSTR": "QBPBSTASLNREALCONDEV",
     "US_LOANS_CONS": "QBPBSTASLNINDV",
-
-    "JP_MANU": "JPNPRMNTO01GPSAM", # mom growth
-
+    "JP_MANU": "JPNPRMNTO01GPSAM",  # mom growth
     # US ECO
-
     # available by sector
     "US_CAP_UTIL": "TCU",
     "US_IP": "INDPRO",
     "US_IP_AUTO": "IPG3361T3S",
     "US_IP_MINE": "IPMINE",
     "US_IP_CONSTR": "IPB54100S",
-    "US_IP_MATRL": "IPMAT", # materials
+    "US_IP_MATRL": "IPMAT",  # materials
     "US_IP_DEFN": "IPB52300S",
     "US_IP_DRILL": "IPN213111S",
     "US_IP_MAN": "IPMANSICS",
-
     "US_HOUSE_PERMIT": "PERMIT",
-
     "US_CU_OIL_GAS": "CAPUTLG211S",
     "US_CU_MINE": "CAPUTLG21S",
-
     "US_UNEMPL": "UNRATE",
     "US_INFL_CONS": "FPCPITOTLZGUSA",
-
     "EU_UNEMPL": "LRHUTTTTEUM156S",
-    "EU_INFL_TOTL": "CPHPTT01EZM659N", # yoy
+    "EU_INFL_TOTL": "CPHPTT01EZM659N",  # yoy
     "EU_INFL_CONS": "FPCPITOTLZGEUU",
-
-    "US_LOAN_LOSS_PROV": "QBPQYLNLOSS", # 2021
-
+    "US_LOAN_LOSS_PROV": "QBPQYLNLOSS",  # 2021
     # EUR yield
-
     "EUR_INTERBANK_1D": "IRSTCI01EZM156N",
     "EUR_INTERBANK_3M": "IR3TIB01EZM156N",
-
     "EUR_GOV_10Y": "IRLTLT01EZM156N",
     "EUR_DISCOUNT": "INTDSREZM193N",
-
     "JPN_GOV_10Y": "IRLTLT01JPM156N",
     "JPN_DISCOUNT": "INTDSRJPM193N",
-
     "GBP_GOV_10Y": "IRLTLT01GBM156N",
     "GBP_DISCOUNT": "INTDSREZM193N",
     "GBP_INTERBANK_3M": "IR3TIB01GBM156N",
-
     "GER_GOV_10Y": "IRLTLT01DEM156N",
     "ESP_GOV_10Y": "IRLTLT01ESM156N",
     "NET_GOV_10Y": "IRLTLT01NLM156N",
     "GRE_GOV_10Y": "IRLTLT01GRM156N",
     "ITA_GOV_10Y": "IRLTLT01ITM156N",
     "FRA_GOV_10Y": "IRLTLT01FRM156N",
-
     # US yields
-
     "US_FF": "DFF",
-
     "US_BE_10Y": "T10YIE",
     "US_BE_5Y": "T5YIE",
-
     "US_INFL_5Y5Y": "T5YIFR",
-
     "US_GOV_1M_CM": "DGS1MO",
     "US_GOV_3M_CM": "DGS3MO",
     "US_GOV_6M_CM": "DGS6MO",
@@ -687,18 +704,14 @@ ALIASES = {
     "US_GOV_7Y_CM": "DGS7",
     "US_GOV_10Y_CM": "DGS10",
     "US_GOV_20Y_CM": "DGS20",
-    "US_GOV_30Y_CM": "DGS30", # "investmnet basis"
+    "US_GOV_30Y_CM": "DGS30",  # "investmnet basis"
     # ^ also inflation indexed?
-
-    "US_GOV_10Y": "BC_10YEAR", # const maturity
+    "US_GOV_10Y": "BC_10YEAR",  # const maturity
     # ^ M suffix?
-
-    "US_AAA": "DAAA", # mmodys seasoned
-    "US_BAA": "DBAA", # mmodys seasoned
-
+    "US_AAA": "DAAA",  # mmodys seasoned
+    "US_BAA": "DBAA",  # mmodys seasoned
     "US_ICE_IG": "BAMLC0A0CMEY",
     "US_ICE_HY": "BAMLH0A0HYM2EY",
-
     "US_ICE_AAA": "BAMLC0A1CAAAEY",
     "US_ICE_AA": "BAMLC0A2CAAEY",
     "US_ICE_A": "BAMLC0A3CAEY",
@@ -706,25 +719,18 @@ ALIASES = {
     "US_ICE_BB": "BAMLH0A1HYBBEY",
     "US_ICE_B": "BAMLH0A2HYBEY",
     "US_ICE_CCC": "BAMLH0A3HYCEY",
-
     "EUR_HY": "BAMLHE00EHYIEY",
-
     "EM_HY": "BAMLEMHBHYCRPIEY",
     "ASIA_EM_IG": "BAMLEMRACRPIASIAEY",
-
     # US yield spreads
-
     "D_US_AAA": "AAA10Y",
     "D_US_BAA": "BAA10Y",
     "D_US_AAA_GOV_10Y": "AAA10Y",
     "D_US_BAA_GOV_10Y": "BAA10Y",
-
-    "D_US_BAA_FF": "BAAFF", # baa seasoned to fed funds
-    "D_US_AAA_FF": "AAAFF", # baa seasoned to fed funds
-
+    "D_US_BAA_FF": "BAAFF",  # baa seasoned to fed funds
+    "D_US_AAA_FF": "AAAFF",  # baa seasoned to fed funds
     "US_HY_OAS": "BAMLH0A0HYM2",
     "US_IG_OAS": "BAMLC0A0CM",
-
     "US_AAA_OAS": "BAMLC0A1CAAA",
     "US_AA_OAS": "BAMLC0A2CAA",
     "US_A_OAS": "BAMLC0A3CA",
@@ -732,22 +738,17 @@ ALIASES = {
     "US_BB_OAS": "BAMLH0A1HYBB",
     "US_B_OAS": "BAMLH0A2HYB",
     "US_CCC_OAS": "BAMLH0A3HYC",
-
     "EUR_HY_OAS": "BAMLHE00EHYIOAS",
-
     "EM_IG_OAS": "BAMLEMHBHYCRPIEY",
     "EM_HY_OAS": "BAMLEMHBHYCRPIOAS",
     # TODO: adjust for long term secular decline?
-
     "ASIA_EM_IG_OAS": "BAMLEMRACRPIASIAOAS",
     "LATAM_EM_IG_OAS": "BAMLEMRLCRPILAOAS",
-
     # USD INDICES
-
-    "NOML_USD": "TWEXBGSMTH", # nominal broad
-    "REAL_USD": "RTWEXBGS", # broad
-    "NOML_USD_ADV": "TWEXAFEGSMTH", # nominal advanced economies
+    "NOML_USD": "TWEXBGSMTH",  # nominal broad
+    "REAL_USD": "RTWEXBGS",  # broad
+    "NOML_USD_ADV": "TWEXAFEGSMTH",  # nominal advanced economies
     "REAL_USD_ADV": "RTWEXAFEGS",
-    "NOML_USD_EMG": "TWEXEMEGSMTH", # nominal EM
+    "NOML_USD_EMG": "TWEXEMEGSMTH",  # nominal EM
     "REAL_USD_EMG": "RTWEXEMEGS",
 }

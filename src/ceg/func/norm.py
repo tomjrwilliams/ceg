@@ -218,7 +218,9 @@ class norm_mid_vec(Node.Vector_F64):
         a: float = 0.0,
         b: float = 1.0,
     ):
-        return norm_mid_vec("norm_mid_vec", vec=vec, a=a, b=b)
+        return norm_mid_vec(
+            "norm_mid_vec", vec=vec, a=a, b=b
+        )
 
     bind = define.bind_from_new(new, Node.Vector_F64.ref)
 

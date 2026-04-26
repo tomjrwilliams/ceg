@@ -1,4 +1,3 @@
-
 from typing import Callable
 import polars as pl
 import numpy as np
@@ -12,13 +11,14 @@ from ..utils import *
 
 # ----------------------------------------
 
+
 @nb.jit()
 def smooth_cum(
     nd_rx: np.ndarray,
     nd_null: np.ndarray,
     n_t: int,
 ):
-    
+
     res = np.zeros((n_t,), dtype=float)
     res_null = np.zeros((n_t,), dtype=np.bool)
 
@@ -27,7 +27,6 @@ def smooth_cum(
 
     t: int = 0
     while t < n_t:
-
         if nd_null[t]:
             res[t] = np.nan
             res_null[t] = True
@@ -46,8 +45,9 @@ def smooth_cum(
         res[t] = v_cum
         n_v += 1
         t += 1
-    
+
     return res, res_null
+
 
 @nb.jit()
 def smooth_ewm(
@@ -56,7 +56,7 @@ def smooth_ewm(
     alpha: float,
     n_t: int,
 ):
-    
+
     res = np.zeros((n_t,), dtype=float)
     res_null = np.zeros((n_t,), dtype=np.bool)
 
@@ -70,7 +70,6 @@ def smooth_ewm(
     v: float = 0
 
     while t < n_t:
-
         if np.isnan(nd_rx[t]):
             res[t] = v
             t += 1
@@ -79,17 +78,16 @@ def smooth_ewm(
         if n_v == 0:
             v_cum = nd_rx[t]
         else:
-            v_cum = (
-                (v_cum * decay) + (nd_rx[t] * alpha)
-            )
+            v_cum = (v_cum * decay) + (nd_rx[t] * alpha)
 
         v = v_cum
 
         res[t] = v
         n_v += 1
         t += 1
-    
+
     return res, res_null
+
 
 @nb.jit()
 def smooth_rolling(
@@ -98,7 +96,7 @@ def smooth_rolling(
     window: int,
     n_t: int,
 ):
-    
+
     res = np.zeros((n_t,), dtype=float)
     res_null = np.zeros((n_t,), dtype=np.bool)
 
@@ -106,7 +104,6 @@ def smooth_rolling(
 
     t: int = 0
     while t < n_t:
-
         if np.isnan(nd_rx[t]):
             res[t] = v
             t += 1
@@ -127,12 +124,12 @@ def smooth_rolling(
             if np.isnan(nd_rx[tt]):
                 tt += 1
                 continue
-            
+
             rx = nd_rx[tt]
 
             sum_rx += rx
             n_rx += 1
-                
+
             tt += 1
 
         if n_rx > 1:
@@ -141,8 +138,9 @@ def smooth_rolling(
         res[t] = v
 
         t += 1
-    
+
     return res, res_null
+
 
 __all__ = [
     "smooth_cum",

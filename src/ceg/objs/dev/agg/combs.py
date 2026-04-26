@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -36,7 +35,7 @@ from ....engine import *
 
 from ..calc import *
 
-from .collections import *
+from .containers import *
 from .aggs import *
 
 from ....apis.calcs.regimes.dd import *
@@ -49,59 +48,70 @@ logger, log = logs.logger(
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class DailyCombination(
     DailyChunked,
     DependsParentValue,
 ):
-    parent: Collection | str
-    
+    parent: Container | str
+
     args: tuple[int, ...]
     metric: str
+
+    # TODO: peers? can be either agg or comb?
 
     version: int = 0
     type: Literal["DailyCombination"] = "DailyCombination"
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["DailyCombinationSnap"] = "DailyCombinationSnap"
+        type: Literal["DailyCombinationSnap"] = (
+            "DailyCombinationSnap"
+        )
 
-    def get_parent(self) -> Collection:
-        return context.get().get(self.parent, t=Collection)
+    def get_parent(self) -> Container:
+        return context.get().get(self.parent, t=Container)
 
     @classmethod
     def new(
         cls,
-        parent: Collection,
+        parent: Container,
         metric: str,
-        comb: int | Combination | tuple[int | Combination, ...],
+        comb: int
+        | Combination
+        | tuple[int | Combination, ...],
     ):
         return cls.new_(parent, metric, comb)
-    
+
     @classmethod
     def new_(
         cls,
-        parent: Collection,
+        parent: Container,
         metric: str,
-        comb: int | Combination | tuple[int | Combination, ...],
+        comb: int
+        | Combination
+        | tuple[int | Combination, ...],
     ):
         comb = (
             (comb,)
             if isinstance(comb, (int, Combination))
             else comb
         )
-        i = tuple((
-            c if isinstance(c, int) else c.index
-            for c in comb
-        ))
+        i = tuple(
+            (
+                c if isinstance(c, int) else c.index
+                for c in comb
+            )
+        )
         args_pad = f"comb-" + "-".join(map(str, i))
         return cls(
-            path=parent.extend_path(args_pad),
+            id=parent.extend_id(args_pad),
             parent=parent,
             metric=metric,
             args=i,
         )
-    
+
     def handler(self, event: Event, snap: Snap) -> Handler:
         parent = self.get_parent()
 
@@ -109,7 +119,7 @@ class DailyCombination(
 
         parent_update = (
             isinstance(event, ValueUpdate)
-            and obj.path == parent.path
+            and obj.id == parent.id
         )
 
         # TODO: pass params
@@ -122,7 +132,7 @@ class DailyCombination(
         # TODO: if upstream target change
 
         raise ValueError((self, event))
-    
+
     def deriv(
         self,
         key: str | None = None,
@@ -131,11 +141,12 @@ class DailyCombination(
         return DailyCombinationDeriv.new(
             self, index=index, key=key
         )
-    
-def get_comb_dfs(combs: tuple[int, ...], coll: Collection):
+
+
+def get_comb_dfs(combs: tuple[int, ...], coll: Container):
     acc = []
     d0 = d1 = None
-    
+
     for c in combs:
         dfs = frozendict()
         comb = coll.comb[c]
@@ -155,55 +166,59 @@ def get_comb_dfs(combs: tuple[int, ...], coll: Collection):
                     o,
                     alias=k,
                     scale=assert_is(
-                        params.get(f"{k}_scale", 1.),
-                        float
-                    )
+                        params.get(f"{k}_scale", 1.0), float
+                    ),
                 )
                 _d0, _d1 = apis.pl.select_items(
                     df,
                     (
                         pl.col("date").min(),
-                        pl.col("date").max()
+                        pl.col("date").max(),
                     ),
                     dt.date,
                 )
             elif ref.type == "agg":
-                method = assert_is(params.get(
-                    f"{k}_agg_method",
-                    agg_method
-                ), str)
+                method = assert_is(
+                    params.get(
+                        f"{k}_agg_method", agg_method
+                    ),
+                    str,
+                )
 
-                agg_params = frozendict({
-                    kk[len(f"{k}_"):]: v
-                    for kk, v in params.items()
-                    if kk.startswith(f"{k}_")
-                    and kk not in [
-                        f"{k}_agg_method",
-                        f"{k}_scale",
-                    ]
-                    # TODO: or k in h.kwarg_names()?
-                })
+                agg_params = frozendict(
+                    {
+                        kk[len(f"{k}_") :]: v
+                        for kk, v in params.items()
+                        if kk.startswith(f"{k}_")
+                        and kk
+                        not in [
+                            f"{k}_agg_method",
+                            f"{k}_scale",
+                        ]
+                        # TODO: or k in h.kwarg_names()?
+                    }
+                )
 
                 try:
                     h = agg_handler(method, agg_params)
                 except:
-                    raise ValueError(dict(
-                        comb=comb,
-                        params=params,
-                        k=k,
-                    ))
+                    raise ValueError(
+                        dict(
+                            comb=comb,
+                            params=params,
+                            k=k,
+                        )
+                    )
 
                 # TODO: assert singular df handler method
-                
-                _dfs, _d0, _d1 = get_agg_dfs(
-                    (ref.i,), coll
-                )
+
+                _dfs, _d0, _d1 = get_agg_dfs((ref.i,), container)
                 df_ = h.agg_dfs(_d0, _d1, *_dfs)
 
                 df = assert_is(df_, pl.DataFrame)
                 if VALUE in df.schema:
                     df = df.rename({VALUE: k})
-                
+
             else:
                 raise ValueError(comb, combs)
 
@@ -216,7 +231,8 @@ def get_comb_dfs(combs: tuple[int, ...], coll: Collection):
     d0, d1 = assert_is(d0), assert_is(d1)
 
     return acc, d0, d1
-    
+
+
 @dataclass(frozen=True)
 class DailyCombinationDeriv(
     DailyChunked,
@@ -227,11 +243,15 @@ class DailyCombinationDeriv(
     key: str | None = None
 
     version: int = 0
-    type: Literal["DailyCombinationDeriv"] = "DailyCombinationDeriv"
+    type: Literal["DailyCombinationDeriv"] = (
+        "DailyCombinationDeriv"
+    )
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["DailyCombinationDerivSnap"] = "DailyCombinationDerivSnap"
+        type: Literal["DailyCombinationDerivSnap"] = (
+            "DailyCombinationDerivSnap"
+        )
 
     def get_parent(self) -> DailyCombination:
         return context.get().get(
@@ -247,27 +267,28 @@ class DailyCombinationDeriv(
     ):
         key = key or field_default(cls, "key", str)
         assert index is not None or key is not None, (
-            index, key, cls
+            index,
+            key,
+            cls,
         )
-        path = None if index is None else str(index)
-        path = key if path is None else f"{key}-{path}"
+        id=None if index is None else str(index)
+        id=key if id is None else f"{key}-{id}"
         return cls(
             parent=parent,
-            path=parent.extend_path(assert_is(path)),
+            id=parent.extend_id(assert_is(id)),
             index=index,
             key=key,
         )
-    
+
     def depends(self) -> list[Dependency]:
         return []
-    
+
 
 @dataclass(frozen=True)
 class HandleNewDailyCombination(
     HandleNewValueFromPl,
     HandleNewDailyFromDf,
 ):
-
     def comb_dfs(
         self,
         first: dt.date,
@@ -278,13 +299,10 @@ class HandleNewDailyCombination(
         ],
     ) -> (
         pl.DataFrame
-        | tuple[pl.DataFrame, list[
-            str
-            | int
-            | tuple[str, int]
-        ]]
-    ):
-        ...
+        | tuple[
+            pl.DataFrame, list[str | int | tuple[str, int]]
+        ]
+    ): ...
 
     def handle(
         self,
@@ -292,54 +310,56 @@ class HandleNewDailyCombination(
         snap: DailyCombination.Snap,
         obj: DailyCombination,
     ):
-        coll = obj.get_parent()
+        container= obj.get_parent()
 
         d0 = d1 = None
 
         # TODO: shared params? maybe on the DailyCombination instead
 
-        acc, d0, d1 = get_comb_dfs(obj.args, coll)
+        acc, d0, d1 = get_comb_dfs(obj.args, container)
 
-        if (
-            snap.first and snap.last
-        ):
+        if snap.first and snap.last:
             if d0 == snap.first and d1 == snap.last:
                 return frozendict().set(
-                    obj.path, (snap, ())
+                    obj.id, (snap, ())
                 )
 
-        # log("INFO")( agg=obj.path)
+        # log("INFO")( agg=obj.id)
 
         res = self.comb_dfs(d0, d1, *acc)
 
         df = None
 
-        # log("INFO")( store=obj.path)
+        # log("INFO")( store=obj.id)
 
         snaps = frozendict()
 
         if isinstance(res, pl.DataFrame):
             df = res
-            assert len(df) == (
-                (d1 - d0).days + 1
-            ), (df, d1, d0)
+            assert len(df) == ((d1 - d0).days + 1), (
+                df,
+                d1,
+                d0,
+            )
 
             v = self.set_value_from_df(
                 obj,
                 df,
                 VALUE,
-                t = self.key_value_type(obj),
+                t=self.key_value_type(obj),
             )
         elif isinstance(res, tuple):
             df, k_is = res
-            
+
             df = df.filter(
                 pl.col("date").is_between(d0, d1)
             )
 
-            assert len(df) == (
-                (d1 - d0).days + 1
-            ), (df, d1, d0)
+            assert len(df) == ((d1 - d0).days + 1), (
+                df,
+                d1,
+                d0,
+            )
 
             _snaps = {}
 
@@ -363,15 +383,15 @@ class HandleNewDailyCombination(
                     child,
                     df,
                     col,
-                    t = self.key_value_type(child),
+                    t=self.key_value_type(child),
                 )
-                _snaps[child.path] = (
+                _snaps[child.id] = (
                     replace(
                         child_snap,
                         first=d0,
                         last=d1,
                     ),
-                    ValueUpdate(child.path),
+                    ValueUpdate(child.id),
                 )
 
             # TODO: fold / accumulate
@@ -381,7 +401,7 @@ class HandleNewDailyCombination(
         else:
             raise ValueError((type(res), self))
 
-        # log(agg=obj.path, mess="setting snap")
+        # log(agg=obj.id, mess="setting snap")
 
         return ValueUpdate.from_snap(
             self.update_snap_from_df(
@@ -390,15 +410,12 @@ class HandleNewDailyCombination(
                 d_min=d0,
                 d_max=d1,
             ),
-            into=snaps
+            into=snaps,
         )
 
 
 @dataclass(frozen=True)
-class HandleNewDailyHSum(
-    HandleNewDailyCombination
-):
-
+class HandleNewDailyHSum(HandleNewDailyCombination):
     def comb_dfs(
         self,
         first: dt.date,
@@ -415,5 +432,5 @@ __all__ = [
     "get_comb_dfs",
     "DailyCombination",
     "DailyCombinationDeriv",
-    "HandleNewDailyCombination"
+    "HandleNewDailyCombination",
 ]

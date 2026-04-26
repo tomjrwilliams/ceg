@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from functools import wraps
 import polars as pl
 from ...apis.st import cache, library
+
 st = library()
 
 import plotly
@@ -46,7 +47,9 @@ class Options:
         col: str,
         col_type: pl.DataType,
     ):
-        if col_type == pl.String or is_categorical(col_type):
+        if col_type == pl.String or is_categorical(
+            col_type
+        ):
             # TODO: or boolean?
             mp = OptionsCategorical.add(mp, dim, col)
         elif col_type.is_temporal():
@@ -255,7 +258,8 @@ class OptionsNumeric(Options):
                 dim: cls(
                     col,
                     transform=transform,
-                    buckets=buckets_choice or buckets_custom,
+                    buckets=buckets_choice
+                    or buckets_custom,
                     agg=agg_choice or agg_custom,
                 )
             },
@@ -357,7 +361,6 @@ class MultiPivot:
             dfs = {"data": self.df}
 
         for df_k, df in dfs.items():
-
             df_repr = choice_single(
                 f"{df_k}:",
                 DF_REPR,
@@ -394,7 +397,9 @@ class MultiPivot:
                         # eg. if many y passed?
                     )
                     repr.update_traces(showlegend=True)
-                st.plotly_chart(repr, key=f"df.{df_k}.chart")
+                st.plotly_chart(
+                    repr, key=f"df.{df_k}.chart"
+                )
             elif df_repr == "table":
                 if self.y.col is None:
                     group_exprs = not_none(
@@ -409,7 +414,9 @@ class MultiPivot:
                             *agg_exprs
                         )
                     else:
-                        df = df.select(self.x.col, self.v.col)
+                        df = df.select(
+                            self.x.col, self.v.col
+                        )
                     st.table(df)
                 else:
                     group_exprs = not_none(

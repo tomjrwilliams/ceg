@@ -1,4 +1,3 @@
-
 from typing import Callable
 import polars as pl
 import numpy as np
@@ -10,6 +9,7 @@ from ...validation import assert_is
 from ..utils import *
 
 # ----------------------------------------
+
 
 @nb.jit()
 def calc_metrics_ewm(
@@ -62,7 +62,7 @@ def calc_metrics_ewm(
 
     alpha_30 = 2 / ((span * 3) + 1)
     decay_30 = 1 - alpha_30
-    
+
     rx_cmu_15 = np.nan
     rx_cmu_30 = np.nan
 
@@ -99,7 +99,7 @@ def calc_metrics_ewm(
 
             nd_osc_15[t] = np.nan
             nd_osc_30[t] = np.nan
-            
+
             t += 1
             continue
 
@@ -128,22 +128,18 @@ def calc_metrics_ewm(
 
         else:
             rx_mu = (rx_mu * decay) + (rx * alpha)
-            rx_cmu = (
-                (rx_cmu * decay) + (rx_cum * alpha)
+            rx_cmu = (rx_cmu * decay) + (rx_cum * alpha)
+            rx_cmu_15 = (rx_cmu_15 * decay_15) + (
+                rx_cum * alpha_15
             )
-            rx_cmu_15 = (
-                (rx_cmu_15 * decay_15)
-                + (rx_cum * alpha_15)
-            )
-            rx_cmu_30 = (
-                (rx_cmu_30 * decay_30)
-                + (rx_cum * alpha_30)
+            rx_cmu_30 = (rx_cmu_30 * decay_30) + (
+                rx_cum * alpha_30
             )
             rx_ms = (rx_ms * decay) + (rx_sq * alpha)
-            
+
             rx_rms = math.sqrt(rx_ms)
 
-            if rx_cum > rx_max: # ge?
+            if rx_cum > rx_max:  # ge?
                 rx_max = rx_cum
                 rx_hwm = rx_max
                 is_hwm = True
@@ -151,11 +147,9 @@ def calc_metrics_ewm(
 
                 rx_grid_top = 0
             else:
-                rx_max = (
-                    (rx_max * decay) + (rx_cmu * alpha)
-                )
-                
-            if rx_cum < rx_min: # le?
+                rx_max = (rx_max * decay) + (rx_cmu * alpha)
+
+            if rx_cum < rx_min:  # le?
                 rx_min = rx_cum
                 rx_lwm = rx_min
                 is_lwm = True
@@ -163,9 +157,7 @@ def calc_metrics_ewm(
 
                 rx_grid_btm = 0
             else:
-                rx_min = (
-                    (rx_min * decay) + (rx_cmu * alpha)
-                )
+                rx_min = (rx_min * decay) + (rx_cmu * alpha)
 
         hwm_len += 1
         hwm_net += rx
@@ -234,7 +226,8 @@ def calc_metrics_ewm(
         nd_osc_15,
         nd_osc_30,
     )
-    
+
+
 @nb.jit()
 def basket_metrics_ewm(
     nd_rx: np.ndarray,
@@ -258,7 +251,7 @@ def basket_metrics_ewm(
     nd_hwm_grs = np.zeros(nd_rx.shape)
     nd_lwm_net = np.zeros(nd_rx.shape)
     nd_lwm_grs = np.zeros(nd_rx.shape)
-    
+
     nd_osc_15 = np.zeros(nd_rx.shape)
     nd_osc_30 = np.zeros(nd_rx.shape)
 
@@ -314,14 +307,13 @@ def basket_metrics_ewm(
         nd_osc_30,
     )
 
+
 def metrics_ewm_df(
     df: pl.DataFrame,
     span: float,
 ):
-    (
-        nd_rx, nd_null, nd_active, v_null_expr, all_null
-    ) = cols_with_null_map(
-        df, drop = ["date"]
+    (nd_rx, nd_null, nd_active, v_null_expr, all_null) = (
+        cols_with_null_map(df, drop=["date"])
     )
     print(("calc metrics ewm", span))
     (
@@ -372,8 +364,9 @@ def metrics_ewm_df(
             "lwm_grs": nd_lwm_grs,
             "osc_15": nd_osc_15,
             "osc_30": nd_osc_30,
-        }
+        },
     )
+
 
 __all__ = [
     "metrics_ewm_df",

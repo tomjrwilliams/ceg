@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -37,7 +36,7 @@ from ....engine import *
 
 from ..calc import *
 
-from .collections import *
+from .containers import *
 
 from ....apis.calcs.regimes.dd import *
 
@@ -49,35 +48,50 @@ logger, log = logs.logger(
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class DailyAggregate(
     DailyChunked,
     DependsParentValue,
 ):
-    parent: Collection | str
-    
+    parent: Container | str
+
     agg: str
-    args: tuple[int, ...] # args of agg in collection
+    args: tuple[int, ...]  # args of agg in container
     # NOTE: tuple to allow eg. panel vs panel regression
 
-    params: t.frozen.dict[
-        str, bool | int | float | None
-    ] | None = None
+    params: (
+        t.frozen.dict[str, bool | int | float | None] | None
+    ) = None
+
+    peers: tuple[str, ...] = ()
 
     version: int = 0
     type: Literal["DailyAggregate"] = "DailyAggregate"
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["DailyAggregateSnap"] = "DailyAggregateSnap"
+        type: Literal["DailyAggregateSnap"] = (
+            "DailyAggregateSnap"
+        )
 
-    def get_parent(self) -> Collection:
-        return context.get().get(self.parent, t=Collection)
+    def get_parent(self) -> Container:
+        return context.get().get(self.parent, t=Container)
+
+    def depends(self) -> list[Dependency]:
+        return self.depends_parent() + [
+            Dependency(
+                self.id,
+                peer,
+                events=('ValueUpdate',)
+            )
+            for peer in self.peers
+        ]
 
     @classmethod
     def new(
         cls,
-        parent: Collection,
+        parent: Container,
         agg: str,
         aggs: (
             int
@@ -87,13 +101,17 @@ class DailyAggregate(
         ),
         **params: bool | int | float | None,
     ):
-        args = (aggs,) if isinstance(aggs, (
-            int, Aggregate
-        )) else aggs
-        args = tuple([
-            arg if isinstance(arg, int) else arg.index
-            for arg in args
-        ])
+        args = (
+            (aggs,)
+            if isinstance(aggs, (int, Aggregate))
+            else aggs
+        )
+        args = tuple(
+            [
+                arg if isinstance(arg, int) else arg.index
+                for arg in args
+            ]
+        )
         args_pad = "agg-" + "-".join(map(str, args))
         if len(params):
             # TODO: v much TBC!! need keys?
@@ -101,17 +119,17 @@ class DailyAggregate(
 
             # TODO: None, minus, .0 etc. abbreviate
 
-            args_pad += "-" + "-".join(map(
-                str, params.values()
-            ))
+            args_pad += "-" + "-".join(
+                map(str, params.values())
+            )
         return cls(
             parent=parent,
-            path=parent.extend_path(args_pad),
+            id=parent.extend_id(args_pad),
             agg=agg,
             args=args,
             params=frozendict(params),
         )
-    
+
     def handler(self, event: Event, snap: Snap) -> Handler:
         parent = self.get_parent()
 
@@ -119,18 +137,16 @@ class DailyAggregate(
 
         parent_update = (
             isinstance(event, ValueUpdate)
-            and event.obj == parent.path
+            and event.obj == parent.id
         )
 
         if parent_update:
-            return agg_handler(
-                self.agg, self.params
-            )
+            return agg_handler(self.agg, self.params)
 
         # TODO: if upstream target change
 
         raise ValueError((self, event))
-    
+
     def deriv(
         self,
         key: str | None = None,
@@ -139,53 +155,49 @@ class DailyAggregate(
         return DailyAggregateDeriv.new(
             self, index=index, key=key
         )
-    
-def get_agg_dfs(
-    aggs: tuple[int, ...],
-    coll: Collection
-):
-    
+
+
+def get_agg_dfs(aggs: tuple[int, ...], coll: Container):
+
     dfs = []
 
     d0 = d1 = None
+
+    g = context.get(Graph)
 
     for a in aggs:
         try:
             agg = coll.agg[a]
         except:
             raise ValueError((coll, a))
-        
+
         objs = agg.get_objects(coll)
 
-        df = apis.pl.join_dfs(
-            [daily_pl_df(obj) for obj in objs],
-            on="date",
-            align=True,
-        ).sort(by="date").select(
-            "date",
-            *[
-                obj.path for obj in objs
-            ]
+        df = (
+            apis.pl.join_dfs(
+                [daily_pl_df(obj) for obj in objs],
+                on="date",
+                align=True,
+            )
+            .sort(by="date")
+            .select("date", *[obj.id for obj in objs])
         )
 
         _d0, _d1 = apis.pl.select_items(
             df,
-            (
-                pl.col("date").min(),
-                pl.col("date").max()
-            ),
+            (pl.col("date").min(), pl.col("date").max()),
             dt.date,
         )
         d0 = _d0 if d0 is None else min([d0, _d0])
         d1 = _d1 if d1 is None else min([d1, _d1])
 
         dfs.append(df)
-    
+
     d0, d1 = assert_is(d0), assert_is(d1)
 
     return dfs, d0, d1
 
-    
+
 @dataclass(frozen=True)
 class DailyAggregateDeriv(
     DailyChunked,
@@ -196,11 +208,15 @@ class DailyAggregateDeriv(
     key: str | None = None
 
     version: int = 0
-    type: Literal["DailyAggregateDeriv"] = "DailyAggregateDeriv"
+    type: Literal["DailyAggregateDeriv"] = (
+        "DailyAggregateDeriv"
+    )
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["DailyAggregateDerivSnap"] = "DailyAggregateDerivSnap"
+        type: Literal["DailyAggregateDerivSnap"] = (
+            "DailyAggregateDerivSnap"
+        )
 
     def get_parent(self) -> DailyAggregate:
         return context.get().get(
@@ -216,17 +232,18 @@ class DailyAggregateDeriv(
     ):
         key = key or field_default(cls, "key", str)
         assert index is not None or key is not None, (
-            index, key
+            index,
+            key,
         )
-        path = None if index is None else str(index)
-        path = key if path is None else f"{key}-{path}"
+        id=None if index is None else str(index)
+        id=key if id is None else f"{key}-{id}"
         return cls(
             parent=parent,
-            path=parent.extend_path(assert_is(path)),
+            id=parent.extend_id(assert_is(id)),
             index=index,
             key=key,
         )
-    
+
     def depends(self) -> list[Dependency]:
         return []
 
@@ -236,7 +253,6 @@ class HandleNewDailyAggregate(
     HandleNewValueFromPl,
     HandleNewDailyFromDf,
 ):
-
     def agg_dfs(
         self,
         first: dt.date,
@@ -244,13 +260,10 @@ class HandleNewDailyAggregate(
         *dfs: pl.DataFrame,
     ) -> (
         pl.DataFrame
-        | tuple[pl.DataFrame, list[
-            str
-            | int
-            | tuple[str, int]
-        ]]
-    ):
-        ...
+        | tuple[
+            pl.DataFrame, list[str | int | tuple[str, int]]
+        ]
+    ): ...
 
     def handle(
         self,
@@ -258,52 +271,59 @@ class HandleNewDailyAggregate(
         snap: DailyAggregate.Snap,
         obj: DailyAggregate,
     ):
-        # log("INFO")( agg=obj.path)
+        # log("INFO")( agg=obj.id)
 
-        coll = obj.get_parent()
+        g = context.get(Graph)
 
-        dfs, d0, d1 = get_agg_dfs(obj.args, coll)
+        container= obj.get_parent()
 
-        if (
-            snap.first 
-            and snap.last
-        ):
+        dfs, d0, d1 = get_agg_dfs(obj.args, container)
+
+        dfs = dfs + [
+            daily_pl_df(g.get(peer, Daily)) for peer in obj.peers
+        ]
+
+        if snap.first and snap.last:
             if d0 == snap.first and d1 == snap.last:
                 return frozendict().set(
-                    obj.path, (snap, ())
+                    obj.id, (snap, ())
                 )
 
         res = self.agg_dfs(d0, d1, *dfs)
 
         df = None
 
-        # log("INFO")( store=obj.path)
+        # log("INFO")( store=obj.id)
 
         snaps = frozendict()
 
         if isinstance(res, pl.DataFrame):
             df = res
-            assert len(df) == (
-                (d1 - d0).days + 1
-            ), (df, d1, d0)
+            assert len(df) == ((d1 - d0).days + 1), (
+                df,
+                d1,
+                d0,
+            )
 
             v = self.set_value_from_df(
                 obj,
                 df,
                 VALUE,
-                t = self.key_value_type(obj),
+                t=self.key_value_type(obj),
             )
         elif isinstance(res, tuple):
             df, k_is = res
-            
-            assert len(df) == (
-                (d1 - d0).days + 1
-            ), (df, d1, d0)
+
+            assert len(df) == ((d1 - d0).days + 1), (
+                df,
+                d1,
+                d0,
+            )
 
             _snaps = {}
 
             def store_child(
-                k_i: str | int | tuple[str, int]
+                k_i: str | int | tuple[str, int],
             ):
                 if isinstance(k_i, str):
                     k = col = k_i
@@ -316,9 +336,10 @@ class HandleNewDailyAggregate(
                     k, i = k_i
                     col = f"{k}_{i}"
                 child = obj.deriv(
-                    key=k, index=i,
+                    key=k,
+                    index=i,
                 )
-                
+
                 context.get().with_obj(child, force=True)
 
                 child_snap = child.get_snap(Daily.Snap)
@@ -326,15 +347,15 @@ class HandleNewDailyAggregate(
                     child,
                     df,
                     col,
-                    t = self.key_value_type(child),
+                    t=self.key_value_type(child),
                 )
-                _snaps[child.path] = (
+                _snaps[child.id] = (
                     replace(
                         child_snap,
                         first=d0,
                         last=d1,
                     ),
-                    ValueUpdate(child.path),
+                    ValueUpdate(child.id),
                 )
 
             # TODO: fold / accumulate
@@ -346,7 +367,7 @@ class HandleNewDailyAggregate(
         else:
             raise ValueError((type(res), self))
 
-        # log(agg=obj.path, mess="setting snap")
+        # log(agg=obj.id, mess="setting snap")
 
         return ValueUpdate.from_snap(
             self.update_snap_from_df(
@@ -355,14 +376,12 @@ class HandleNewDailyAggregate(
                 d_min=d0,
                 d_max=d1,
             ),
-            into=snaps
+            into=snaps,
         )
 
-@dataclass(frozen=True)
-class HandleNewDailyHSum(
-    HandleNewDailyAggregate
-):
 
+@dataclass(frozen=True)
+class HandleNewDailyHSum(HandleNewDailyAggregate):
     def agg_dfs(
         self,
         first: dt.date,
@@ -373,20 +392,19 @@ class HandleNewDailyHSum(
             pl.col("date"),
             h_sum(
                 [
-                    k for k in df.schema.keys()
+                    k
+                    for k in df.schema.keys()
                     if k != "date"
                 ],
                 propagate_nulls=False,
             )
             .alias(VALUE)
-            .fill_nan(None)
+            .fill_nan(None),
         )
-    
-@dataclass(frozen=True)
-class HandleNewDailyHGross(
-    HandleNewDailyAggregate
-):
 
+
+@dataclass(frozen=True)
+class HandleNewDailyHGross(HandleNewDailyAggregate):
     def agg_dfs(
         self,
         first: dt.date,
@@ -397,22 +415,21 @@ class HandleNewDailyHGross(
             pl.col("date"),
             h_sum(
                 [
-                    k for k in df.schema.keys()
+                    k
+                    for k in df.schema.keys()
                     if k != "date"
                 ],
-                f = lambda e: e.abs().fill_null(0.),
+                f=lambda e: e.abs().fill_null(0.0),
                 propagate_nulls=False,
             )
             .alias(VALUE)
-            .fill_nan(None)
+            .fill_nan(None),
         )
         return df
-    
-@dataclass(frozen=True)
-class HandleNewDailyHProd(
-    HandleNewDailyAggregate
-):
 
+
+@dataclass(frozen=True)
+class HandleNewDailyHProd(HandleNewDailyAggregate):
     def agg_dfs(
         self,
         first: dt.date,
@@ -423,16 +440,18 @@ class HandleNewDailyHProd(
             pl.col("date"),
             h_prod(
                 [
-                    k for k in df.schema.keys()
+                    k
+                    for k in df.schema.keys()
                     if k != "date"
                 ],
                 propagate_nulls=True,
             )
             .alias(VALUE)
-            .fill_nan(None)
+            .fill_nan(None),
         )
         return df
-    
+
+
 def h_sum(
     ks: list[str],
     propagate_nulls: bool = True,
@@ -440,23 +459,27 @@ def h_sum(
 ):
     return (
         pl.when(
-            pl.all_horizontal([
-                pl.col(k).is_null()
-                for k in ks
-            ])
+            pl.all_horizontal(
+                [pl.col(k).is_null() for k in ks]
+            )
             if not propagate_nulls
-            else pl.any_horizontal([
-                pl.col(k).is_null()
-                for k in ks
-            ])
+            else pl.any_horizontal(
+                [pl.col(k).is_null() for k in ks]
+            )
         )
         .then(None)
-        .otherwise(pl.sum_horizontal(*[
-            pl.col(k) if f is None
-            else pl.col(k).pipe(f)
-            for k in ks
-        ]))
+        .otherwise(
+            pl.sum_horizontal(
+                *[
+                    pl.col(k)
+                    if f is None
+                    else pl.col(k).pipe(f)
+                    for k in ks
+                ]
+            )
+        )
     )
+
 
 def h_prod(
     ks: list[str],
@@ -465,35 +488,32 @@ def h_prod(
 ):
     return (
         pl.when(
-            pl.all_horizontal([
-                pl.col(k).is_null()
-                for k in ks
-            ])
+            pl.all_horizontal(
+                [pl.col(k).is_null() for k in ks]
+            )
             if not propagate_nulls
-            else pl.any_horizontal([
-                pl.col(k).is_null()
-                for k in ks
-            ])
+            else pl.any_horizontal(
+                [pl.col(k).is_null() for k in ks]
+            )
         )
         .then(None)
         .otherwise(
             pl.fold(
-                acc=pl.lit(1.),
-                function=lambda acc, x: acc * x, 
+                acc=pl.lit(1.0),
+                function=lambda acc, x: acc * x,
                 exprs=[
                     pl.col(k).fill_nan(None)
                     if f is None
                     else pl.col(k).fill_nan(None).pipe(f)
                     for k in ks
-                ]
+                ],
             )
         )
     )
 
+
 @dataclass(frozen=True)
-class HandleNewDailyHDot(
-    HandleNewDailyAggregate
-):
+class HandleNewDailyHDot(HandleNewDailyAggregate):
     dot_groups: int
 
     def agg_dfs(
@@ -507,10 +527,7 @@ class HandleNewDailyHDot(
         d = len(ks) / self.dot_groups
         assert d == int(d), self
         groups = [
-            [
-                ks[int((ii * d) + i)]
-                for ii in range(n)
-            ]
+            [ks[int((ii * d) + i)] for ii in range(n)]
             for i in range(int(d))
         ]
         df = df.select(
@@ -519,7 +536,7 @@ class HandleNewDailyHDot(
                 h_prod(
                     g,
                     propagate_nulls=False,
-                    f = lambda e: e.fill_null(0.)
+                    f=lambda e: e.fill_null(0.0),
                 )
                 .alias(f"{VALUE}_{i}")
                 .fill_nan(None)
@@ -532,15 +549,13 @@ class HandleNewDailyHDot(
                 propagate_nulls=True,
             )
             .alias(VALUE)
-            .fill_nan(None)
+            .fill_nan(None),
         )
         return df
 
 
 @dataclass(frozen=True)
-class HandleNewDailyDDRegime(
-    HandleNewDailyAggregate
-):
+class HandleNewDailyDDRegime(HandleNewDailyAggregate):
     threshold: float
     span: int
     window: int
@@ -566,11 +581,11 @@ class HandleNewDailyDDRegime(
             continuous=self.continuous,
         )
 
+
 @dataclass(frozen=True)
-class HandleNewDailyMetricsEWM(
-    HandleNewDailyAggregate
-):
+class HandleNewDailyMetricsEWM(HandleNewDailyAggregate):
     span: float
+
     def agg_dfs(
         self,
         first: dt.date,
@@ -582,10 +597,9 @@ class HandleNewDailyMetricsEWM(
             span=self.span,
         )
 
+
 @dataclass(frozen=True)
-class HandleNewDailyMetricsGrid(
-    HandleNewDailyAggregate
-):
+class HandleNewDailyMetricsGrid(HandleNewDailyAggregate):
     rx_grid_width: float
     re_grid: bool
 
@@ -600,11 +614,10 @@ class HandleNewDailyMetricsGrid(
             rx_grid_width=self.rx_grid_width,
             re_grid=self.re_grid,
         )
-    
+
+
 @dataclass(frozen=True)
-class HandleNewDailyWeightsRank(
-    HandleNewDailyAggregate
-):
+class HandleNewDailyWeightsRank(HandleNewDailyAggregate):
     metric: str
     sample: str | int
     window: float
@@ -628,6 +641,7 @@ class HandleNewDailyWeightsRank(
             top=self.top,
         )
 
+
 HANDLERS = {
     "hsum": HandleNewDailyHSum,
     "hdot": HandleNewDailyHDot,
@@ -639,11 +653,11 @@ HANDLERS = {
     "weights_rank": HandleNewDailyWeightsRank,
 }
 
+
 def agg_handler(
     agg: str,
-    params: frozendict[
-        str, bool | int | float | None
-    ] | None = None,
+    params: frozendict[str, bool | int | float | None]
+    | None = None,
 ) -> HandleNewDailyAggregate:
     cls = assert_is(HANDLERS.get(agg))
     if params is None:
@@ -653,9 +667,10 @@ def agg_handler(
     except:
         raise ValueError((cls, agg, params))
 
+
 __all__ = [
     "DailyAggregate",
     "DailyAggregateDeriv",
     "get_agg_dfs",
-    "agg_handler"
+    "agg_handler",
 ]

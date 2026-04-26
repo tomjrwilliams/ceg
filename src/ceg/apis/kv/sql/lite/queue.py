@@ -25,8 +25,8 @@ from ...core import (
 
 # TODO: env variable
 import os
-TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
 
+TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
 
 
 @dataclass(frozen=True)
@@ -41,12 +41,15 @@ class SQLiteQueueConfig(QueueConfig):
 
 
 ID = TypeVar("ID", bound=int)
-ValI = TypeVar("ValI", bound=bool | int | float | str | bytes)
+ValI = TypeVar(
+    "ValI", bound=bool | int | float | str | bytes
+)
 
 
 @dataclass(frozen=True)
 class SQLiteQueue(Queue[ID, DtI, ValI, DtO, ValO]):
     """Queue[ID, DtI, ValI, DtO, ValO]"""
+
     config: SQLiteQueueConfig
     type_id: Type[ID]
     type_dt_i: Type[DtI]
@@ -65,7 +68,7 @@ class SQLiteQueue(Queue[ID, DtI, ValI, DtO, ValO]):
             self.config.name,
             primary_key="id",
             val=self.type_val_i,
-            dt=self.type_dt_i
+            dt=self.type_dt_i,
         ).create(self.config.db)
 
         # TODO: if exists, assert types match!
@@ -81,7 +84,7 @@ class SQLiteQueue(Queue[ID, DtI, ValI, DtO, ValO]):
         )
 
     def slice(
-        self, 
+        self,
         n: int = 1,
         where_i: list[tuple[Comp, ID]] | None = None,
         where_dt: list[tuple[Comp, DtI]] | None = None,
@@ -99,7 +102,7 @@ class SQLiteQueue(Queue[ID, DtI, ValI, DtO, ValO]):
         return cast(list[ValI], list(v))
 
     def islice(
-        self, 
+        self,
         n: int = 1,
         where_i: list[tuple[Comp, ID]] | None = None,
         where_dt: list[tuple[Comp, DtI]] | None = None,
@@ -110,14 +113,18 @@ class SQLiteQueue(Queue[ID, DtI, ValI, DtO, ValO]):
         assert table is not None, self
 
         where = (
-            [] if where_i is None else [
+            []
+            if where_i is None
+            else [
                 getattr(sqlite.where, comp)(
                     table.col("id"), i
                 )
                 for comp, i in where_i
             ]
         ) + (
-            [] if where_dt is None else [
+            []
+            if where_dt is None
+            else [
                 getattr(sqlite.where, comp)(
                     table.col("dt"), dt
                 )
@@ -129,12 +136,12 @@ class SQLiteQueue(Queue[ID, DtI, ValI, DtO, ValO]):
             [
                 table.col("id"),
                 table.col("val"),
-                table.col("dt")
+                table.col("dt"),
             ],
             where=where,
             order=getattr(
                 sqlite.order, "asc" if head else "desc"
-            )(table.col("id"))
+            )(table.col("id")),
         )
 
         if not len(res):
@@ -180,7 +187,7 @@ class SQLiteQueue(Queue[ID, DtI, ValI, DtO, ValO]):
 @dataclass(frozen=True)
 class ExampleSQLiteQueue(
     ExampleQueue,
-    SQLiteQueue[int, float, int, dt.datetime, float]
+    SQLiteQueue[int, float, int, dt.datetime, float],
 ):
     """
     >>> import time
@@ -215,9 +222,11 @@ class ExampleSQLiteQueue(
     >>> kv.head(n=3, where_i=[("le", 2)])
     [0.0, 1.0]
     """
+
     config: SQLiteQueueConfig = SQLiteQueueConfig(
         db=TEST_DB, name="ExampleQueue"
     )
+
 
 __all__ = [
     "SQLiteQueue",

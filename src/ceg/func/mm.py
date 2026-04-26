@@ -73,7 +73,9 @@ class vs_x_vec(Node.D0_F64):
     def __call__(self, event: Event, graph: Graph):
         vs = list(
             map(
-                lambda v: v.history(graph).last_before(event.t),
+                lambda v: v.history(graph).last_before(
+                    event.t
+                ),
                 self.vs,
             )
         )

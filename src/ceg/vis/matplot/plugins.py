@@ -22,12 +22,13 @@ from .core import Grid_Key
 
 t_slice = slice
 
+
 def unpack_aliases_1d_y(
     mark: Continuous_1D | Continuous_2D,
     ref: ceg.Ref.Col | ceg.Ref.Col1D,
     graph: ceg.Graph,
     event: ceg.Event,
-    slice: int | slice | None=None,
+    slice: int | slice | None = None,
     t: str | None = None,
     c: str | None = None,
     label: str | None = None,
@@ -44,9 +45,19 @@ def unpack_aliases_1d_y(
         i_shift = int(abs(shift))
         y_not_nan = y[np.logical_not(y_nan)]
         if shift > 0:
-            y[np.logical_not(y_nan)] = np.concatenate((np.ones(i_shift) * np.NAN, y_not_nan[:-i_shift]))
+            y[np.logical_not(y_nan)] = np.concatenate(
+                (
+                    np.ones(i_shift) * np.NAN,
+                    y_not_nan[:-i_shift],
+                )
+            )
         else:
-            y[np.logical_not(y_nan)] = np.concatenate((y_not_nan[i_shift:], np.ones(i_shift) * np.NAN))
+            y[np.logical_not(y_nan)] = np.concatenate(
+                (
+                    y_not_nan[i_shift:],
+                    np.ones(i_shift) * np.NAN,
+                )
+            )
     if prev is not None:
         y = y[tt >= prev.t]
         tt = tt[tt >= prev.t]
@@ -85,15 +96,20 @@ def unpack_aliases_1d_y(
     #     assert c is None
     return y, x, x2, c
 
+
 def unpack_aliases_1d_x(
     ref: ceg.Ref.Col | ceg.Ref.Col1D,
     graph: ceg.Graph,
     event: ceg.Event,
-    slice: int | slice | None=None,
+    slice: int | slice | None = None,
     shift: float | None = None,
     prev: ceg.Event | None = None,
 ):
-    where = None if prev is None else dict(t=lambda t: t>=prev.t)
+    where = (
+        None
+        if prev is None
+        else dict(t=lambda t: t >= prev.t)
+    )
     x = graph.select(ref, at=event, where=where)
     if isinstance(slice, (int, t_slice)):
         x = x[slice]
@@ -103,11 +119,12 @@ def unpack_aliases_1d_x(
         x = x[-1]
     return x
 
+
 def unpack_aliases_1d_c(
     ref: ceg.Ref.Col | ceg.Ref.Col1D,
     graph: ceg.Graph,
     event: ceg.Event,
-    slice: int | slice | None=None,
+    slice: int | slice | None = None,
     shift: float | None = None,
     prev: ceg.Event | None = None,
 ):
@@ -121,6 +138,7 @@ def unpack_aliases_1d_c(
     elif isinstance(ref, ceg.Ref.Col1D):
         x = x[-1]
     return x
+
 
 def unpack_aliases_1d_xyc(
     mark: Continuous_1D,
@@ -141,21 +159,28 @@ def unpack_aliases_1d_xyc(
         ref, kwargs = aliases[mark.y]
         y, x, x2, c = unpack_aliases_1d_y(
             mark,
-            ref, # type: ignore
-            graph, event, prev=prev,**kwargs
+            ref,  # type: ignore
+            graph,
+            event,
+            prev=prev,
+            **kwargs,
         )
 
     if mark.y2 is not None and mark.y2 in aliases:
         ref, kwargs = aliases[mark.y2]
         y2, x, x2, c = unpack_aliases_1d_y(
             mark,
-            ref, # type: ignore
-            graph, event, prev=prev, **kwargs
+            ref,  # type: ignore
+            graph,
+            event,
+            prev=prev,
+            **kwargs,
         )
 
     assert y is not None or y2 is not None, aliases
 
     return x, y, x2, y2, c
+
 
 def unpack_aliases_continuous_1d(
     mark: Continuous_1D,
@@ -170,25 +195,45 @@ def unpack_aliases_continuous_1d(
         mark, aliases, graph, event, prev=prev
     )
 
-    if x is None and mark.x is not None and mark.x in aliases:
+    if (
+        x is None
+        and mark.x is not None
+        and mark.x in aliases
+    ):
         ref, kwargs = aliases[mark.x]
         x = unpack_aliases_1d_x(
             ref,  # type: ignore
-            graph, event, prev=prev, **kwargs
+            graph,
+            event,
+            prev=prev,
+            **kwargs,
         )
 
-    if x2 is None and mark.x2 is not None and mark.x2 in aliases:
+    if (
+        x2 is None
+        and mark.x2 is not None
+        and mark.x2 in aliases
+    ):
         ref, kwargs = aliases[mark.x2]
         x2 = unpack_aliases_1d_x(
             ref,  # type: ignore
-            graph, event, prev=prev, **kwargs)
+            graph,
+            event,
+            prev=prev,
+            **kwargs,
+        )
 
-    if c is None and mark.c is not None and mark.c in aliases:
+    if (
+        c is None
+        and mark.c is not None
+        and mark.c in aliases
+    ):
         ref, kwargs = aliases[mark.c]
         c = unpack_aliases_1d_c(
-            ref, # type: ignore
+            ref,  # type: ignore
             graph,
-            event, prev=prev,
+            event,
+            prev=prev,
             # slice from kwargs?
         )
 
@@ -200,6 +245,7 @@ def unpack_aliases_continuous_1d(
         c=c,
         # x_label, etc.
     )
+
 
 def unpack_aliases_2d_yc(
     mark: Continuous_2D,
@@ -221,8 +267,11 @@ def unpack_aliases_2d_yc(
         for ref, kwargs in aliases[mark.y]:
             y_, _, _, c_ = unpack_aliases_1d_y(
                 mark,
-                ref, # type: ignore
-                graph, event, prev=prev, **kwargs
+                ref,  # type: ignore
+                graph,
+                event,
+                prev=prev,
+                **kwargs,
             )
             y.append(y_)
             if c_ is not None:
@@ -232,8 +281,11 @@ def unpack_aliases_2d_yc(
         for ref, kwargs in aliases[mark.y2]:
             y2_, _, _, c_ = unpack_aliases_1d_y(
                 mark,
-                ref, # type: ignore
-                graph, event, prev=prev, **kwargs
+                ref,  # type: ignore
+                graph,
+                event,
+                prev=prev,
+                **kwargs,
             )
             y2.append(y2_)
             if c_ is not None:
@@ -248,48 +300,67 @@ def unpack_aliases_2d_yc(
 
     return y, y2, c
 
+
 REF_KWARGS = tuple[ceg.Ref.Any, frozendict]
+
 
 def unpack_aliases_continuous_2d(
     mark: Continuous_2D,
-    aliases: frozendict[
-        str, REF_KWARGS | list[REF_KWARGS]
-    ],
+    aliases: frozendict[str, REF_KWARGS | list[REF_KWARGS]],
     graph: ceg.Graph,
     event: ceg.Event,
     prev: ceg.Event | None = None,
 ):
     y, y2, c = unpack_aliases_2d_yc(
         mark,
-        aliases, # type: ignore
-        graph, event, prev=prev, 
+        aliases,  # type: ignore
+        graph,
+        event,
+        prev=prev,
     )
 
     x = None
     x2 = None
 
-    if x is None and mark.x is not None and mark.x in aliases:
+    if (
+        x is None
+        and mark.x is not None
+        and mark.x in aliases
+    ):
         ref, kwargs = aliases[mark.x]
         x = unpack_aliases_1d_x(
             ref,  # type: ignore
-            graph, event, prev=prev,
-            **kwargs # type: ignore
+            graph,
+            event,
+            prev=prev,
+            **kwargs,  # type: ignore
         )
 
-    if x2 is None and mark.x2 is not None and mark.x2 in aliases:
+    if (
+        x2 is None
+        and mark.x2 is not None
+        and mark.x2 in aliases
+    ):
         ref, kwargs = aliases[mark.x2]
         x2 = unpack_aliases_1d_x(
             ref,  # type: ignore
-            graph, event, prev=prev,
-            **kwargs # type: ignore
+            graph,
+            event,
+            prev=prev,
+            **kwargs,  # type: ignore
         )
 
-    if c is None and mark.c is not None and mark.c in aliases:
+    if (
+        c is None
+        and mark.c is not None
+        and mark.c in aliases
+    ):
         ref, kwargs = aliases[mark.c]
         c = unpack_aliases_1d_c(
-            ref, # type: ignore
+            ref,  # type: ignore
             graph,
-            event, prev=prev,
+            event,
+            prev=prev,
             # slice from kwargs?
         )
 
@@ -301,6 +372,7 @@ def unpack_aliases_continuous_2d(
         c=c,
         # x_label, etc.
     )
+
 
 #  ------------------
 
@@ -315,21 +387,21 @@ class Continuous_1D_Kw(NamedTuple):
     x2: str | None = None
     y2: str | None = None
     c: str | None = None
-    slice: int | None = None # or slice
+    slice: int | None = None  # or slice
     colors: Optional[core.Color | core.Colors] = None
 
-class Continuous_1D(Continuous_1D_Kw, ceg.Plugin.Aliased):
 
+class Continuous_1D(Continuous_1D_Kw, ceg.Plugin.Aliased):
     @classmethod
     def new(
         cls,
-        grid: Grid_Key, # needs all plots already added
+        grid: Grid_Key,  # needs all plots already added
         axis: str,
         scope: ceg.Aliases | None = None,
         figure: Optional[str] = None,
         # x / y etc. refer to aliases
         x: Optional[str] = None,
-        y: Optional[str] = None, # label for series
+        y: Optional[str] = None,  # label for series
         x2: Optional[str] = None,
         y2: Optional[str] = None,
         c: Optional[str] = None,
@@ -364,16 +436,20 @@ class Continuous_1D(Continuous_1D_Kw, ceg.Plugin.Aliased):
             scope,
         )
 
-        aliases = frozendict({
-            key: (ref, kwargs)
-            for (ref, key), kwargs 
-            in scope.aliases.items()
-        })
+        aliases = frozendict(
+            {
+                key: (ref, kwargs)
+                for (
+                    ref,
+                    key,
+                ), kwargs in scope.aliases.items()
+            }
+        )
 
         kwargs = unpack_aliases_continuous_1d(
             self,
-            aliases, # type: ignore
-            graph, 
+            aliases,  # type: ignore
+            graph,
             event,
             prev=prev,
         )
@@ -390,11 +466,12 @@ class Continuous_1D(Continuous_1D_Kw, ceg.Plugin.Aliased):
                 # TODO: self.kwargs
             ),
         )
-        
+
         return state.set(self.grid, grid)
 
 
 #  ------------------
+
 
 class Line(Continuous_1D):
     """
@@ -421,6 +498,7 @@ class Line(Continuous_1D):
     def plot(self):
         return core.Line
 
+
 class Scatter(Continuous_1D):
     """
     >>> from ... import fs
@@ -445,7 +523,8 @@ class Scatter(Continuous_1D):
 
     def plot(self):
         return core.Scatter
-        
+
+
 #  ------------------
 
 
@@ -459,23 +538,23 @@ class Continuous_2D_Kw(NamedTuple):
     x2: str | None = None
     y2: str | None = None
     c: str | None = None
-    slice: int | None = None # or slice
+    slice: int | None = None  # or slice
     colors: Optional[core.Color | core.Colors] = None
     window: Optional[float] = None
     consts: frozendict[str, float] | None = None
 
-class Continuous_2D(Continuous_2D_Kw, ceg.Plugin.Aliased):
 
+class Continuous_2D(Continuous_2D_Kw, ceg.Plugin.Aliased):
     @classmethod
     def new(
         cls,
-        grid: Grid_Key, # needs all plots already added
+        grid: Grid_Key,  # needs all plots already added
         axis: str,
         scope: ceg.Aliases | None = None,
         figure: Optional[str] = None,
         # x / y etc. refer to aliases
         x: Optional[str] = None,
-        y: Optional[str] = None, # label for series
+        y: Optional[str] = None,  # label for series
         x2: Optional[str] = None,
         y2: Optional[str] = None,
         c: Optional[str] = None,
@@ -512,14 +591,18 @@ class Continuous_2D(Continuous_2D_Kw, ceg.Plugin.Aliased):
             scope,
         )
 
-        keys = list(set(key for (_, key) in scope.aliases.keys()))
+        keys = list(
+            set(key for (_, key) in scope.aliases.keys())
+        )
         keys_2d = [
-            k for k in keys if k in {self.y, self.y2, self.c}
+            k
+            for k in keys
+            if k in {self.y, self.y2, self.c}
         ]
 
-        aliases: dict[str, REF_KWARGS | list[REF_KWARGS]] = {
-            k: [] for k in keys_2d
-        }
+        aliases: dict[
+            str, REF_KWARGS | list[REF_KWARGS]
+        ] = {k: [] for k in keys_2d}
 
         labels_y = []
         labels_y2 = []
@@ -540,33 +623,38 @@ class Continuous_2D(Continuous_2D_Kw, ceg.Plugin.Aliased):
 
         kwargs = unpack_aliases_continuous_2d(
             self,
-            frozendict(aliases), # type: ignore
+            frozendict(aliases),  # type: ignore
             graph,
             event,
             prev=prev,
         )
 
         grid: core.Grid = self.grid.get(graph)
-    
+
         kw_y = [dict(label=l) for l in labels_y]
         kw_y2 = [dict(label=l) for l in labels_y2]
-        hidden=[
+        hidden = [
             kw["label"] for kw in kw_y
-        ] # TODO: is being popped in the call below?
+        ]  # TODO: is being popped in the call below?
 
         kws = {"y": kw_y, "y2": kw_y2}
 
         for ykey in ["y", "y2"]:
-            if self.consts is not None and kwargs[ykey] is not None:
+            if (
+                self.consts is not None
+                and kwargs[ykey] is not None
+            ):
                 y_ex = kwargs[ykey][0]
                 for k, v in self.consts.items():
-                    kwargs[ykey].append([
-                        v for _ in y_ex
-                    ])
+                    kwargs[ykey].append([v for _ in y_ex])
                     kws[ykey].append(
-                        dict(label=k, color="black", linestyle=(0, (1, 5)))
+                        dict(
+                            label=k,
+                            color="black",
+                            linestyle=(0, (1, 5)),
+                        )
                     )
-        
+
         y = kwargs.pop("y")
         y2 = kwargs.pop("y2")
 
@@ -582,7 +670,7 @@ class Continuous_2D(Continuous_2D_Kw, ceg.Plugin.Aliased):
                         **kwargs,
                         y=y,
                         colors=self.colors,
-                        kwargs = kws["y"]
+                        kwargs=kws["y"],
                     ),
                 )
             if y2 is not None:
@@ -594,17 +682,18 @@ class Continuous_2D(Continuous_2D_Kw, ceg.Plugin.Aliased):
                         **kwargs,
                         y2=y2,
                         colors=self.colors,
-                        kwargs = kws["y2"],
+                        kwargs=kws["y2"],
                         hidden=hidden,
                     ),
                 )
         except:
             raise ValueError(self)
-        
+
         return state.set(self.grid, grid)
 
 
 #  ------------------
+
 
 class Lines(Continuous_2D):
     """
@@ -631,6 +720,7 @@ class Lines(Continuous_2D):
     def plot(self):
         return core.Lines
 
+
 class Scatters(Continuous_2D):
     """
     >>> from ... import fs
@@ -655,9 +745,10 @@ class Scatters(Continuous_2D):
 
     def plot(self):
         return core.Scatters
-        
+
 
 #  ------------------
+
 
 class Discrete_1D_Kw(NamedTuple):
     scope: ceg.Aliases | None
@@ -669,24 +760,24 @@ class Discrete_1D_Kw(NamedTuple):
     y: str | None = None
     y2: str | None = None
     c: str | None = None
-    slice: int | None = None # or slice
+    slice: int | None = None  # or slice
     colors: Optional[core.Color | core.Colors] = None
     format: str | None = None
 
-class Discrete_1D(Discrete_1D_Kw, ceg.Plugin.Aliased):
 
+class Discrete_1D(Discrete_1D_Kw, ceg.Plugin.Aliased):
     @classmethod
     def new(
         cls,
-        grid: Grid_Key, # needs all plots already added
+        grid: Grid_Key,  # needs all plots already added
         axis: str,
         scope: ceg.Aliases | None = None,
         figure: Optional[str] = None,
         # x / y etc. refer to aliases
         x: Optional[str] = None,
         x2: Optional[str] = None,
-        y: Optional[str] = None, 
-        y2: Optional[str] = None, 
+        y: Optional[str] = None,
+        y2: Optional[str] = None,
         # label for series
         c: Optional[str] = None,
         colors: Optional[core.Color | core.Colors] = None,
@@ -721,14 +812,13 @@ class Discrete_1D(Discrete_1D_Kw, ceg.Plugin.Aliased):
             self,
             scope,
         )
-        
+
         x: list[str] = []
         y: list[float] = []
 
         c = []
 
         for (ref, key), kwargs in scope.aliases.items():
-
             if self.x is not None:
                 ref_x = kwargs[self.x]
             elif self.x2 is not None:
@@ -737,14 +827,16 @@ class Discrete_1D(Discrete_1D_Kw, ceg.Plugin.Aliased):
                 raise ValueError(self)
 
             if isinstance(ref_x, str):
-                v = graph.select(ref, event, t = False)[-1] # type: ignore
+                v = graph.select(ref, event, t=False)[-1]  # type: ignore
                 x.append(ref_x)
                 y.append(v)
             else:
                 assert isinstance(ref, ceg.Ref.Col1D), ref
                 x.extend(ref_x)
                 y.extend(
-                    graph.select(ref, event, t=False)[-1].tolist()
+                    graph.select(ref, event, t=False)[
+                        -1
+                    ].tolist()
                 )
                 # type: ignore
 
@@ -768,15 +860,17 @@ class Discrete_1D(Discrete_1D_Kw, ceg.Plugin.Aliased):
                 # TODO: other kwargs?
             ),
         )
-        
+
         return state.set(self.grid, grid)
 
-class Bar(Discrete_1D):
 
+class Bar(Discrete_1D):
     def plot(self) -> Type[core.Discrete_1D]:
         return core.Bar
 
+
 #  ------------------
+
 
 class Discrete_Pairwise_Kw(NamedTuple):
     scope: ceg.Aliases | None
@@ -786,22 +880,24 @@ class Discrete_Pairwise_Kw(NamedTuple):
     x: str | None = None
     y: str | None = None
     c: str | None = None
-    slice: int | None = None # or slice
+    slice: int | None = None  # or slice
     colors: Optional[core.Color | core.Colors] = None
     format: str | None = None
 
-class Discrete_Pairwise(Discrete_Pairwise_Kw, ceg.Plugin.Aliased):
 
+class Discrete_Pairwise(
+    Discrete_Pairwise_Kw, ceg.Plugin.Aliased
+):
     @classmethod
     def new(
         cls,
-        grid: Grid_Key, # needs all plots already added
+        grid: Grid_Key,  # needs all plots already added
         axis: str,
         scope: ceg.Aliases | None = None,
         figure: Optional[str] = None,
         # x / y etc. refer to aliases
         x: Optional[str] = None,
-        y: Optional[str] = None, # label for series
+        y: Optional[str] = None,  # label for series
         c: Optional[str] = None,
         colors: Optional[core.Color | core.Colors] = None,
         format: str | None = None,
@@ -847,7 +943,9 @@ class Discrete_Pairwise(Discrete_Pairwise_Kw, ceg.Plugin.Aliased):
             assert self.y is not None, self
             y.append(kwargs[self.y])
 
-            v = graph.select(ref, event, t = False, i=-1, null=False) # type: ignore
+            v = graph.select(
+                ref, event, t=False, i=-1, null=False
+            )  # type: ignore
             c.append(v)
 
         grid: core.Grid = self.grid.get(graph)
@@ -864,12 +962,13 @@ class Discrete_Pairwise(Discrete_Pairwise_Kw, ceg.Plugin.Aliased):
                 # TODO: other kwargs?
             ),
         )
-        
+
         return state.set(self.grid, grid)
 
-class Heatmap(Discrete_Pairwise):
 
+class Heatmap(Discrete_Pairwise):
     def plot(self) -> Type[core.Discrete_Pairwise]:
         return core.Rectangle
+
 
 #  ------------------

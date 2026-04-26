@@ -38,7 +38,7 @@ def lines(
         .with_universe(data.bars.UNIVERSE)
         .with_functions(
             cast(
-                app.model.Collection,
+                app.model.Container,
                 frozendict(
                     {
                         "date": func.dates.daily.loop,

@@ -36,6 +36,7 @@ from .....engine import *
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class CalDailyPattern:
     n: int
@@ -45,6 +46,7 @@ class CalDailyPattern:
     def path(self):
         return f"{self.freq}{self.n}"
 
+
 @dataclass(frozen=True)
 class CalDailyRegular(
     Daily,
@@ -52,14 +54,16 @@ class CalDailyRegular(
     parent: Project | str | None
 
     pattern: CalDailyPattern
-    
+
     version: int = 0
     type: Literal["CalDailyRegular"] = "CalDailyRegular"
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["CalDailyRegularSnap"] = "CalDailyRegularSnap"
-    
+        type: Literal["CalDailyRegularSnap"] = (
+            "CalDailyRegularSnap"
+        )
+
     @classmethod
     def new(
         cls,
@@ -68,21 +72,19 @@ class CalDailyRegular(
         parent: Project | None = None,
         # TODO: then
     ):
-        pattern=CalDailyPattern(
-            n=n,
-            freq=freq
-        )
+        pattern = CalDailyPattern(n=n, freq=freq)
         return cls(
-            path=cls.build_path(parent, pattern.path()),
+            id=cls.build_id(parent, pattern.id()),
             parent=parent,
-            pattern=pattern
+            pattern=pattern,
         )
 
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ObjectChange):
-            assert self.path == event.obj, (self, event)
+            assert self.id == event.obj, (self, event)
             return HandleNewCalDailyRegular()
         raise ValueError((self, event))
+
 
 @dataclass(frozen=True)
 class HandleUpdateCalDailyRegular(Handler):
@@ -97,6 +99,7 @@ class HandleUpdateCalDailyRegular(Handler):
         # if after snap.last, get and append
         return
 
+
 @dataclass(frozen=True)
 class HandleNewCalDailyRegular(Handler):
     def handle(
@@ -106,7 +109,7 @@ class HandleNewCalDailyRegular(Handler):
         obj: CalDailyRegular,
     ):
         pattern = obj.pattern
-    
+
         raise ValueError(self)
         d_min, d_max = None
 
@@ -122,10 +125,12 @@ class HandleNewCalDailyRegular(Handler):
             into=frozendict(),
         )
 
+
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
 # if backend type / loc change, copy
 # else, throw
+
 
 #  ------------------
 @dataclass(frozen=True)
@@ -133,7 +138,10 @@ class HasCalDailyRegularParent(Object):
     parent: CalDailyRegular | str
 
     def get_parent(self) -> CalDailyRegular:
-        return context.get().get(self.parent, CalDailyRegular)
+        return context.get().get(
+            self.parent, CalDailyRegular
+        )
+
 
 #  ------------------
 

@@ -1,35 +1,38 @@
-
 from __future__ import annotations
 from typing import overload
 import numpy as np
 from .types import *
 from . import State
 
+
 def concat_empty(incr: int, v: np.ndarray, axis: int = 0):
-    shape = tuple([
-        d if i != axis else incr
-        for i, d in enumerate(v.shape)
-    ])
+    shape = tuple(
+        [
+            d if i != axis else incr
+            for i, d in enumerate(v.shape)
+        ]
+    )
     return np.concat(
         (v, np.zeros(shape, v.dtype) * np.nan), axis=axis
     )
+
 
 @dataclass(frozen=True)
 class Results:
     fp: str
     n_agents: int
     n_products: int
-    technologies: F64_3D # products, products
-    rels: F64_3D # agents, agents
-    functions: F64_3D # agents, products
-    prices: F64_3D # agents, products
-    inventory: F64_3D # agents, products
-    inflows: F64_3D # agents, products
-    outflows: F64_3D # agents, products
-    production: F64_3D # agents, products
-    orders: F64_4D # products, agents, agents
-    deliveries: F64_4D # products, agents, agents
-    cash: F64_2D # agents
+    technologies: F64_3D  # products, products
+    rels: F64_3D  # agents, agents
+    functions: F64_3D  # agents, products
+    prices: F64_3D  # agents, products
+    inventory: F64_3D  # agents, products
+    inflows: F64_3D  # agents, products
+    outflows: F64_3D  # agents, products
+    production: F64_3D  # agents, products
+    orders: F64_4D  # products, agents, agents
+    deliveries: F64_4D  # products, agents, agents
+    cash: F64_2D  # agents
 
     t: int = 0
 
@@ -45,7 +48,7 @@ class Results:
         n_products: int,
         batch: int | None = None,
         length: int | None = None,
-        fallback: int = 128, # TODO: rename better
+        fallback: int = 128,  # TODO: rename better
     ) -> Results:
         A = n_agents
         P = n_products
@@ -56,38 +59,43 @@ class Results:
             T = batch
         else:
             T = fallback
-            
+
         return Results(
             # TODO: given state, just expand_dims
             fp=fp,
             n_agents=n_agents,
             n_products=n_products,
             #
-            technologies=np.zeros((T, P, P), float)* np.nan,
-            rels=np.zeros((T, A, A), float)* np.nan,
-            functions=np.zeros((T, A, P), float)* np.nan,
-            prices=np.zeros((T, A, P), float)* np.nan,
-            inventory=np.zeros((T, A, P), float)* np.nan,
-            inflows=np.zeros((T, A, P), float)* np.nan,
-            outflows=np.zeros((T, A, P), float)* np.nan,
-            production=np.zeros((T, A, P), float)* np.nan,
-            orders=np.zeros((T, P, A, A), float)* np.nan,
-            deliveries=np.zeros((T, P, A, A), float)* np.nan,
-            cash=np.zeros((T, A), float)* np.nan,
+            technologies=np.zeros((T, P, P), float)
+            * np.nan,
+            rels=np.zeros((T, A, A), float) * np.nan,
+            functions=np.zeros((T, A, P), float) * np.nan,
+            prices=np.zeros((T, A, P), float) * np.nan,
+            inventory=np.zeros((T, A, P), float) * np.nan,
+            inflows=np.zeros((T, A, P), float) * np.nan,
+            outflows=np.zeros((T, A, P), float) * np.nan,
+            production=np.zeros((T, A, P), float) * np.nan,
+            orders=np.zeros((T, P, A, A), float) * np.nan,
+            deliveries=np.zeros((T, P, A, A), float)
+            * np.nan,
+            cash=np.zeros((T, A), float) * np.nan,
             #
             batch=batch,
             length=length,
         )
 
-    def save(self, compressed=False) -> Results: 
+    def save(self, compressed=False) -> Results:
         f = np.savez_compressed if compressed else np.savez
         f(
             self.fp,
-            shape=np.array([
-                self.n_agents,
-                self.n_products,
-                self.t,
-            ], int),
+            shape=np.array(
+                [
+                    self.n_agents,
+                    self.n_products,
+                    self.t,
+                ],
+                int,
+            ),
             technologies=self.technologies,
             rels=self.rels,
             functions=self.functions,
@@ -107,12 +115,12 @@ class Results:
 
         # TODO: incremental save if batch
         # if self.batch is not None:
-            # row = (state.t + 1) % self.batch
-            # if row == 0:
-            #     self = self.save(state)
-            # else:
-            #     row -= 1
-            
+        # row = (state.t + 1) % self.batch
+        # if row == 0:
+        #     self = self.save(state)
+        # else:
+        #     row -= 1
+
         if row + 1 > self.cash.shape[0]:
             self = self.resize()
 
@@ -128,7 +136,7 @@ class Results:
         self.deliveries[row] = state.deliveries
         self.cash[row] = state.cash
 
-        return replace(self, t = state.t)
+        return replace(self, t=state.t)
 
     def resize(self) -> Results:
         if self.batch is None:
@@ -140,15 +148,11 @@ class Results:
             technologies=concat_empty(
                 incr, self.technologies, axis=0
             ),
-            rels=concat_empty(
-                incr, self.rels, axis=0
-            ),
+            rels=concat_empty(incr, self.rels, axis=0),
             functions=concat_empty(
                 incr, self.functions, axis=0
             ),
-            prices=concat_empty(
-                incr, self.prices, axis=0
-            ),
+            prices=concat_empty(incr, self.prices, axis=0),
             inventory=concat_empty(
                 incr, self.inventory, axis=0
             ),
@@ -161,20 +165,18 @@ class Results:
             production=concat_empty(
                 incr, self.production, axis=0
             ),
-            orders=concat_empty(
-                incr, self.orders, axis=0
-            ),
+            orders=concat_empty(incr, self.orders, axis=0),
             deliveries=concat_empty(
                 incr, self.deliveries, axis=0
             ),
-            cash=concat_empty(
-                incr, self.cash, axis=0
-            ),
+            cash=concat_empty(incr, self.cash, axis=0),
         )
 
     @overload
     @classmethod
-    def load(cls, fp: str, *, technologies: bool) -> F64_3D: ...
+    def load(
+        cls, fp: str, *, technologies: bool
+    ) -> F64_3D: ...
 
     @overload
     @classmethod
@@ -182,7 +184,9 @@ class Results:
 
     @overload
     @classmethod
-    def load(cls, fp: str, *, functions: bool) -> F64_3D: ...
+    def load(
+        cls, fp: str, *, functions: bool
+    ) -> F64_3D: ...
 
     @overload
     @classmethod
@@ -190,7 +194,9 @@ class Results:
 
     @overload
     @classmethod
-    def load(cls, fp: str, *, inventory: bool) -> F64_3D: ...
+    def load(
+        cls, fp: str, *, inventory: bool
+    ) -> F64_3D: ...
 
     @overload
     @classmethod
@@ -202,7 +208,9 @@ class Results:
 
     @overload
     @classmethod
-    def load(cls, fp: str, *, production: bool) -> F64_3D: ...
+    def load(
+        cls, fp: str, *, production: bool
+    ) -> F64_3D: ...
 
     @overload
     @classmethod
@@ -210,7 +218,9 @@ class Results:
 
     @overload
     @classmethod
-    def load(cls, fp: str, *, deliveries: bool) -> F64_4D: ...
+    def load(
+        cls, fp: str, *, deliveries: bool
+    ) -> F64_4D: ...
 
     @overload
     @classmethod
@@ -230,11 +240,11 @@ class Results:
                 return blob[key]
 
             shape = blob["shape"]
-            
+
             return Results(
                 fp=fp,
-                n_agents = int(shape[0]),
-                n_products = int(shape[1]),
+                n_agents=int(shape[0]),
+                n_products=int(shape[1]),
                 technologies=blob["technologies"],
                 rels=blob["rels"],
                 functions=blob["functions"],
@@ -246,7 +256,7 @@ class Results:
                 orders=blob["orders"],
                 deliveries=blob["deliveries"],
                 cash=blob["cash"],
-                t=int(shape[2])
+                t=int(shape[2]),
             )
 
     def update(
@@ -261,6 +271,7 @@ class Results:
             batch=self.batch if batch == -1 else batch,
             length=self.length if length == -1 else length,
         )
+
 
 # TODO:
 # utils to reshape from a single row to the original tensor

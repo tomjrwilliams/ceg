@@ -1,6 +1,7 @@
 import os
 from typing import cast, TYPE_CHECKING, ClassVar
 import itertools
+
 if TYPE_CHECKING:
     from dataclasses import dataclass
 else:
@@ -34,23 +35,22 @@ SPAN_VOL_SCALE = [
 ]
 SPAN_VOL_SIG = [
     # 16,
-    48, 
+    48,
     # 48 * 4
 ]
 
 SPAN_RATIO = [
-    1.5, 
+    1.5,
     # 3
 ]
 
+
 def eosc(fast: int, ratio: float = 1.5, vol: int = 48):
-    return strat.SignalOsc(
-        fast, int(fast * ratio), vol
-    )
+    return strat.SignalOsc(fast, int(fast * ratio), vol)
+
 
 @dataclass(frozen=True)
 class Project_002(strat.StratExplorer):
-    
     def product_symbol_signals(self):
         ES_TN = [
             ("ETF", "SPY", None),
@@ -86,33 +86,29 @@ class Project_002(strat.StratExplorer):
         WITH_UI = bool(os.environ.get("STREAMLIT"))
         # TODO: root, test etc. from env vars
 
-        self = (
-            Project_002(root=root)
-            .with_config(explorer.ExplorerConfig(PROJECT))
+        self = Project_002(root=root).with_config(
+            explorer.ExplorerConfig(PROJECT)
         )
         project = engine.Project.new(PROJECT)
 
         i = 0
-        for (
-            name, product_symbol_signals
-        ), (
-            suff, rebal
+        for (name, product_symbol_signals), (
+            suff,
+            rebal,
         ) in itertools.product(
             self.product_symbol_signals(),
-            self.rebal_variants()
+            self.rebal_variants(),
         ):
             page = f"{PROJECT}-{name}{suff}"
             if target is not None and page != target:
-                log("INFO")( skipping=page)
+                log("INFO")(skipping=page)
                 continue
-            log("INFO")( loading=page)
+            log("INFO")(loading=page)
 
             with engine.context.graph(
-                page, t = strat.StrategyGraph
+                page, t=strat.StrategyGraph
             ):
-                project.set_storage_defaults([
-                    
-                ])
+                project.set_storage_defaults([])
                 univ = strat.Strategies.new(
                     project,
                     f"{page}-strats",
@@ -120,48 +116,49 @@ class Project_002(strat.StratExplorer):
                 res = []
                 for params in [
                     strat.Strategy(
-                        asset = strat.AssetConcrete(
+                        asset=strat.AssetConcrete(
                             product,
                             symbol,
                         ),
-                        params = strat.StrategyParams(
-                            scale=strat.ScaleVol(
-                                span=48
-                            ),
+                        params=strat.StrategyParams(
+                            scale=strat.ScaleVol(span=48),
                             signal=signal,
                             rebal=rebal,
-                        )
+                        ),
                     )
-                    for product, symbol, signal
-                    in product_symbol_signals
+                    for product, symbol, signal in product_symbol_signals
                 ]:
                     univ, res = params.bind(
                         univ, strat.Strategies, into=res
                     )
-                
+
                 engine.context.get().with_obj(
                     univ, force=True
                 )
                 # TODO: rescale?
 
-                self = self.with_page(
-                    page,
-                    type="daily",
-                    graph=True,
-                    t=Project_002
-                ).with_perf_table(
-                    res, t=Project_002
-                ).with_rx_graph(
-                    res, t=Project_002
-                # ).with_signal_graph(
-                #     res, t=Project_002
-                ).with_graph(
-                    engine.context.get(),
-                    t=Project_002
+                self = (
+                    self.with_page(
+                        page,
+                        type="daily",
+                        graph=True,
+                        t=Project_002,
+                    )
+                    .with_perf_table(res, t=Project_002)
+                    .with_rx_graph(
+                        res,
+                        t=Project_002,
+                        # ).with_signal_graph(
+                        #     res, t=Project_002
+                    )
+                    .with_graph(
+                        engine.context.get(), t=Project_002
+                    )
                 )
                 if test:
                     return self
                 i += 1
         return self
+
 
 PROJECTS[PROJECT] = Project_002

@@ -1,6 +1,5 @@
-
-
 import os, sys, signal
+
 sys.path.append("./src")
 
 import json
@@ -21,7 +20,7 @@ if __name__ == "__main__":
         # TODO: dev in path?
         app_cache = f"./__local__/apps/{app_name}"
         Path(app_cache).mkdir(exist_ok=True, parents=True)
-    
+
     if len(project_name) == 0:
         exit()
 
@@ -29,7 +28,7 @@ if __name__ == "__main__":
         "TEST_LOGS", f"./__local__/logs/{project_name}.log"
     )
     log_fp = Path(os.environ["TEST_LOGS"])
-    
+
     if log_fp.exists():
         try:
             os.remove(log_fp)
@@ -45,13 +44,13 @@ if __name__ == "__main__":
         __file__, streams=dict(formatter=True)
     )
     PROJECTS = {}
-    Project = ceg.app.dev.PROJECTS[project_name]
-    
+    Project = ceg.app._dev.PROJECTS[project_name]
+
     os.environ["STREAMLIT"] = str(streamlit)
 
     args_fp = Path("./src/ceg/app/dev/ARGS.json")
     if args_fp.exists():
-        with args_fp.open('r') as f:
+        with args_fp.open("r") as f:
             args = json.load(f)
     else:
         args = {}
@@ -59,7 +58,7 @@ if __name__ == "__main__":
     command = args.get("command", None)
 
     if command == "reset":
-        log("INFO")( command="reset")
+        log("INFO")(command="reset")
         ceg.vis.explorer.load_page(
             None, Project, reset=True
         )
@@ -67,18 +66,18 @@ if __name__ == "__main__":
         if streamlit:
             log("INFO")(clearing_cache="streamlit")
             ceg.apis.st.library().cache_data.clear()
-        
+
     if "die" in args:
-        log("INFO")( command="die")
+        log("INFO")(command="die")
         os.kill(os.getpid(), signal.SIGINT)
 
     if streamlit:
-        log("INFO")( running_app=app_name)
+        log("INFO")(running_app=app_name)
         app = ceg.vis.explorer.prepare_app(
             app_name,
             app_cache,
             Project,
-            suffix_root = False,
+            suffix_root=False,
         ).run()
 
 # py -m streamlit run ./src/ceg/app/dev/run.py p001

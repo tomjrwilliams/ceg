@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -46,8 +45,10 @@ class DependencyStatus:
     event: Event
     dep: Dependency
 
+
 # q = self.root.event_key_val(self)
 # history = q.head_with_i(n=-1)
+
 
 def dependency_status(
     obj: Object,
@@ -65,7 +66,7 @@ def dependency_status(
     # for dep in depends:
     #     if not dep.active:
     #         continue
-    #     assert dep.obj == obj.path, (dep, obj)
+    #     assert dep.obj == obj.id, (dep, obj)
     #     target = dep.depends
     #     if target not in targets:
     #         targets[target] = {}
@@ -106,6 +107,7 @@ def dependency_status(
     # TODO: implement
     raise ValueError(obj)
 
+
 # TODO:
 # find objects that dont have snap
 # for each, get deps (or those of what creates - eg. rx has no dep, is created by bt?) pf pos likewise
@@ -117,10 +119,9 @@ def dependency_status(
 
 # ---
 
-def status_report(
-    examples: list[str]
-):
-    
+
+def status_report(examples: list[str]):
+
     # e_q = domain.root.event_key_val()
     # history = e_q.head_with_i(n=-1)
 
@@ -134,7 +135,7 @@ def status_report(
     #         history,
     #     )
     #     print("--")
-    #     print("obj:", obj.path)
+    #     print("obj:", obj.id)
     #     for target, events in deps.items():
     #         print("dep:", target, {
     #             t: len(es)
@@ -142,6 +143,7 @@ def status_report(
     #         })
     # TODO: implement
     raise ValueError()
+
 
 # if name == "forever":
 #     objs = [

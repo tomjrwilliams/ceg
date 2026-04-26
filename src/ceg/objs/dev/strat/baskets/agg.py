@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -50,10 +49,12 @@ from ..domain import *
 
 from .....vis import explorer
 
+
 @overload
 def rank_baskets_dot(
     project: Project,
-    baskets: dict[str, list[Strategy]] | dict[
+    baskets: dict[str, list[Strategy]]
+    | dict[
         str, dict[str, list[Strategy]]
         # NOTE if dict, assume key is weight key
     ],
@@ -67,10 +68,12 @@ def rank_baskets_dot(
     dict[str, Strategy | Basket],
 ]: ...
 
+
 @overload
 def rank_baskets_dot(
     project: Project,
-    baskets: dict[str, list[Strategy]] | dict[
+    baskets: dict[str, list[Strategy]]
+    | dict[
         str, dict[str, list[Strategy]]
         # NOTE if dict, assume key is weight key
     ],
@@ -86,9 +89,11 @@ def rank_baskets_dot(
     dict[str, Strategy | Basket],
 ]: ...
 
+
 def rank_baskets_dot(
     project: Project,
-    baskets: dict[str, list[Strategy]] | dict[
+    baskets: dict[str, list[Strategy]]
+    | dict[
         str, dict[str, list[Strategy]]
         # NOTE if dict, assume key is weight key
     ],
@@ -114,11 +119,11 @@ def rank_baskets_dot(
 
         univ_prefix = project.name
 
-        univ = Strategies.under_project( 
+        univ = Strategies.under_project(
             project,
             f"{name}-rw-panel",
         )
-        univ_rank = Strategies.under_project( 
+        univ_rank = Strategies.under_project(
             project,
             f"{name}-rw",
         )
@@ -126,7 +131,7 @@ def rank_baskets_dot(
         univ_norm = (
             None
             if vol_norm is None
-            else Strategies.under_project( 
+            else Strategies.under_project(
                 project,
                 f"{name}-rw-norm",
             )
@@ -137,14 +142,12 @@ def rank_baskets_dot(
             inds = []
             for strat in strats:
                 univ, i = univ.with_object(
-                    strat.rx(),
-                    t=Strategies
+                    strat.rx(), t=Strategies
                 )
                 inds.append(i)
 
             univ, i_agg = univ.with_agg(
-                tuple(inds),
-                t=Strategies
+                tuple(inds), t=Strategies
             )
             context.get().with_obj(univ, force=True)
         else:
@@ -153,20 +156,17 @@ def rank_baskets_dot(
                 inds_d[weight_key] = []
                 for strat in k_strats:
                     univ, i = univ.with_object(
-                        strat.rx(),
-                        t=Strategies
+                        strat.rx(), t=Strategies
                     )
                     inds_d[weight_key].append(i)
 
         for w_params in rank_params:
             top = w_params["top"]
 
-            weight_key = "_".join(map(
-                param_str, w_params.values()
-            ))
-            mvar_key = (
-                f"{univ_prefix}-{name}-{weight_key}"
+            weight_key = "_".join(
+                map(param_str, w_params.values())
             )
+            mvar_key = f"{univ_prefix}-{name}-{weight_key}"
 
             if isinstance(strats, list):
                 strat_inds = inds
@@ -174,8 +174,7 @@ def rank_baskets_dot(
             else:
                 strat_inds = inds_d[weight_key]
                 univ, i_agg = univ.with_agg(
-                    tuple(strat_inds),
-                    t=Strategies
+                    tuple(strat_inds), t=Strategies
                 )
                 context.get().with_obj(univ, force=True)
                 v_strats = strats[weight_key]
@@ -209,37 +208,36 @@ def rank_baskets_dot(
                     weight_objs[k] = []
                 vws = [
                     DailyAggregateDeriv.new(
-                        weights,
-                        index=i,
-                        key=k
+                        weights, index=i, key=k
                     )
                     for i in range(len(strat_inds))
                 ]
                 v_weights[k] = vws
                 for ii, v_w in enumerate(vws):
-                    weight_objs[k].append((
-                        v_w.path,
-                        f"{mvar_key}_{ii}"
-                    ))
+                    weight_objs[k].append(
+                        (v_w.id, f"{mvar_key}_{ii}")
+                    )
 
                     # TODO: label with params
 
-                context.get().with_objs(
-                    *vws, force=True
-                )
+                context.get().with_objs(*vws, force=True)
 
             dot_sig = SignalFactor(
-                factors = tuple([
-                    assert_is(s.params.signal_path, str)
-                    for s in v_strats
-                ]),
+                factors=tuple(
+                    [
+                        assert_is(s.params.signal_path, str)
+                        for s in v_strats
+                    ]
+                ),
                 key=f"{mvar_key}-dot",
-                weights = (
-                    tuple([
-                        vw.path for vw
-                        in v_weights["weight"]
-                    ]),
-                )
+                weights=(
+                    tuple(
+                        [
+                            vw.id
+                            for vw in v_weights["weight"]
+                        ]
+                    ),
+                ),
             )
 
             uvar = Strategy(
@@ -249,11 +247,11 @@ def rank_baskets_dot(
                     cap=cap,
                     scale=scale,
                     # rebal=... TODO
-                )
+                ),
             )
 
             univ_rank, uvar = uvar.bind(
-                univ_rank, t = Strategies
+                univ_rank, t=Strategies
             )
             context.get().with_obj(univ_rank, force=True)
 
@@ -261,27 +259,31 @@ def rank_baskets_dot(
 
             if vol_norm is not None:
                 assert univ_norm is not None, (
-                    univ_norm, vol_norm
+                    univ_norm,
+                    vol_norm,
                 )
                 mvar_norm = Strategy(
                     asset=AssetSynthetic(
-                        uvar.rx().path,
+                        uvar.rx().id,
                     ),
                     params=StrategyParams(
                         scale=ScaleVol(
                             span=vol_norm,
-                            rx=uvar.rx().path,
+                            rx=uvar.rx().id,
                         ),
                         cap=cap,
                     ),
-                    name=f"{mvar_key}_norm"
+                    name=f"{mvar_key}_norm",
                 )
                 univ_norm, bt_norm = mvar_norm.bind(
-                    univ_norm, Strategies, 
+                    univ_norm,
+                    Strategies,
                 )
                 res_norm[f"{mvar_key}_norm"] = bt_norm
 
-                context.get().with_obj(univ_norm, force=True)
+                context.get().with_obj(
+                    univ_norm, force=True
+                )
 
         univs[name] = univ
         univs_rank[name] = univ_rank
@@ -298,7 +300,8 @@ def rank_baskets_dot(
             # weight_objs
         )
     return univs, univs_rank, res
-    # , weight_objs 
+    # , weight_objs
+
 
 @overload
 def rank_baskets(
@@ -349,7 +352,7 @@ def rank_baskets(
     rank_params: list[dict],
     vol_norm: None = None,
     univ_norm: None = None,
-    ntl_cap: float = 10.,
+    ntl_cap: float = 10.0,
     univ_cap: Strategies | None = None,
     prices: dict[str, Daily] = {},
 ) -> tuple[
@@ -359,6 +362,7 @@ def rank_baskets(
     dict[str, Strategy | Basket],
     dict[str, Strategy | Basket],
 ]: ...
+
 
 @overload
 def rank_baskets(
@@ -373,10 +377,9 @@ def rank_baskets(
     univ_cap: None = None,
     prices: None = None,
 ) -> tuple[
-    Strategies,
-    Strategies,
-    dict[str, Strategy | Basket]
+    Strategies, Strategies, dict[str, Strategy | Basket]
 ]: ...
+
 
 def rank_baskets(
     univ: Strategies,
@@ -400,8 +403,7 @@ def rank_baskets(
         assert len(inds), name
 
         univ, i_agg = univ.with_agg(
-            tuple(inds),
-            t=Strategies
+            tuple(inds), t=Strategies
         )
 
         for w_params in rank_params:
@@ -409,13 +411,10 @@ def rank_baskets(
             if top > len(inds):
                 continue
 
-            weight_key = "_".join(map(
-                param_str,
-                w_params.values()
-            ))
-            mvar_key = (
-                f"{name}-{weight_key}"
+            weight_key = "_".join(
+                map(param_str, w_params.values())
             )
+            mvar_key = f"{name}-{weight_key}"
 
             weights = DailyAggregate.new(
                 univ,
@@ -438,30 +437,25 @@ def rank_baskets(
                     weight_objs[k] = []
                 vws = [
                     DailyAggregateDeriv.new(
-                        weights,
-                        index=i,
-                        key=k
+                        weights, index=i, key=k
                     )
                     for i in range(len(inds))
                 ]
                 v_weights[k] = vws
                 for ii, v_w in enumerate(vws):
-                    weight_objs[k].append((
-                        v_w.path,
-                        f"{mvar_key}_{ii}"
-                    ))
+                    weight_objs[k].append(
+                        (v_w.id, f"{mvar_key}_{ii}")
+                    )
 
                     # TODO: label with params
 
-                context.get().with_objs(
-                    *vws, force=True
-                )
+                context.get().with_objs(*vws, force=True)
 
             uvars = [
                 # replace(
                 #     i_to_params[i],
                 #     weight=WeightFactor(
-                #         vw.path,
+                #         vw.id,
                 #         f"{weight_key}_{ii}"
                 #     )
                 # )
@@ -471,24 +465,21 @@ def rank_baskets(
                     ),
                     params=StrategyParams(
                         signal=SignalFactor(
-                            vw.path,
-                            f"{weight_key}_{ii}"
+                            vw.id, f"{weight_key}_{ii}"
                         )
-                    )
+                    ),
                 )
                 for i, (
-                    ii, vw, 
+                    ii,
+                    vw,
                 ) in zip(
-                    inds,
-                    enumerate(
-                        v_weights["weight"]
-                    )
+                    inds, enumerate(v_weights["weight"])
                 )
             ]
             mvar = Basket(
                 tuple(uvars),
                 params=StrategyParams(),
-                name = mvar_key
+                name=mvar_key,
             )
             univ_rank, bt = mvar.bind(
                 univ_rank,
@@ -499,22 +490,24 @@ def rank_baskets(
 
             if vol_norm is not None:
                 assert univ_norm is not None, (
-                    univ_norm, vol_norm
+                    univ_norm,
+                    vol_norm,
                 )
                 mvar_norm = Strategy(
                     asset=AssetSynthetic(
-                        bt.rx().path,
+                        bt.rx().id,
                     ),
                     params=StrategyParams(
                         scale=ScaleVol(
                             span=vol_norm,
-                            rx=bt.rx().path,
+                            rx=bt.rx().id,
                         ),
                     ),
-                    name=f"{mvar_key}_norm"
+                    name=f"{mvar_key}_norm",
                 )
                 univ_norm, bt_norm = mvar_norm.bind(
-                    univ_norm, Strategies, 
+                    univ_norm,
+                    Strategies,
                 )
                 res_norm[f"{mvar_key}_norm"] = bt_norm
 
@@ -536,9 +529,9 @@ def rank_baskets(
                     univ_rank, bt = bt.with_pfo_ntl(
                         cap=ntl_cap,
                         prices=prices,
-                        t=Strategies
+                        t=Strategies,
                     )
-                
+
                 cap_ratio = DailyPfolioNotionalCap.new(
                     assert_is(bt.ntl), key="gross"
                 )
@@ -548,15 +541,15 @@ def rank_baskets(
 
                 mvar_cap = Strategy(
                     asset=AssetSynthetic(
-                        bt.rx().path,
+                        bt.rx().id,
                     ),
-                    params = StrategyParams(
+                    params=StrategyParams(
                         scale=ScaleFactor(
-                            cap_ratio.path,
+                            cap_ratio.id,
                             key=f"cap-n{ntl_cap}",
                         )
                     ),
-                    name=f"{mvar_key}_cap"
+                    name=f"{mvar_key}_cap",
                 )
                 univ_cap, bt_cap = mvar_cap.bind(
                     univ_cap, Strategies
@@ -593,7 +586,7 @@ def rank_baskets(
             # weight_objs
         )
     return univ, univ_rank, res
-    # , weight_objs 
+    # , weight_objs
 
 
 @overload
@@ -618,6 +611,7 @@ def weight_baskets(
     dict[str, Strategy | Basket],
 ]: ...
 
+
 @overload
 def weight_baskets(
     univ: Strategies,
@@ -638,6 +632,7 @@ def weight_baskets(
     dict[str, Strategy | Basket],
 ]: ...
 
+
 @overload
 def weight_baskets(
     univ: Strategies,
@@ -647,7 +642,7 @@ def weight_baskets(
     weight_params: list[dict],
     vol_norm: None = None,
     univ_norm: None = None,
-    ntl_cap: float = 10.,
+    ntl_cap: float = 10.0,
     univ_cap: Strategies | None = None,
     prices: dict[str, Daily] = {},
 ) -> tuple[
@@ -657,6 +652,7 @@ def weight_baskets(
     dict[str, Strategy | Basket],
     dict[str, Strategy | Basket],
 ]: ...
+
 
 @overload
 def weight_baskets(
@@ -671,10 +667,9 @@ def weight_baskets(
     univ_cap: None = None,
     prices: None = None,
 ) -> tuple[
-    Strategies,
-    Strategies,
-    dict[str, Strategy | Basket]
+    Strategies, Strategies, dict[str, Strategy | Basket]
 ]: ...
+
 
 def weight_baskets(
     univ: Strategies,
@@ -696,24 +691,22 @@ def weight_baskets(
 
     for name, inds in basket_indices.items():
         assert len(inds), name
-            
+
         for w_params in weight_params:
             # top = w_params["top"]
             # if top > len(inds):
             #     continue
 
-            weight_key = "_".join(map(
-                param_str, w_params.values()
-            ))
-            mvar_key = (
-                f"{name}-{weight_key}"
+            weight_key = "_".join(
+                map(param_str, w_params.values())
             )
+            mvar_key = f"{name}-{weight_key}"
             uvars = [
                 Strategy(
                     asset=AssetSynthetic(
                         obj_path(univ.objects[i])
                     ),
-                    params=ps
+                    params=ps,
                 )
                 for i, ps in zip(
                     inds,
@@ -725,7 +718,7 @@ def weight_baskets(
                             for i in inds
                         ],
                         w_params,
-                    )
+                    ),
                 )
             ]
             if len(uvars) == 1:
@@ -734,7 +727,7 @@ def weight_baskets(
                 mvar = Basket(
                     tuple(uvars),
                     params=StrategyParams(),
-                    name = mvar_key
+                    name=mvar_key,
                 )
             univ_weight, bt = mvar.bind(
                 univ_weight,
@@ -746,22 +739,24 @@ def weight_baskets(
 
             if vol_norm is not None:
                 assert univ_norm is not None, (
-                    univ_norm, vol_norm
+                    univ_norm,
+                    vol_norm,
                 )
                 mvar_norm = Strategy(
                     asset=AssetSynthetic(
-                        bt.rx().path,
+                        bt.rx().id,
                     ),
                     params=StrategyParams(
                         scale=ScaleVol(
                             span=vol_norm,
-                            rx=bt.rx().path,
+                            rx=bt.rx().id,
                         ),
                     ),
-                    name=f"{mvar_key}_norm"
+                    name=f"{mvar_key}_norm",
                 )
                 univ_norm, bt_norm = mvar_norm.bind(
-                    univ_norm, Strategies, 
+                    univ_norm,
+                    Strategies,
                 )
                 res_norm[f"{mvar_key}_norm"] = bt_norm
 
@@ -772,7 +767,7 @@ def weight_baskets(
                 prices = assert_is(prices)
 
                 bt = bt.with_pfo()
-                
+
                 if vol_norm is not None:
                     univ_norm, bt = bt.with_pfo_ntl(
                         cap=ntl_cap,
@@ -783,9 +778,9 @@ def weight_baskets(
                     univ_weight, bt = bt.with_pfo_ntl(
                         cap=ntl_cap,
                         prices=prices,
-                        t=Strategies
+                        t=Strategies,
                     )
-                
+
                 cap_ratio = DailyPfolioNotionalCap.new(
                     assert_is(bt.ntl), key="gross"
                 )
@@ -795,22 +790,20 @@ def weight_baskets(
 
                 mvar_cap = Strategy(
                     asset=AssetSynthetic(
-                        bt.rx().path,
+                        bt.rx().id,
                     ),
-                    params = StrategyParams(
+                    params=StrategyParams(
                         scale=ScaleFactor(
-                            cap_ratio.path,
+                            cap_ratio.id,
                             key=f"cap-n{ntl_cap}",
                         )
                     ),
-                    name=f"{mvar_key}_cap"
+                    name=f"{mvar_key}_cap",
                 )
                 univ_cap, bt_cap = mvar_cap.bind(
                     univ_cap, Strategies
                 )
                 res_cap[f"{mvar_key}_cap"] = bt_cap
-
-            
 
     if ntl_cap is not None and vol_norm is not None:
         return (
@@ -842,7 +835,8 @@ def weight_baskets(
             # weight_objs
         )
     return univ, univ_weight, res
-    # , weight_objs 
+    # , weight_objs
+
 
 @dataclass(frozen=True)
 class BasketSpec:
@@ -850,7 +844,7 @@ class BasketSpec:
     vol_norm: int | None = None
     not_cap: float | None = None
     params: tuple[t.frozen.dict, ...] | None = None
-    
+
     @classmethod
     def new(
         cls,
@@ -868,35 +862,29 @@ class BasketSpec:
             vol_norm=vol_norm,
             not_cap=not_cap,
             params=(
-                params if params is None
+                params
+                if params is None
                 else tuple(map(frozendict, params))
             ),
         )
-    
+
     def update(self, **kwargs):
         return replace(self, **kwargs)
 
-    def arg_spec(self) -> tuple[
+    def arg_spec(
+        self,
+    ) -> tuple[
         int | None,
         float | None,
         tuple[frozendict, ...] | None,
     ]:
-        return (
-            self.vol_norm,
-            self.not_cap,
-            self.params
-        )
+        return (self.vol_norm, self.not_cap, self.params)
 
 
 @dataclass(frozen=True)
 class WeightBasket(BasketSpec):
-    
     @classmethod
-    def build_params(
-        cls,
-        rxs: list[Daily],
-        params: dict
-    ):
+    def build_params(cls, rxs: list[Daily], params: dict):
         sig = params.get("signal", None)
         scale = params.get("scale", None)
         cap = params.get("cap", None)
@@ -905,23 +893,30 @@ class WeightBasket(BasketSpec):
         res = []
         for i, rx in enumerate(rxs):
             # TODO: some kind of callable that can use the rx?
-            res.append(StrategyParams(
-                scale=unpack_basket_param(
-                    scale, i, 
-                    TScale # type: ignore
-                ),
-                signal=unpack_basket_param(
-                    sig, i, 
-                    TSignal # type: ignore
-                ),
-                cap=unpack_basket_param(
-                    cap, i, 
-                    TCap # type: ignore
-                ),
-            ))
+            res.append(
+                StrategyParams(
+                    scale=unpack_basket_param(
+                        scale,
+                        i,
+                        TScale,  # type: ignore
+                    ),
+                    signal=unpack_basket_param(
+                        sig,
+                        i,
+                        TSignal,  # type: ignore
+                    ),
+                    cap=unpack_basket_param(
+                        cap,
+                        i,
+                        TCap,  # type: ignore
+                    ),
+                )
+            )
         return res
 
+
 T = TypeVar("T")
+
 
 def unpack_signal_param(
     param: (
@@ -935,7 +930,9 @@ def unpack_signal_param(
     ),
     i: int,
 ):
-    return unpack_basket_param(param, i, TSignal) # type: ignore
+    return unpack_basket_param(param, i, TSignal)  # type: ignore
+
+
 def unpack_scale_param(
     param: (
         TSignal
@@ -948,7 +945,9 @@ def unpack_scale_param(
     ),
     i: int,
 ):
-    return unpack_basket_param(param, i, TScale) # type: ignore
+    return unpack_basket_param(param, i, TScale)  # type: ignore
+
+
 def unpack_cap_param(
     param: (
         TSignal
@@ -961,7 +960,8 @@ def unpack_cap_param(
     ),
     i: int,
 ):
-    return unpack_basket_param(param, i, TCap) # type: ignore
+    return unpack_basket_param(param, i, TCap)  # type: ignore
+
 
 def unpack_basket_param(
     param: (
@@ -974,7 +974,7 @@ def unpack_basket_param(
         | None
     ),
     i: int,
-    t: Type[T]
+    t: Type[T],
 ) -> T | None:
     if param is None:
         return None
@@ -985,15 +985,17 @@ def unpack_basket_param(
         return assert_is(p, t)
     else:
         return assert_is(param, t)
-        
+
 
 @dataclass(frozen=True)
 class RankBasket(BasketSpec):
     pass
 
+
 agg_rank_basket = RankBasket.new
 agg_weight_basket = WeightBasket.new
-    
+
+
 def build_baskets(
     baskets: dict[str, RankBasket | WeightBasket],
     project: Project,
@@ -1003,13 +1005,11 @@ def build_baskets(
     rank_params_default: list[dict],
     weight_params_default: list[dict],
 ):
-    
-    required = set().union(*[
-        b.symbols for b in baskets.values()
-    ])
-    strats: dict[
-        str, Strategy | Basket
-    ] = {
+
+    required = set().union(
+        *[b.symbols for b in baskets.values()]
+    )
+    strats: dict[str, Strategy | Basket] = {
         **cv,
     }
     done = {}
@@ -1018,17 +1018,17 @@ def build_baskets(
     while len(done) < len(baskets):
         n_curr = len(done)
 
-        univ = Strategies.under_project( 
+        univ = Strategies.under_project(
             project,
             f"{univ_prefix}-rx",
             depth=depth,
         )
-        univ_rank = Strategies.under_project( 
+        univ_rank = Strategies.under_project(
             project,
             f"{univ_prefix}-rw",
             depth=depth,
         )
-        univ_weight = Strategies.under_project( 
+        univ_weight = Strategies.under_project(
             project,
             f"{univ_prefix}-w",
             depth=depth,
@@ -1038,9 +1038,7 @@ def build_baskets(
         univ_w_norm: Strategies | None = None
         univ_w_cap: Strategies | None = None
 
-        deriv_indices: dict[
-            str, list[int]
-        ] = {}
+        deriv_indices: dict[str, list[int]] = {}
         rank_arg_specs: dict[
             tuple[
                 int | None,
@@ -1061,22 +1059,22 @@ def build_baskets(
         for b_key, b in baskets.items():
             if b_key in done:
                 continue
-            if any([
-                symbol not in strats
-                for symbol in b.symbols
-            ]):
+            if any(
+                [
+                    symbol not in strats
+                    for symbol in b.symbols
+                ]
+            ):
                 continue
             indices: list[int] = []
             for symbol in b.symbols:
                 univ, i = univ.with_object(
-                    strats[symbol]
-                    .rx(),
-                    t=Strategies
+                    strats[symbol].rx(), t=Strategies
                 )
                 indices.append(i)
-            
+
             deriv_indices[b_key] = indices
-            
+
             if isinstance(b, RankBasket):
                 arg_spec = b.arg_spec()
                 if arg_spec not in rank_arg_specs:
@@ -1089,11 +1087,11 @@ def build_baskets(
                 weight_arg_specs[arg_spec].append(b_key)
             else:
                 raise ValueError(b)
-            
+
         for (
             vol_norm,
             ntl_cap,
-            rank_params
+            rank_params,
         ), b_keys in rank_arg_specs.items():
             #     (
             #     basket_name,
@@ -1101,19 +1099,19 @@ def build_baskets(
             # )
             if vol_norm is not None:
                 if univ_r_norm is None:
-                    univ_r_norm = Strategies.under_project( 
+                    univ_r_norm = Strategies.under_project(
                         project,
                         f"{univ_prefix}-rw-norm",
                         depth=depth,
                     )
             if ntl_cap is not None:
                 if univ_r_cap is None:
-                    univ_r_cap = Strategies.under_project( 
+                    univ_r_cap = Strategies.under_project(
                         project,
                         f"{univ_prefix}-rw-cap",
                         depth=depth,
                     )
-            
+
             if rank_params is None:
                 rank_params = rank_params_default
 
@@ -1121,20 +1119,12 @@ def build_baskets(
 
             b_inds = {
                 b_key: inds
-                for b_key, inds
-                in deriv_indices.items()
+                for b_key, inds in deriv_indices.items()
                 if b_key in b_keys
             }
 
-            if (
-                vol_norm is None
-                and ntl_cap is None
-            ):
-                (
-                    univ,
-                    univ_rank,
-                    b_strats
-                ) = rank_baskets(
+            if vol_norm is None and ntl_cap is None:
+                (univ, univ_rank, b_strats) = rank_baskets(
                     univ,
                     univ_rank,
                     b_inds,
@@ -1146,10 +1136,7 @@ def build_baskets(
                     **strats,
                     **b_strats,
                 }
-            elif (
-                vol_norm is not None
-                and ntl_cap is None
-            ):
+            elif vol_norm is not None and ntl_cap is None:
                 (
                     univ,
                     univ_rank,
@@ -1163,25 +1150,20 @@ def build_baskets(
                     list(map(dict, rank_params)),
                     vol_norm=vol_norm,
                     ntl_cap=ntl_cap,
-                    univ_norm=assert_is(
-                        univ_r_norm
-                    ),
+                    univ_norm=assert_is(univ_r_norm),
                 )
                 strats = {
                     **strats,
                     **b_strats,
                     **b_strats_norm,
                 }
-            elif (
-                vol_norm is None
-                and ntl_cap is not None
-            ):
+            elif vol_norm is None and ntl_cap is not None:
                 (
                     univ,
                     univ_rank,
                     univ_r_cap,
                     b_strats,
-                    b_strats_cap
+                    b_strats_cap,
                 ) = rank_baskets(
                     univ,
                     univ_rank,
@@ -1197,10 +1179,9 @@ def build_baskets(
                     **b_strats,
                     **b_strats_cap,
                 }
-                
+
             elif (
-                vol_norm is not None
-                and ntl_cap is not None
+                vol_norm is not None and ntl_cap is not None
             ):
                 (
                     univ,
@@ -1227,18 +1208,18 @@ def build_baskets(
                     **b_strats_norm,
                     **b_strats_cap,
                 }
-                
+
             else:
                 raise ValueError(rank_arg_specs)
 
             done = {
                 **done,
-                **{b_key: True for b_key in b_keys}
+                **{b_key: True for b_key in b_keys},
             }
         for (
             vol_norm,
             ntl_cap,
-            weight_params
+            weight_params,
         ), b_keys in weight_arg_specs.items():
             #     (
             #     basket_name,
@@ -1246,53 +1227,44 @@ def build_baskets(
             # )
             if vol_norm is not None:
                 if univ_w_norm is None:
-                    univ_w_norm = Strategies.under_project( 
+                    univ_w_norm = Strategies.under_project(
                         project,
                         f"{univ_prefix}-w-norm",
                         depth=depth,
                     )
             if ntl_cap is not None:
                 if univ_w_cap is None:
-                    univ_w_cap = Strategies.under_project( 
+                    univ_w_cap = Strategies.under_project(
                         project,
                         f"{univ_prefix}-w-cap",
                         depth=depth,
                     )
-            
+
             if weight_params is None:
                 weight_params = weight_params_default
 
             b_inds = {
                 b_key: inds
-                for b_key, inds
-                in deriv_indices.items()
+                for b_key, inds in deriv_indices.items()
                 if b_key in b_keys
             }
 
-            if (
-                vol_norm is None
-                and ntl_cap is None
-            ):
-                (
-                    univ,
-                    univ_weight,
-                    b_strats
-                ) = weight_baskets(
-                    univ,
-                    univ_weight,
-                    b_inds,
-                    list(map(dict, weight_params)),
-                    vol_norm=vol_norm,
-                    ntl_cap=ntl_cap,
+            if vol_norm is None and ntl_cap is None:
+                (univ, univ_weight, b_strats) = (
+                    weight_baskets(
+                        univ,
+                        univ_weight,
+                        b_inds,
+                        list(map(dict, weight_params)),
+                        vol_norm=vol_norm,
+                        ntl_cap=ntl_cap,
+                    )
                 )
                 strats = {
                     **strats,
                     **b_strats,
                 }
-            elif (
-                vol_norm is not None
-                and ntl_cap is None
-            ):
+            elif vol_norm is not None and ntl_cap is None:
                 (
                     univ,
                     univ_weight,
@@ -1306,25 +1278,20 @@ def build_baskets(
                     list(map(dict, weight_params)),
                     vol_norm=vol_norm,
                     ntl_cap=ntl_cap,
-                    univ_norm=assert_is(
-                        univ_w_norm
-                    ),
+                    univ_norm=assert_is(univ_w_norm),
                 )
                 strats = {
                     **strats,
                     **b_strats,
                     **b_strats_norm,
                 }
-            elif (
-                vol_norm is None
-                and ntl_cap is not None
-            ):
+            elif vol_norm is None and ntl_cap is not None:
                 (
                     univ,
                     univ_weight,
                     univ_w_cap,
                     b_strats,
-                    b_strats_cap
+                    b_strats_cap,
                 ) = weight_baskets(
                     univ,
                     univ_weight,
@@ -1340,10 +1307,9 @@ def build_baskets(
                     **b_strats,
                     **b_strats_cap,
                 }
-                
+
             elif (
-                vol_norm is not None
-                and ntl_cap is not None
+                vol_norm is not None and ntl_cap is not None
             ):
                 (
                     univ,
@@ -1370,32 +1336,33 @@ def build_baskets(
                     **b_strats_norm,
                     **b_strats_cap,
                 }
-                
+
             else:
                 raise ValueError(weight_arg_specs)
 
             done = {
                 **done,
-                **{b_key: True for b_key in b_keys}
+                **{b_key: True for b_key in b_keys},
             }
 
         if n_curr == len(done):
-            raise ValueError(dict(
-                universe=list(strats.keys()),
-                baskets_done=list(done.keys()),
-                baskets_todo=[
-                    k for k in baskets
-                    if k not in done
-                ],
-                strats_found=[
-                    k for k in required
-                    if k in strats
-                ],
-                strats_missing = [
-                    k for k in required
-                    if not k in strats
-                ]
-            ))
+            raise ValueError(
+                dict(
+                    universe=list(strats.keys()),
+                    baskets_done=list(done.keys()),
+                    baskets_todo=[
+                        k for k in baskets if k not in done
+                    ],
+                    strats_found=[
+                        k for k in required if k in strats
+                    ],
+                    strats_missing=[
+                        k
+                        for k in required
+                        if not k in strats
+                    ],
+                )
+            )
 
         context.get().with_obj(univ, force=True)
         context.get().with_obj(univ_rank, force=True)
@@ -1414,11 +1381,13 @@ def build_baskets(
 
     return strats
 
+
 def param_str(o):
     try:
         return o.label()
     except:
         return str(o)
+
 
 __all__ = [
     # "rank_baskets",

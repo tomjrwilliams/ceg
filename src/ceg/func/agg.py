@@ -139,7 +139,6 @@ class sum_vec(Node.Scalar_F64):
 
 
 class sum_mat_i_kw(NamedTuple):
-
     @classmethod
     def ref(
         cls, i: int | Ref.Any, slot: int | None = None
@@ -149,7 +148,6 @@ class sum_mat_i_kw(NamedTuple):
 
 @dataclass(frozen=True)
 class sum_mat_i(Node.Scalar_F64):
-
     type: str
     #
     mat: Ref.D1_F64_D2_F64
@@ -183,7 +181,8 @@ class sum_mat_i(Node.Scalar_F64):
 
     def __call__(self, event: Event, graph: Graph):
         v = self.mat.history(
-            graph, slot=1  # TODO fix
+            graph,
+            slot=1,  # TODO fix
         ).last_before(event.t)
         if self.t:
             v = v[:, self.i]

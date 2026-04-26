@@ -1,4 +1,3 @@
-
 import numpy as np
 
 from .types import *
@@ -8,7 +7,7 @@ from . import states, State
 def df_tall(
     v: F64_4D,
     agents: list[str] | None = None,
-    products: list[str] | None=None,
+    products: list[str] | None = None,
     agent: str = "a",
     product: str = "p",
 ) -> pl.DataFrame:
@@ -34,11 +33,12 @@ def df_tall(
             "product": t_products,
             "agent-o": t_agents,
             "agent-i": t_agents,
-        }
+        },
     )
-    
+
+
 def order_by_rel(state: State) -> F64_3D:
-    
+
     is_output = state.functions > 0
 
     inventory: F64_1D = np.where(
@@ -55,7 +55,6 @@ def order_by_rel(state: State) -> F64_3D:
     # TODO: only works if one good output per agent
     for a in range(state.n_agents):
         for p in range(state.n_products):
-
             a_orders: F64_1D = state.orders[p, a, :]
             a_inventory: F64_1D = inventory[a][p]
             a_rels: F64_1D = rels[a]
@@ -65,18 +64,16 @@ def order_by_rel(state: State) -> F64_3D:
             a_ordered = a_orders[a_order]
             a_ordered_cum = a_ordered.cumsum()
             a_ordered_cum_clip = np.clip(
-                a_ordered_cum, 
-                a_min=None,
-                a_max=a_inventory
+                a_ordered_cum, a_min=None, a_max=a_inventory
             )
 
             a_ordered_unsatisfied = -1 * (
                 a_ordered_cum - a_ordered_cum_clip
             )
-            a_partial_satisfy = np.cumsum(
-                a_ordered_unsatisfied > 0
-            ) == 1
-            
+            a_partial_satisfy = (
+                np.cumsum(a_ordered_unsatisfied > 0) == 1
+            )
+
             a_ordered_satisfied = np.where(
                 a_ordered_unsatisfied == 0,
                 a_ordered,
@@ -84,7 +81,7 @@ def order_by_rel(state: State) -> F64_3D:
                     a_partial_satisfy,
                     a_ordered - a_ordered_unsatisfied,
                     0,
-                )
+                ),
             )
 
             a_del = np.empty(a_orders.shape)
@@ -93,6 +90,7 @@ def order_by_rel(state: State) -> F64_3D:
             res[p][a] = a_del
 
     return res
+
 
 # def proportional_to_rel(state: State) -> F64_3D:
 

@@ -59,7 +59,6 @@ class HasSetFromDf(Protocol):
 
 @dataclass(frozen=True)
 class HandleNewValueFromPl(Handler):
-
     def set_value_from_df(
         self,
         obj: Object,
@@ -71,10 +70,12 @@ class HandleNewValueFromPl(Handler):
         return key_val.set_from_df(
             df,
             col,
-            obj.path,
+            obj.id,
         )
 
-    def key_value_type(self, obj: Object) -> Type[HasSetFromDf]:
+    def key_value_type(
+        self, obj: Object
+    ) -> Type[HasSetFromDf]:
         # TODO: given parametrisation of object
         return ValueKeyChunkPlSeriesSQLite
 
@@ -99,7 +100,10 @@ class HandleNewValueFromPl(Handler):
             obj,
         )
         df = df.with_columns(
-            pl.when(pl.col(VALUE).is_null()).then(None).otherwise(e).alias(VALUE)
+            pl.when(pl.col(VALUE).is_null())
+            .then(None)
+            .otherwise(e)
+            .alias(VALUE)
         )
         return df
 
@@ -113,7 +117,6 @@ class DailyWithDailyParent(
         return context.get().get(self.parent, Daily)
 
 
-
 @dataclass(frozen=True)
 class HandleFromParent(Handler):
     pass
@@ -121,7 +124,6 @@ class HandleFromParent(Handler):
 
 @dataclass(frozen=True)
 class HandleFromParentPl(HandleFromParent):
-
     def get_parent_pl(
         self,
         event: ObjectChange,
@@ -135,7 +137,7 @@ class HandleFromParentPl(HandleFromParent):
         if parent_snap is None:
             parent_snap = assert_is(parent.get_snap())
 
-        v = parent.value_key_val().get(parent.path)
+        v = parent.value_key_val().get(parent.id)
         assert isinstance(v, ValuePlSeries), v
 
         return v
@@ -151,7 +153,6 @@ class HandleNewValueFromParentPl(
 
 @dataclass(frozen=True)
 class HandleNewDailyFromDf(Handler):
-
     def update_snap_from_df(
         self,
         snap: Daily.Snap,
@@ -179,7 +180,6 @@ class HandleNewDailyFromDf(Handler):
 
 @dataclass(frozen=True)
 class HandleNewDailyFromDailyParent(Handler):
-
     def update_snap_from_parent(
         self,
         snap: Daily.Snap,
@@ -206,14 +206,13 @@ class HandleNewDailyFromDailyParentPl(
     HandleNewValueFromParentPl,
     HandleNewDailyFromDailyParent,
 ):
-
     def handle(
         self,
         event: ObjectChange,
         snap: Daily.Snap,
         obj: DailyWithDailyParent,
     ):
-        # log("INFO")( handle_daily=obj.path)
+        # log("INFO")( handle_daily=obj.id)
 
         parent = obj.get_parent()
         parent_snap = parent.get_snap(Daily.Snap)
@@ -224,14 +223,14 @@ class HandleNewDailyFromDailyParentPl(
                 and snap.last == parent_snap.last
             ):
                 return frozendict().set(
-                    obj.path, (snap, [])
+                    obj.id, (snap, [])
                 )
 
         v = self.get_parent_pl(
             event,
             obj,
             parent=parent,
-            parent_snap=parent_snap
+            parent_snap=parent_snap,
         )
 
         first = v.start or parent_snap.first
@@ -243,8 +242,16 @@ class HandleNewDailyFromDailyParentPl(
             else [pl.date_range(first, last).alias("date")]
         )
 
-        df = v.to_df(alias=VALUE, pipe=lambda e: e.fill_nan(None), with_cols=date_cols)
-        assert "date" in df.schema, (df.schema, parent_snap, v)
+        df = v.to_df(
+            alias=VALUE,
+            pipe=lambda e: e.fill_nan(None),
+            with_cols=date_cols,
+        )
+        assert "date" in df.schema, (
+            df.schema,
+            parent_snap,
+            v,
+        )
 
         df = df.pipe(self.calc_df, event, obj)
 
@@ -265,74 +272,28 @@ class HandleNewDailyFromDailyParentPl(
 
 
 @dataclass(frozen=True)
-class TracksLatestUpstream(Object):
-
+class TriageUpstream(Object):
     def upstream_paths(self) -> list[str]: ...
 
     @dataclass(frozen=True)
     class Snap(Snap):
-        n_upstream: int | None = None
-        upstream: t.frozen.dict[str, int] = frozendict()
+        triage: bool = True
 
-        type: Literal["TracksLatestUpstreamSnap"] = "TracksLatestUpstreamSnap"
+        type: Literal["TriageUpstreamSnap"] = (
+            "TriageUpstreamSnap"
+        )
 
 
 @dataclass(frozen=True)
 class HandleUpdateLatestUpstream(Handler):
-
     def handle(
         self,
         event: ValueUpdate,
-        snap: TracksLatestUpstream.Snap,
-        obj: TracksLatestUpstream,
+        snap: TriageUpstream.Snap,
+        obj: TriageUpstream,
     ):
-        i = assert_is(event.i)
-
-        if snap.n_upstream is None:
-            snap = replace(
-                snap,
-                n_upstream=len(obj.upstream_paths()),
-            )
-            
-        upstream = snap.upstream
-        if obj.path in upstream:
-            raise ValueError(obj)
-        
-        if event.obj == obj.path:
-            raise ValueError(obj)
-
-        if (
-            event.obj not in snap.upstream
-            and len(upstream) == assert_is(
-                snap.n_upstream
-            ) - 1
-        ):
-            upstream = upstream.set(event.obj, i)
-            snap = replace(snap, upstream=upstream)
-            # first time we have all upstream, fire
-            es = [ValueUpdate(obj.path)]
-        elif (
-            len(upstream) == snap.n_upstream
-            and i > upstream.get(event.obj, -1)
-        ):
-            upstream = upstream.set(event.obj, i)
-            snap = replace(snap, upstream=upstream)
-            # already have all, one newly updated, fire
-            es = [ValueUpdate(obj.path)]
-            
-            # TODO: only if snap has changed and not just event?
-        elif i > upstream.get(event.obj, -1):
-            upstream = upstream.set(event.obj, i)
-            snap = replace(snap, upstream=upstream)
-            es = []
-
-        else:
-            # only update snap
-            es = []
-
-        return frozendict().set(
-            obj.path, (snap, es)
-        )
+        es = [ValueUpdate(obj.id)]
+        return frozendict().set(obj.id, (snap, es))
 
 
 __all__ = [
@@ -344,6 +305,6 @@ __all__ = [
     "HandleNewDailyFromDf",
     "HandleNewDailyFromDailyParent",
     "HandleNewDailyFromDailyParentPl",
-    "TracksLatestUpstream",
+    "TriageUpstream",
     "HandleUpdateLatestUpstream",
 ]

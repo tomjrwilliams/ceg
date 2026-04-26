@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -42,7 +41,7 @@ from ......apis.eq import *
 
 # SP500 trackers:
 # US: SPY, VOO, and IVV
-# UK/EU: VUSA, CSPX, and SPXP. 
+# UK/EU: VUSA, CSPX, and SPXP.
 
 # ETFs:
 # XLY (Consumer Discretionary), XLE (Energy), XLU (Utilities), XLB (Materials).
@@ -52,7 +51,8 @@ from ......apis.eq import *
 # SCHG (U.S. Large-Cap Growth ETF).
 # FNDA (Fundamental U.S. Small Company ETF), SCHK (1000 Index® ETF), SCHP (U.S. TIPS ETF), SCYB (High Yield Bond ETF), SCMB (Municipal Bond ETF), SCHA (U.S. Small-Cap ETF), SCHR (Intermediate-Term U.S. Treasury ETF), SCHJ (1-5 Year Corporate Bond ETF), SCHO (Short-Term U.S. Treasury ETF), SCHZ (U.S. Aggregate Bond ETF), SCHI (5-10 Year Corporate Bond ETF), SCHF (International Equity ETF).
 # GLL (UltraShort Gold), EEV (UltraShort Emerging Markets), YXI (UltraShort Japan), BZQ (UltraShort Basic Materials).
-# Vanguard High Dividend Yield ETF (VYM) 
+# Vanguard High Dividend Yield ETF (VYM)
+
 
 @dataclass(frozen=True)
 class EqDailyEtfTags(BarDailyTags):
@@ -91,7 +91,7 @@ class EqDailyEtf(
     ...     spy, splits, price, divs, full
     ... ) = objs
     >>> Graph().with_objs(*objs).sync()
-    >>> f_v = lambda o: o.value_key_val().get(o.path)
+    >>> f_v = lambda o: o.value_key_val().get(o.id)
     >>> f_v(spy).tail(8)
     shape: (8,)
     Series: 'test-eq-d-SPY-close-pct-frd' [f64]
@@ -153,10 +153,11 @@ class EqDailyEtf(
         252.586646
     ]
     """
+
     parent: Project | str | None
 
     tags: EqDailyEtfTags
-    
+
     version: int = 0
     type: Literal["EqDailyEtf"] = "EqDailyEtf"
 
@@ -164,7 +165,6 @@ class EqDailyEtf(
     class Snap(Daily.Snap):
         type: Literal["EqDailyEtfSnap"] = "EqDailyEtfSnap"
 
-    
     @classmethod
     def new(
         cls,
@@ -185,17 +185,17 @@ class EqDailyEtf(
             source,
             fx,
         ) = cls.identifier(
-            symbol, 
-            ident, 
-            field, 
-            adjust, 
-            source, 
+            symbol,
+            ident,
+            field,
+            adjust,
+            source,
             fx=fx,
-            expect=ETF
+            expect=ETF,
         )
         assert adjust in EQ_ADJUSTMENTS, adjust
         return cls(
-            path=cls.build_path(
+            id=cls.build_id(
                 parent,
                 "eq-etf-d",
                 ident,
@@ -218,6 +218,7 @@ class EqDailyEtf(
         # elif isinstance(event, ValueUpdate):
         raise ValueError((self, event))
 
+
 @dataclass(frozen=True)
 class HandleUpdateEqDailyEtf(Handler):
     def handle(
@@ -231,6 +232,7 @@ class HandleUpdateEqDailyEtf(Handler):
         # if after snap.last, get and append
         return
 
+
 def load_df_frd(
     symbol: str, field: str, adjust: str, alias: str
 ):
@@ -240,14 +242,16 @@ def load_df_frd(
             folder=apis.data.frd.Folders.ETF,
             symbol=symbol,
             suffix=adjust,
-            snap = "full",  # full
-            freq = "1day",  # 1day
+            snap="full",  # full
+            freq="1day",  # 1day
             #
-            start = None,
-            end = None,
+            start=None,
+            end=None,
+            update=True,
         ).select("date", pl.col(field).alias(alias))
     except:
         raise ValueError((symbol, adjust, alias))
+
 
 def load_join_dfs(
     symbol: str,
@@ -267,6 +271,7 @@ def load_join_dfs(
         maintain_order="left_right",
     )
 
+
 @dataclass(frozen=True)
 class HandleNewEqDailyEtf(
     HandleNewValueFromPl,
@@ -284,75 +289,80 @@ class HandleNewEqDailyEtf(
             f_df = load_df_frd
         else:
             raise ValueError(obj)
-        
-        if tags.adjust in [
-            "pct",
-            "split",
-            "raw"
-        ]:
+
+        if tags.adjust in ["pct", "split", "raw"]:
             df = f_df(
                 tags.symbol,
                 tags.field,
                 tags.adjust,
-                alias=tags.field
+                alias=tags.field,
             )
         elif tags.adjust == "splits":
             df = load_join_dfs(
-                tags.symbol, tags.field, f_df, [
-                    ("raw", "raw"),
-                    ("split", "split")
-                ]
+                tags.symbol,
+                tags.field,
+                f_df,
+                [("raw", "raw"), ("split", "split")],
             )
             df = df.pipe(
                 with_splits,
                 raw="raw",
                 split="split",
-                alias=tags.field
+                alias=tags.field,
             )
         elif tags.adjust == "divs":
             df = load_join_dfs(
-                tags.symbol, tags.field, f_df, [
+                tags.symbol,
+                tags.field,
+                f_df,
+                [
                     ("raw", "raw"),
                     ("split", "split"),
                     ("pct", "pct"),
-                ]
+                ],
             )
             df = df.pipe(
                 with_divs,
                 raw="raw",
                 split="split",
                 pct="pct",
-                alias=tags.field
+                alias=tags.field,
             )
         elif tags.adjust == "price":
             df = load_join_dfs(
-                tags.symbol, tags.field, f_df, [
+                tags.symbol,
+                tags.field,
+                f_df,
+                [
                     ("raw", "raw"),
                     ("split", "split"),
                     ("pct", "pct"),
-                ]
+                ],
             )
             df = df.pipe(
                 with_price,
                 raw="raw",
                 split="split",
                 pct="pct",
-                alias=tags.field
+                alias=tags.field,
             )
         elif tags.adjust == "full":
             df = load_join_dfs(
-                tags.symbol, tags.field, f_df, [
+                tags.symbol,
+                tags.field,
+                f_df,
+                [
                     ("raw", "raw"),
                     ("split", "split"),
                     ("pct", "pct"),
-                ]
+                ],
             )
             df = df.pipe(
                 with_full,
                 raw="raw",
                 split="split",
                 pct="pct",
-                alias=tags.field
+                alias=tags.field,
             )
         else:
             raise ValueError(tags)
@@ -361,7 +371,7 @@ class HandleNewEqDailyEtf(
             obj,
             df,
             tags.field,
-            t = self.key_value_type(obj),
+            t=self.key_value_type(obj),
         )
 
         new_snap = self.update_snap_from_df(snap, df)
@@ -369,12 +379,14 @@ class HandleNewEqDailyEtf(
             new_snap.first != snap.first
             and new_snap.last != snap.last
         ):
+            # TODO: new snap!!!??
             return ValueUpdate.from_snap(
                 self.update_snap_from_df(snap, df),
-                into=frozendict()
+                into=frozendict(),
             )
-        
-        return frozendict().set(obj.path, (snap, []))
+
+        return frozendict().set(obj.id, (snap, []))
+
 
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
@@ -383,12 +395,14 @@ class HandleNewEqDailyEtf(
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class DependsEqDailyEtfParent(DependsParentValue):
     parent: EqDailyEtf | str
 
     def get_parent(self) -> EqDailyEtf:
         return context.get().get(self.parent, EqDailyEtf)
+
 
 #  ------------------
 

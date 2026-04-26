@@ -1,5 +1,3 @@
-
-
 from __future__ import annotations
 import os
 from typing import (
@@ -44,13 +42,16 @@ from ..derivs import *
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class DailyPfolioNotional(DailyPfolioDeriv):
     parent: DailyPfolio | str
 
-    prices: tuple[tuple[str, int], ...] = () # (key, universe object index)
+    prices: tuple[
+        tuple[str, int], ...
+    ] = ()  # (key, universe object index)
 
-    cap: float = 1.
+    cap: float = 1.0
     # TODO: or daily series
     # eg. use to apply sub-portfolio weighting
 
@@ -60,62 +61,71 @@ class DailyPfolioNotional(DailyPfolioDeriv):
     # ie. so can cap diff per key eg.
 
     version: int = 0
-    type: Literal["DailyPfolioNotional"] = "DailyPfolioNotional"
+    type: Literal["DailyPfolioNotional"] = (
+        "DailyPfolioNotional"
+    )
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["DailyPfolioNotionalSnap"] = "DailyPfolioNotionalSnap"
-    
-    def handler_object_new(
-        self
-    ):
+        type: Literal["DailyPfolioNotionalSnap"] = (
+            "DailyPfolioNotionalSnap"
+        )
+
+    def handler_object_new(self):
         return HandleNewDailyPfolioNotional()
-    
+
     @classmethod
     def new(
         cls,
         parent: DailyPfolio,
-        cap: float = 1.,
+        cap: float = 1.0,
         **px_indices: int,
     ):
         px = tuple(px_indices.items())
-        path = "ntl-" + f"-".join([f"{k}-{i}" for k, i in px])
+        id="ntl-" + f"-".join(
+            [f"{k}-{i}" for k, i in px]
+        )
         return cls(
             parent=parent,
-            path=parent.extend_path(path),
+            id=parent.extend_id(path),
             prices=px,
             cap=cap,
         )
-    
-    
+
+
 def calc_notional_df(
     px: pl.DataFrame,
     pos: pl.DataFrame,
 ):
-    return px.join(
-        pos, how="full", coalesce=True, on="date",
-    ).sort(by="date").select(
-        "date",
-        pl.when(pl.col("px").is_null())
-        .then(None)
-        .otherwise(
-            pl.col("px")
-            .fill_nan(None)
-            .forward_fill()
-            .mul(
-                pl.col("pos")
+    return (
+        px.join(
+            pos,
+            how="full",
+            coalesce=True,
+            on="date",
+        )
+        .sort(by="date")
+        .select(
+            "date",
+            pl.when(pl.col("px").is_null())
+            .then(None)
+            .otherwise(
+                pl.col("px")
                 .fill_nan(None)
                 .forward_fill()
+                .mul(
+                    pl.col("pos")
+                    .fill_nan(None)
+                    .forward_fill()
+                )
             )
+            .alias("notional"),
         )
-        .alias("notional")
     )
-    
+
 
 @dataclass(frozen=True)
-class HandleNewDailyPfolioNotional(
-    HandleNewValueFromPl
-):
+class HandleNewDailyPfolioNotional(HandleNewValueFromPl):
     def handle(
         self,
         event: ObjectChange,
@@ -127,10 +137,7 @@ class HandleNewDailyPfolioNotional(
 
         univ = pf.get_parent().get_parent()
 
-        pos = {
-            ser.key: ser.pos
-            for ser in data.series
-        }
+        pos = {ser.key: ser.pos for ser in data.series}
         prices = {
             k: daily_pl_df(
                 context.get().get(univ.objects[i], Daily),
@@ -146,48 +153,64 @@ class HandleNewDailyPfolioNotional(
                 for k, df_px in prices.items()
             }
         except:
-            raise ValueError((
-                list(pos.keys()),
-                list(prices.keys()),
-            ))
-        
+            raise ValueError(
+                (
+                    list(pos.keys()),
+                    list(prices.keys()),
+                )
+            )
+
         if not len(notionals):
-            raise ValueError(dict(
-                pos=pos,
-                prices={
-                    k: context.get().get(univ.objects[i], Daily)
-                    for k, i in obj.prices
-                }
-            ))
-        
-        df = apis.pl.join_dfs(
-            [
-                df.rename({"notional": k})
-                for k, df in notionals.items()
-            ],
-            how="full",
-            coalesce=True,
-            on="date",
-        ).sort(by="date").with_columns(
-            pl.when(pl.all_horizontal([
-                pl.col(k)
-                .is_null() for k in notionals.keys()
-            ]))
-            .then(None)
-            .otherwise(pl.sum_horizontal(
-                *[
-                    pl.col(k).abs()
-                    for k in notionals.keys()
-                ]
-            ))
-            .alias("gross")
+            raise ValueError(
+                dict(
+                    pos=pos,
+                    prices={
+                        k: context.get().get(
+                            univ.objects[i], Daily
+                        )
+                        for k, i in obj.prices
+                    },
+                )
+            )
+
+        df = (
+            apis.pl.join_dfs(
+                [
+                    df.rename({"notional": k})
+                    for k, df in notionals.items()
+                ],
+                how="full",
+                coalesce=True,
+                on="date",
+            )
+            .sort(by="date")
+            .with_columns(
+                pl.when(
+                    pl.all_horizontal(
+                        [
+                            pl.col(k).is_null()
+                            for k in notionals.keys()
+                        ]
+                    )
+                )
+                .then(None)
+                .otherwise(
+                    pl.sum_horizontal(
+                        *[
+                            pl.col(k).abs()
+                            for k in notionals.keys()
+                        ]
+                    )
+                )
+                .alias("gross")
+            )
         )
 
         # TODO: cap relative to rolling / total sharpe?
 
-        res: frozendict[
-            str, tuple[Snap, Event]
-        ] = frozendict()
+        res: frozendict[str, tuple[Snap, Event]] = (
+            frozendict()
+        )
 
         for k in df.drop("date").schema.keys():
             obj_val = DailyPfolioNotionalVal.new(obj, k)
@@ -197,7 +220,7 @@ class HandleNewDailyPfolioNotional(
                 obj_val,
                 df,
                 k,
-                t = self.key_value_type(obj_val),
+                t=self.key_value_type(obj_val),
             )
             res = ValueUpdate.from_snap(
                 replace(
@@ -209,7 +232,7 @@ class HandleNewDailyPfolioNotional(
                 ),
                 into=res,
             )
-        
+
         k = "gross"
         v = pl.col("gross")
         cap = obj.cap
@@ -231,14 +254,14 @@ class HandleNewDailyPfolioNotional(
                 .otherwise(v)
                 .alias(VALUE)
                 .fill_nan(None)
-            )
+            ),
         )
 
         _ = self.set_value_from_df(
             obj_cap,
             df_cap,
             VALUE,
-            t = self.key_value_type(obj_cap),
+            t=self.key_value_type(obj_cap),
         )
         res = ValueUpdate.from_snap(
             replace(
@@ -260,8 +283,9 @@ class HandleNewDailyPfolioNotional(
         )
         return res
 
-    
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class DailyPfolioNotionalVal(
@@ -272,11 +296,15 @@ class DailyPfolioNotionalVal(
     key: str | None = None
 
     version: int = 0
-    type: Literal["DailyPfolioNotionalVal"] = "DailyPfolioNotionalVal"
+    type: Literal["DailyPfolioNotionalVal"] = (
+        "DailyPfolioNotionalVal"
+    )
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["DailyPfolioNotionalValSnap"] = "DailyPfolioNotionalValSnap"
+        type: Literal["DailyPfolioNotionalValSnap"] = (
+            "DailyPfolioNotionalValSnap"
+        )
 
     def get_parent(self) -> DailyPfolioNotional:
         return context.get().get(
@@ -292,13 +320,14 @@ class DailyPfolioNotionalVal(
         key = key or "gross"
         return cls(
             parent=parent,
-            path=parent.extend_path(key),
+            id=parent.extend_id(key),
             key=key,
         )
-    
+
     def depends(self) -> list[Dependency]:
         return []
-    
+
+
 @dataclass(frozen=True)
 class DailyPfolioNotionalCap(
     DailyChunked,
@@ -310,11 +339,15 @@ class DailyPfolioNotionalCap(
     key: str | None = None
 
     version: int = 0
-    type: Literal["DailyPfolioNotionalCap"] = "DailyPfolioNotionalCap"
+    type: Literal["DailyPfolioNotionalCap"] = (
+        "DailyPfolioNotionalCap"
+    )
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["DailyPfolioNotionalCapSnap"] = "DailyPfolioNotionalCapSnap"
+        type: Literal["DailyPfolioNotionalCapSnap"] = (
+            "DailyPfolioNotionalCapSnap"
+        )
 
     def get_parent(self) -> DailyPfolioNotional:
         return context.get().get(
@@ -328,16 +361,17 @@ class DailyPfolioNotionalCap(
         key: str | None = None,
     ):
         key = key or "gross"
-        path = f"cap-{key}"
+        id=f"cap-{key}"
         return cls(
             parent=parent,
-            path=parent.extend_path(path),
+            id=parent.extend_id(path),
             key=key,
         )
-    
+
     def depends(self) -> list[Dependency]:
         return []
-    
+
+
 #  ------------------
 
 # interesting: notional cap based on stress indicator

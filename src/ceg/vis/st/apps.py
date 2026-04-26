@@ -8,7 +8,6 @@ from typing import (
     Literal,
     overload,
     cast,
-
 )
 from pathlib import Path
 import datetime as dt
@@ -16,6 +15,7 @@ import numpy as np
 import polars as pl
 
 from ... import apis
+
 st = apis.st.library()
 
 import plotly.express as px
@@ -37,7 +37,8 @@ logger, log = apis.logs.logger(
 
 # TODO: this is really an objs.vis file (move)
 
-def hidden_link(path: str | None, id:str):
+
+def hidden_link(path: str | None, uid: str):
     if path is None:
         return
     root = st.context.url
@@ -45,8 +46,10 @@ def hidden_link(path: str | None, id:str):
         return
     root = root.split("/")[0]
     st.write(
-        f"<a href='{root}/{path}' id='{id}'></a>", unsafe_allow_html=True
+        f"<a href='{root}/{path}' id='{uid}'></a>",
+        unsafe_allow_html=True,
     )
+
 
 @apis.st.cache()
 def load_configs(root: str):
@@ -60,14 +63,13 @@ def load_configs(root: str):
         res.append(dp)
     return res
 
+
 @dataclass(frozen=True)
 class App:
     name: str
     root: str
 
-    pages: dict[str, Any] = field(
-        default_factory=dict
-    )
+    pages: dict[str, Any] = field(default_factory=dict)
 
     def list_pages(self):
         # log("INFO")( build_page_list=self.root)
@@ -78,6 +80,7 @@ class App:
                 if dp.name in self.pages:
                     st.page_link(self.pages[dp.name])
             # log("INFO")( loaded_configs=self.root)
+
         return st.Page(
             f,
             title="home",
@@ -88,11 +91,12 @@ class App:
         return st.session_state.get(
             f"{self.name}.sidenav.name"
         )
+
     def get_page_type(self):
         return st.session_state.get(
             f"{self.name}.sidenav.type"
         )
-        
+
     def init_page(self):
         def click_rename():
             url = st.context.url
@@ -100,7 +104,7 @@ class App:
                 return
             url_split = url.split("/")
             if len(url_split) > 1:
-                path = url_split[-1]
+                id=url_split[-1]
                 name = self.get_page_name()
                 assert name is not None, name
                 if path != name:
@@ -109,7 +113,7 @@ class App:
                         path_root / name
                     )
             return
-        
+
         def click_new():
             name = self.get_page_name()
             type = self.get_page_type()
@@ -122,10 +126,13 @@ class App:
             fp_config.parent.mkdir(
                 exist_ok=True, parents=True
             )
-            with fp_config.open('w+') as f:
-                json.dump({
-                    "type": type,
-                }, f)
+            with fp_config.open("w+") as f:
+                json.dump(
+                    {
+                        "type": type,
+                    },
+                    f,
+                )
 
         # with st.sidebar:
         #     st.text_input(
@@ -137,7 +144,7 @@ class App:
 
         #     hidden_link(self.get_page_name(), "RENAME")
         #     hidden_link(self.get_page_name(), "NEW")
-            
+
         #     c1, c2 = st.columns(2)
         #     with c2:
         #         st.button("NEW", on_click=click_new)
@@ -159,9 +166,9 @@ class App:
             fp_config = dp / "config.json"
             if not fp_config.exists():
                 continue
-            with fp_config.open('r') as f_config:
+            with fp_config.open("r") as f_config:
                 config = json.load(f_config)
-            
+
             name = dp.name
             # TODO: or numeric names?
 
@@ -177,12 +184,10 @@ class App:
                         "params": pl.String,
                     },
                 ).page(Project)
-                page = st.Page(
-                    f, title=name, url_path = name
-                )
+                page = st.Page(f, title=name, url_id=name)
                 pages[name] = page
                 self.pages[name] = page
             else:
                 raise ValueError(config)
-    
+
         return pages

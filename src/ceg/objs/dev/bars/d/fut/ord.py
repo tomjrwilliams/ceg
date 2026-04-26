@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -37,6 +36,7 @@ from ..ident import *
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class FutDailyOrdinalTags(BarDailyTags):
     symbol: str
@@ -45,6 +45,7 @@ class FutDailyOrdinalTags(BarDailyTags):
     adjust: str
     source: str
     fx: str | None = None  # ccy to convert to
+
 
 @dataclass(frozen=True)
 class FutDailyOrdinal(
@@ -60,7 +61,7 @@ class FutDailyOrdinal(
     ...     source="frd",
     ... )
     >>> g = Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd' [f64]
     [
@@ -74,6 +75,7 @@ class FutDailyOrdinal(
         5623.0
     ]
     """
+
     parent: Project | str | None
 
     tags: FutDailyOrdinalTags
@@ -83,8 +85,10 @@ class FutDailyOrdinal(
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["FutDailyOrdinalSnap"] = "FutDailyOrdinalSnap"
-    
+        type: Literal["FutDailyOrdinalSnap"] = (
+            "FutDailyOrdinalSnap"
+        )
+
     @classmethod
     def new(
         cls,
@@ -106,18 +110,18 @@ class FutDailyOrdinal(
             source,
             fx,
         ) = cls.identifier(
-            symbol, 
-            ident, 
-            field, 
-            adjust, 
-            source, 
+            symbol,
+            ident,
+            field,
+            adjust,
+            source,
             fx=fx,
-            expect=ORD
+            expect=ORD,
         )
-        assert ord == 1, ord # TODO: for now only first
+        assert ord == 1, ord  # TODO: for now only first
         assert adjust in ORD_ADJUSTMENTS, adjust
         return cls(
-            path=cls.build_path(
+            id=cls.build_id(
                 parent,
                 "fut-ord-d",
                 ident,
@@ -138,9 +142,9 @@ class FutDailyOrdinal(
         if isinstance(event, GraphSync):
             return HandleNewFutDailyOrdinal()
         # elif isinstance(event, ValueUpdate):
-            # return handle update
+        # return handle update
         raise ValueError((self, event))
-        
+
 
 @dataclass(frozen=True)
 class HandleNewFutDailyOrdinal(
@@ -161,11 +165,12 @@ class HandleNewFutDailyOrdinal(
                 folder=apis.data.frd.Folders.FUT,
                 symbol=tags.symbol,
                 suffix=tags.adjust,
-                snap = "full",  # full
-                freq = "1day",  # 1day
+                snap="full",  # full
+                freq="1day",  # 1day
                 #
-                start = None,
-                end = None,
+                start=None,
+                end=None,
+                update=True,
             ).select("date", tags.field)
         else:
             raise ValueError(obj)
@@ -174,7 +179,7 @@ class HandleNewFutDailyOrdinal(
             obj,
             df,
             tags.field,
-            t = self.key_value_type(obj),
+            t=self.key_value_type(obj),
         )
 
         new_snap = self.update_snap_from_df(snap, df)
@@ -184,21 +189,25 @@ class HandleNewFutDailyOrdinal(
         ):
             return ValueUpdate.from_snap(
                 self.update_snap_from_df(snap, df),
-                into=frozendict()
+                into=frozendict(),
             )
-        return frozendict().set(obj.path, (snap, []))
+        return frozendict().set(obj.id, (snap, []))
+
 
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
 # if backend type / loc change, copy
 # else, throw
 
+
 @dataclass(frozen=True)
 class DependsFutDailyOrdinalParent(DependsParentValue):
     parent: FutDailyOrdinal | str
 
     def get_parent(self) -> FutDailyOrdinal:
-        return context.get().get(self.parent, FutDailyOrdinal)
+        return context.get().get(
+            self.parent, FutDailyOrdinal
+        )
 
 
 #  ------------------

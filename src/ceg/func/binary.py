@@ -80,7 +80,12 @@ class truncate(Node.Scalar_F64):
     def __call__(self, event: Event, graph: Graph):
         l = self.v.history(graph).last_before(event.t)
         r = self.bound.history(graph).last_before(event.t)
-        if l is None or np.isnan(l) or r is None or np.isnan(r):
+        if (
+            l is None
+            or np.isnan(l)
+            or r is None
+            or np.isnan(r)
+        ):
             return np.nan
         r = r * self.b
         if l < r and l > -r:
@@ -207,17 +212,26 @@ class pct_diff(Node.Scalar_F64):
         shift: tuple[int | None, ...] | None = None,
         m: float | None = None,
     ):
-        return pct_diff("pct_diff", l=l, r=r, shift=shift, m=m)
+        return pct_diff(
+            "pct_diff", l=l, r=r, shift=shift, m=m
+        )
 
     bind = define.bind_from_new(new, Node.Scalar_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
         l = self.l.history(graph).last_before(event.t)
         r = self.r.history(graph).last_before(event.t)
-        if l is None or np.isnan(l) or r is None or np.isnan(r):
+        if (
+            l is None
+            or np.isnan(l)
+            or r is None
+            or np.isnan(r)
+        ):
             return np.nan
 
-        return ((l / r) - 1) * (1 if self.m is None else self.m)
+        return ((l / r) - 1) * (
+            1 if self.m is None else self.m
+        )
 
 
 #  ------------------
@@ -284,7 +298,12 @@ class subtract(Node.Scalar_F64):
     def __call__(self, event: Event, graph: Graph):
         l = self.l.history(graph).last_before(event.t)
         r = self.r.history(graph).last_before(event.t)
-        if l is None or np.isnan(l) or r is None or np.isnan(r):
+        if (
+            l is None
+            or np.isnan(l)
+            or r is None
+            or np.isnan(r)
+        ):
             return np.nan
         return self.a + ((l - r) * self.b)
 
@@ -353,7 +372,12 @@ class add(Node.Scalar_F64):
     def __call__(self, event: Event, graph: Graph):
         l = self.l.history(graph).last_before(event.t)
         r = self.r.history(graph).last_before(event.t)
-        if l is None or np.isnan(l) or r is None or np.isnan(r):
+        if (
+            l is None
+            or np.isnan(l)
+            or r is None
+            or np.isnan(r)
+        ):
             return np.nan
         return self.a + ((l + r) * self.b)
 

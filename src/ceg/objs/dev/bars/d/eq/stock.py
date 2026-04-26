@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -37,16 +36,19 @@ from ..ident import *
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class EqDailyStockTags(BarDailyTags):
     symbol: str
-    ident: None # tbc
+    ident: None  # tbc
     field: str
     adjust: str
     source: str
     fx: str | None = None  # ccy to convert to
 
+
 # TODO: stock data not yet downloaded
+
 
 @dataclass(frozen=True)
 class EqDailyStock(
@@ -62,7 +64,7 @@ class EqDailyStock(
     # ...     source="frd",
     # ... )
     # >>> Graph().with_obj(obj).sync()
-    # >>> obj.value_key_val().get(obj.path).tail(8)
+    # >>> obj.value_key_val().get(obj.id).tail(8)
     # shape: (8,)
     # Series: 'test-fut-d-AAPL-1-close-full-frd' [f64]
     # [
@@ -79,14 +81,16 @@ class EqDailyStock(
     parent: Project | str | None
 
     tags: EqDailyStockTags
-    
+
     version: int = 0
     type: Literal["EqDailyStock"] = "EqDailyStock"
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["EqDailyStockSnap"] = "EqDailyStockSnap"
-    
+        type: Literal["EqDailyStockSnap"] = (
+            "EqDailyStockSnap"
+        )
+
     @classmethod
     def new(
         cls,
@@ -107,17 +111,17 @@ class EqDailyStock(
             source,
             fx,
         ) = cls.identifier(
-            symbol, 
-            ident, 
-            field, 
-            adjust, 
-            source, 
+            symbol,
+            ident,
+            field,
+            adjust,
+            source,
             fx=fx,
-            expect=STOCK
+            expect=STOCK,
         )
         assert adjust in EQ_ADJUSTMENTS, adjust
         return cls(
-            path=cls.build_path(
+            id=cls.build_id(
                 parent,
                 "eq-stock-d",
                 ident,
@@ -134,12 +138,12 @@ class EqDailyStock(
             ),
         )
 
-
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, GraphSync):
             return HandleNewEqDailyStock()
         # elif isinstance(event, ValueUpdate):
         raise ValueError((self, event))
+
 
 @dataclass(frozen=True)
 class HandleUpdateEqDailyStock(Handler):
@@ -153,6 +157,7 @@ class HandleUpdateEqDailyStock(Handler):
         # check new data available
         # if after snap.last, get and append
         return
+
 
 @dataclass(frozen=True)
 class HandleNewEqDailyStock(
@@ -173,11 +178,11 @@ class HandleNewEqDailyStock(
                 folder=apis.data.frd.Folders.STOCK,
                 symbol=tags.symbol,
                 suffix=tags.adjust,
-                snap = "full",  # full
-                freq = "1day",  # 1day
+                snap="full",  # full
+                freq="1day",  # 1day
                 #
-                start = None,
-                end = None,
+                start=None,
+                end=None,
             ).select("date", tags.field)
         else:
             raise ValueError(obj)
@@ -186,7 +191,7 @@ class HandleNewEqDailyStock(
             obj,
             df,
             tags.field,
-            t = self.key_value_type(obj),
+            t=self.key_value_type(obj),
         )
 
         new_snap = self.update_snap_from_df(snap, df)
@@ -196,9 +201,10 @@ class HandleNewEqDailyStock(
         ):
             return ValueUpdate.from_snap(
                 self.update_snap_from_df(snap, df),
-                into=frozendict()
+                into=frozendict(),
             )
-        return frozendict().set(obj.path, (snap, []))
+        return frozendict().set(obj.id, (snap, []))
+
 
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
@@ -207,12 +213,14 @@ class HandleNewEqDailyStock(
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class DependsEqDailyStockParent(DependsParentValue):
     parent: EqDailyStock | str
 
     def get_parent(self) -> EqDailyStock:
         return context.get().get(self.parent, EqDailyStock)
+
 
 #  ------------------
 

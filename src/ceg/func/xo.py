@@ -102,9 +102,13 @@ class xo_mean_ew_rms_ew(Node.D0_F64_4):
                 return None
             return 0.0, v, v, np.abs(v)
 
-        rf: Ref.D0_F64_4 = cast(Ref.D0_F64_4, event.prev.ref)
+        rf: Ref.D0_F64_4 = cast(
+            Ref.D0_F64_4, event.prev.ref
+        )
 
-        prev_v = self.v.history(graph).last_before(event.prev.t)
+        prev_v = self.v.history(graph).last_before(
+            event.prev.t
+        )
 
         prev_f = rf.history(graph, slot=1).last_before(
             event.prev.t
@@ -126,7 +130,11 @@ class xo_mean_ew_rms_ew(Node.D0_F64_4):
         # and do on that in pct
         # it's the signal anyway, doesnt need to be in dollars
 
-        if prev_f is None or prev_s is None or prev_vol is None:
+        if (
+            prev_f is None
+            or prev_s is None
+            or prev_vol is None
+        ):
             return 0.0, v, v, np.abs(v)
 
         alpha_f = alpha(self.span_f)

@@ -17,9 +17,14 @@ import polars as pl
 import pathlib
 from pathlib import Path
 
+import json
+import datetime as dt
+
 from .. import s3
 
 from .. import logs
+
+from .FRD_API import KEY
 
 logger, log = logs.logger(
     __file__,
@@ -124,8 +129,9 @@ logger, log = logs.logger(
 # Example :
 # https://firstratedata.com/api/ticker_listing?type=futures&userid=Gp66_esi0E-jz_-_mfmW0Q
 
+
 class Folders:
-    STOCK = "stock" # NOTE: tbc, stock?
+    STOCK = "stock"  # NOTE: tbc, stock?
     ETF = "etf"
     FUT = "futures"
     FUTC = "individual_contracts_archive"
@@ -183,24 +189,77 @@ suffix_maps = cast(
                 ),
             ),
             Folders.IND: SuffixMap(
-                file=frozendict(
-                    empty=""
-                ),
+                file=frozendict(empty=""),
                 folder=frozendict(
                     raw="",
-                )
+                ),
             ),
             Folders.FX: SuffixMap(
-                file=frozendict(
-                    empty=""
-                ),
+                file=frozendict(empty=""),
                 folder=frozendict(
                     raw="",
-                )
+                ),
             ),
         }
     ),
 )
+import requests, zipfile, io
+
+def request_archive(
+    res: Path,
+    folder: str,
+    symbol: str,
+    suffix: str | None = None,
+    snap: str = "full",  # full
+    freq: str = "1day",  # 1day
+):
+    url = f"https://firstratedata.com/api/data_file?type={folder}"
+    url += f"&period={snap}&timeframe={freq}"
+
+    suffixes = suffix_maps[folder].folder
+    if suffix is None:
+        suffix = suffixes.get("default", None)
+        
+    suffix_folder = None
+    if suffix is not None:
+        suffix_folder = suffixes.get(suffix)
+
+    if suffix_folder is not None:
+        suffix = suffix_folder
+        if folder == Folders.ETF:
+            suffix = suffix.removesuffix("_")
+            if suffix.startswith("adj"):
+                suffix = "adj_" + suffix.removeprefix("adj")
+        else:
+            raise ValueError(folder, suffix, url)
+    else:
+        raise ValueError(folder, suffixes, suffix)
+
+    if len(suffix):
+        url += f"&adjustment={suffix}"
+
+    if folder == Folders.ETF or folder == Folders.STOCK:
+        url += f"&ticker_range={symbol[0]}"
+
+    url += f"&userid={KEY}"
+    print(url)
+
+    if not res.parent.exists():
+        res.parent.mkdir(exist_ok=True, parents=True)
+
+    data = requests.get(url)
+    with res.open('wb+') as f:
+        f.write(data.content)
+
+    # z = zipfile.ZipFile(io.BytesIO(r.content))
+
+    dp_timestamp = str(res).removesuffix(".zip") + "_timestamp.json"
+    with Path(dp_timestamp).open("w+") as f:
+        json.dump({
+            "timestamp": dt.date.today().isoformat()
+        }, f)
+
+    return res
 
 
 def folder_stem(
@@ -228,6 +287,7 @@ def folder_stem(
 
     return stem
 
+
 def file_stem(
     folder: str,
     symbol: str,
@@ -247,8 +307,9 @@ def file_stem(
     file_stem = f"{symbol}_{snap}_{freq}"
     if suffix_file is not None and len(suffix_file):
         file_stem = f"{file_stem}_{suffix_file}"
-    
+
     return file_stem
+
 
 def find_folder(
     dir: str,
@@ -263,16 +324,16 @@ def find_folder(
         if fp.name.startswith(stem):
             fps.append(fp)
 
-    assert len(fps) == 1, (fps, stem)
-    fp = fps[0]
+    if len(fps) == 1:
+        return fps[0]
 
-    return fp
+    return None
+
 
 @contextlib.contextmanager
 def find_file(dp: Path, stem: str):
 
     with zipfile.ZipFile(dp) as archive:
-
         zip_names = archive.namelist()
         match_names = []
 
@@ -287,6 +348,7 @@ def find_file(dp: Path, stem: str):
 
         name = match_names[0]
         yield name, archive
+
 
 @contextlib.contextmanager
 def open_file(dp: Path, stem: str):
@@ -350,7 +412,9 @@ def parse_daily_file(
         df = df.rename({"column_6": "volume"})
     else:
         df = df.with_columns(
-            polars.lit(None).cast(polars.Float64).alias("volume")
+            polars.lit(None)
+            .cast(polars.Float64)
+            .alias("volume")
         )
     if "column_7" in df:
         df = df.rename({"column_7": "open_interest"})
@@ -362,6 +426,7 @@ def parse_daily_file(
         )
     assert "date_right" not in df.schema, df.schema
     return df.pipe(filter_start_end, start, end)
+
 
 SCHEMA = {
     "date": pl.Date,
@@ -377,6 +442,7 @@ FIELD_INDICES = {
     k: i - 1 for i, k in enumerate(SCHEMA) if k != "date"
 }
 
+
 class FieldIndices:
     OPEN = FIELD_INDICES["open"]
     HIGH = FIELD_INDICES["high"]
@@ -384,6 +450,7 @@ class FieldIndices:
     CLOSE = FIELD_INDICES["close"]
     VOLUME = FIELD_INDICES["volume"]
     OPEN_INTEREST = FIELD_INDICES["open_interest"]
+
 
 def filter_start_end(
     df: polars.DataFrame,
@@ -410,6 +477,7 @@ def filter_start_end(
     assert "date_right" not in df.schema, df.schema
     return df
 
+
 def read_daily_file(
     fp: str | bytes,
     start: dt.date | None = None,
@@ -423,6 +491,7 @@ def read_daily_file(
         df = parse_daily_file(f=fp, start=start, end=end)
 
     return df
+
 
 # TODO: streamlit tiemzone offset
 def get_bucket():
@@ -475,6 +544,7 @@ def read_file_s3(
     bs: bytes = s3.get_object(bucket, key)
     return polars.DataFrame.deserialize(BytesIO(bs))
 
+
 def read_file(
     parent: str,
     folder: str,
@@ -486,10 +556,16 @@ def read_file(
     start: dt.date | None = None,
     end: dt.date | None = None,
     fields: list[str] | None = None,
+    update: bool = False,
 ):
-    log("INFO")( read_data=f"{folder} {symbol}" + (
-        "" if suffix is None else f" {suffix}"
-    ))
+    today = dt.date.today()
+    since_weekday = max(0, today.weekday() - 4)
+    last_weekday = today - dt.timedelta(days=since_weekday)
+
+    log("INFO")(
+        read_data=f"{folder} {symbol}"
+        + ("" if suffix is None else f" {suffix}")
+    )
     if freq == "1day":
         if os.environ.get("DATA_SOURCE_FRD") == "AWS":
             return read_file_s3(
@@ -499,16 +575,42 @@ def read_file(
                 snap=snap,
                 freq=freq,
             ).pipe(filter_start_end, start, end)
+        path = folder_stem(
+            folder=folder,
+            symbol=symbol,
+            suffix=suffix,
+            snap=snap,
+            freq=freq,
+        )
         dp = find_folder(
             parent,
-            stem=folder_stem(
+            path,
+        )
+        if dp is None and update:
+            dp = request_archive(
+                Path(parent) / f"{path}.zip",
                 folder=folder,
                 symbol=symbol,
                 suffix=suffix,
                 snap=snap,
                 freq=freq,
             )
-        )
+        elif dp is None:
+            raise ValueError(dp)
+        else:
+            dp_timestamp = str(dp).removesuffix(".zip") + "_timestamp.json"
+            with Path(dp_timestamp).open('r') as f:
+                ts = json.load(f)
+            timestamp = dt.date.fromisoformat(ts["timestamp"])
+            if timestamp < last_weekday and update:
+                dp = request_archive(
+                    Path(parent) / f"{path}.zip",
+                    folder=folder,
+                    symbol=symbol,
+                    suffix=suffix,
+                    snap=snap,
+                    freq=freq,
+                )
         with open_file(
             dp,
             stem=file_stem(
@@ -517,8 +619,11 @@ def read_file(
                 suffix=suffix,
                 snap=snap,
                 freq=freq,
-            )
+            ),
         ) as f:
-            return read_daily_file(f, start=start, end=end)
+            return read_daily_file(f, start=start, end=end).filter(
+                pl.col("date") < dt.date.today()
+            )
     else:
         raise ValueError(freq)
+

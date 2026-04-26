@@ -125,7 +125,6 @@ class mean(Node.Scalar_F64):
 
 @dataclass(frozen=True)
 class mean_w(Node.Scalar_F64):
-
     type: str
     #
     v: Ref.Scalar_F64
@@ -464,7 +463,6 @@ class rms(Node.Scalar_F64):
 
 @dataclass(frozen=True)
 class rms_w(Node.Scalar_F64):
-
     type: str
     #
     v: Ref.Scalar_F64
@@ -574,7 +572,9 @@ class rms_ew(Node.Scalar_F64):
         v_sq = np.square(v)
 
         return (
-            np.sqrt(((1 - alpha) * prev_sq) + (alpha * v_sq))
+            np.sqrt(
+                ((1 - alpha) * prev_sq) + (alpha * v_sq)
+            )
             * self.b
         )
 
@@ -634,7 +634,6 @@ class max(Node.Scalar_F64):
 
 @dataclass(frozen=True)
 class max_w(Node.Scalar_F64):
-
     type: str
     #
     v: Ref.Scalar_F64
@@ -1073,7 +1072,6 @@ class quantile(Node.Scalar_F64):
 
 @dataclass(frozen=True)
 class quantile_w(Node.Scalar_F64):
-
     type: str
     #
     v: Ref.Scalar_F64
@@ -1200,17 +1198,23 @@ class cov(Node.Scalar_F64):
         # TODO: if only one observation, return nan?
         mu_1 = None
         if self.mu_1 is not None:
-            mu_1 = self.mu_1.history(graph).last_before(event.t)
+            mu_1 = self.mu_1.history(graph).last_before(
+                event.t
+            )
         if mu_1 is None:
             mu_1 = np.nanmean(v1)
 
         if self.mu_2 is not None:
-            mu_2 = self.mu_2.history(graph).last_before(event.t)
+            mu_2 = self.mu_2.history(graph).last_before(
+                event.t
+            )
         mu_2 = None
         if mu_2 is None:
             mu_2 = np.nanmean(v2)
 
-        res = np.nanmean((v1 - float(mu_1)) * (v2 - float(mu_2)))
+        res = np.nanmean(
+            (v1 - float(mu_1)) * (v2 - float(mu_2))
+        )
 
         return res
 

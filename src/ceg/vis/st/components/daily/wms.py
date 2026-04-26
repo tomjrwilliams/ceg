@@ -8,7 +8,6 @@ from typing import (
     Literal,
     overload,
     cast,
-
 )
 from pathlib import Path
 import datetime as dt
@@ -33,6 +32,7 @@ from ..dates import *
 from ..dfs import *
 
 from ..... import apis
+
 st = apis.st.library()
 
 from .....apis import assert_is, t, perf
@@ -50,13 +50,12 @@ class DailyWatermarks(ExploreDailyComponent):
     n: int = 2
     width: float = 0.1
 
-
     def render(self) -> DailyWatermarks:
-        
+
         df = self.df
         if not len(df):
             return self
-        
+
         exp = self.explorer
         # df = self.render_date_filter(df)
 
@@ -70,7 +69,7 @@ class DailyWatermarks(ExploreDailyComponent):
                 "symbol",
                 "span",
                 "field",
-            ]
+            ],
         )
         df_state = df.pipe(
             radio_filter_df,
@@ -83,27 +82,34 @@ class DailyWatermarks(ExploreDailyComponent):
         )
 
         for (label,), sub_df in df_state.partition_by(
-            exp.label_key,
-            as_dict=True
+            exp.label_key, as_dict=True
         ).items():
             # TODO: manually set colors ourselves?
-            for t in px.line(
-                sub_df.sort(by="date"),
-                x=exp.date_key,
-                y=exp.value_key,
-                color="group",
-            ).update_traces(
-                legendgroup=label,
-                legendgrouptitle_text=label,
-            ).data:
+            for t in (
+                px.line(
+                    sub_df.sort(by="date"),
+                    x=exp.date_key,
+                    y=exp.value_key,
+                    color="group",
+                )
+                .update_traces(
+                    legendgroup=label,
+                    legendgrouptitle_text=label,
+                )
+                .data
+            ):
                 fig.add_trace(t)
 
-        st.plotly_chart(fig.update_layout(
-            legend=dict(groupclick="toggleitem")
-        ), key = f"{self.key}_fig_rx")
-        
+        st.plotly_chart(
+            fig.update_layout(
+                legend=dict(groupclick="toggleitem")
+            ),
+            key=f"{self.key}_fig_rx",
+        )
+
         return self
-    
+
+
 EXPLORER_COMPONENTS["watermarks"] = DailyWatermarks
 
 __all__ = ["DailyWatermarks"]

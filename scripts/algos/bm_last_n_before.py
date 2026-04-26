@@ -12,7 +12,9 @@ variants = {
     "loop": algos.last_n_before_naive,
     "np": algos.last_n_before_np,
 }
-vs = {p: np.linspace(0, 2**p, 2**p) for p in range(3, 18, 3)}
+vs = {
+    p: np.linspace(0, 2**p, 2**p) for p in range(3, 18, 3)
+}
 results = []
 
 print({p: v.shape for p, v in vs.items()})

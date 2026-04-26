@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -54,7 +53,7 @@ class IndexDailyRx(
     ... )
     >>> obj = IndexDailyRx.new(ord, adjust="abs")
     >>> Graph.with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-idx-d-VIX-close-raw-frd-rx' [f64]
     [
@@ -78,8 +77,10 @@ class IndexDailyRx(
 
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
-        type: Literal["IndexDailyRxSnap"] = "IndexDailyRxSnap"
- 
+        type: Literal["IndexDailyRxSnap"] = (
+            "IndexDailyRxSnap"
+        )
+
     @classmethod
     def new(
         cls,
@@ -106,18 +107,22 @@ class IndexDailyRx(
             )
         assert adjust in RX_ADJUSTMENTS, adjust
         return cls(
-            path=parent.extend_path("rx"),
+            id=parent.extend_id("rx"),
             parent=parent,
             adjust=adjust,
-        )    
+        )
 
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ValueAppend):
             return HandleUpdateIndexDailyRx()
         elif isinstance(event, ValueUpdate):
-            assert self.get_parent().path == event.obj, (self, event)
+            assert self.get_parent().id == event.obj, (
+                self,
+                event,
+            )
             return HandleNewIndexDailyRx()
         raise ValueError((self, event))
+
 
 @dataclass(frozen=True)
 class HandleUpdateIndexDailyRx(Handler):
@@ -132,20 +137,20 @@ class HandleUpdateIndexDailyRx(Handler):
         # if after snap.last, Wget and append
         return
 
+
 @dataclass(frozen=True)
 class HandleNewIndexDailyRx(
     HandleNewDailyFromDailyParentPl
 ):
-    
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
         obj: IndexDailyRx,
     ) -> pl.DataFrame:
-        
+
         parent = obj.get_parent()
-        
+
         e = (
             pl.col(VALUE).forward_fill().pct_change()
             if obj.adjust == "pct"
@@ -164,6 +169,7 @@ class HandleNewIndexDailyRx(
 
         return df
 
+
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
 # if backend type / loc change, copy
@@ -171,12 +177,16 @@ class HandleNewIndexDailyRx(
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class HasIndexDailyGrandParent(Object):
     parent: IndexDailyPx | IndexDailyRx | str
 
     def get_parent(self) -> IndexDailyPx | IndexDailyRx:
-        return context.get().get(self.parent, IndexDailyPx | IndexDailyRx)
+        return context.get().get(
+            self.parent, IndexDailyPx | IndexDailyRx
+        )
+
 
 #  ------------------
 

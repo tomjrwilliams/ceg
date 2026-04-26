@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -54,7 +53,7 @@ class FxDailyRx(
     ... )
     >>> obj = FxDailyRx.new(ord, adjust="abs")
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fx-d-EURUSD-close-raw-frd-rx' [f64]
     [
@@ -68,6 +67,7 @@ class FxDailyRx(
         0.00272
     ]
     """
+
     parent: FxDailyPx | str
 
     adjust: str
@@ -78,7 +78,7 @@ class FxDailyRx(
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["FxDailyRxSnap"] = "FxDailyRxSnap"
- 
+
     @classmethod
     def new(
         cls,
@@ -106,19 +106,22 @@ class FxDailyRx(
         assert adjust in RX_ADJUSTMENTS, adjust
         # assert ident is not None, parent
         return cls(
-            path=parent.extend_path("rx"),
+            id=parent.extend_id("rx"),
             parent=parent,
             adjust=adjust,
         )
-
 
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ValueAppend):
             return HandleUpdateFxDailyRx()
         elif isinstance(event, ValueUpdate):
-            assert self.get_parent().path == event.obj, (self, event)
+            assert self.get_parent().id == event.obj, (
+                self,
+                event,
+            )
             return HandleNewFxDailyRx()
         raise ValueError((self, event))
+
 
 @dataclass(frozen=True)
 class HandleUpdateFxDailyRx(Handler):
@@ -135,10 +138,7 @@ class HandleUpdateFxDailyRx(Handler):
 
 
 @dataclass(frozen=True)
-class HandleNewFxDailyRx(
-    HandleNewDailyFromDailyParentPl
-):
-    
+class HandleNewFxDailyRx(HandleNewDailyFromDailyParentPl):
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -149,7 +149,7 @@ class HandleNewFxDailyRx(
 
         if "USD" not in symbol:
             raise ValueError(self)
-        
+
         # usdjpy = 153
         # jpyusd = 0.0065
         # if symbol[:3] == "USD":
@@ -176,6 +176,7 @@ class HandleNewFxDailyRx(
 
         return df
 
+
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
 # if backend type / loc change, copy
@@ -183,12 +184,16 @@ class HandleNewFxDailyRx(
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class HasFxDailyGrandParent(Object):
     parent: FxDailyPx | FxDailyRx | str
 
     def get_parent(self) -> FxDailyPx | FxDailyRx:
-        return context.get().get(self.parent, FxDailyPx | FxDailyRx)
+        return context.get().get(
+            self.parent, FxDailyPx | FxDailyRx
+        )
+
 
 #  ------------------
 

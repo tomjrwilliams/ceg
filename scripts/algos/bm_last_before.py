@@ -11,7 +11,9 @@ variants = {
     "loop": algos.last_before_naive,
     "bin": algos.last_before,
 }
-vs = {p: np.linspace(0, 2**p, 2**p) for p in range(3, 18, 3)}
+vs = {
+    p: np.linspace(0, 2**p, 2**p) for p in range(3, 18, 3)
+}
 results = []
 
 print({p: v.shape for p, v in vs.items()})
@@ -39,7 +41,9 @@ for p, v in vs.items():
                 t = time.perf_counter_ns()
                 for i in range(n):
                     _ = f(v, v, i, offset, p)
-                acc += (time.perf_counter_ns() - t) / 1_000_000
+                acc += (
+                    time.perf_counter_ns() - t
+                ) / 1_000_000
             res[variant] = round(acc / runs, 4)
         r = dict(
             n=n,

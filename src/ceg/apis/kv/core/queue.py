@@ -27,18 +27,13 @@ ne = Literal["ne"]
 
 V = TypeVar("V")
 
+
 def comparator(comp: Comp, v: V) -> Callable[[V], bool]:
     op = getattr(operator, comp)
     return lambda val: op(val, v)
 
-Comp = (
-    gt
-    | ge
-    | lt
-    | le
-    | eq
-    | ne
-)
+
+Comp = gt | ge | lt | le | eq | ne
 
 
 @dataclass(frozen=True)
@@ -49,6 +44,7 @@ class QueueConfig:
 @dataclass(frozen=True)
 class QueueStore(ABC, Generic[ID, DtI, ValI]):
     """QueueStore[ID, DtI, ValI]"""
+
     config: QueueConfig
 
     type_id: Type[ID]
@@ -57,11 +53,12 @@ class QueueStore(ABC, Generic[ID, DtI, ValI]):
 
     @abstractmethod
     def prepare(self) -> QueueStore: ...
+
     # TODO: return self
 
     @abstractmethod
     def slice(
-        self, 
+        self,
         n: int = 1,
         where_i: list[tuple[Comp, ID]] | None = None,
         where_dt: list[tuple[Comp, DtI]] | None = None,
@@ -70,7 +67,7 @@ class QueueStore(ABC, Generic[ID, DtI, ValI]):
 
     @abstractmethod
     def islice(
-        self, 
+        self,
         n: int = 1,
         where_i: list[tuple[Comp, ID]] | None = None,
         where_dt: list[tuple[Comp, DtI]] | None = None,
@@ -87,6 +84,7 @@ class QueueStore(ABC, Generic[ID, DtI, ValI]):
 @dataclass(frozen=True)
 class QueueIO(Generic[ID, DtI, ValI, DtO, ValO]):
     """QueueIO[ID, DtI, ValI, DtO, ValO]"""
+
     type_id: Type[ID]
     type_dt_i: Type[DtI]
     type_val_i: Type[ValI]
@@ -100,7 +98,9 @@ class QueueIO(Generic[ID, DtI, ValI, DtO, ValO]):
     def encode_dt_type(self, t: Type[DtO]) -> Type[DtI]: ...
 
     @abstractmethod
-    def encode_val_type(self, t: Type[ValO]) -> Type[ValI]: ...
+    def encode_val_type(
+        self, t: Type[ValO]
+    ) -> Type[ValI]: ...
 
     @abstractmethod
     def encode_dt(self, val: DtO) -> DtI: ...
@@ -131,14 +131,15 @@ class QueueIO(Generic[ID, DtI, ValI, DtO, ValO]):
     def check_type_dt_o(self, dt_o: DtO) -> DtO:
         assert isinstance(dt_o, self.type_dt_o)
         return dt_o
-    
+
     def check_type_val_i(self, val_i: ValI) -> ValI:
         assert isinstance(val_i, self.type_val_i)
         return val_i
-        
+
     def check_type_val_o(self, val_o: ValO) -> ValO:
         assert isinstance(val_o, self.type_val_o)
         return val_o
+
 
 @dataclass(frozen=True)
 class Queue(
@@ -152,7 +153,7 @@ class Queue(
         where_dt: list[tuple[Comp, DtO]] | None = None,
     ) -> list[tuple[Comp, DtI]] | None:
         return (
-            where_dt 
+            where_dt
             if where_dt is None
             else [
                 (comp, self.encode_dt(t))
@@ -161,23 +162,22 @@ class Queue(
         )
 
     def unzip_decode_slice(
-        self,
-        sl: list[tuple[ID, ValI, DtI]]
+        self, sl: list[tuple[ID, ValI, DtI]]
     ) -> tuple[list[ID], list[ValO], list[DtO]]:
         if not len(sl):
             return [], [], []
         i, v, t = cast(
             tuple[list[ID], list[ValI], list[DtI]],
-            zip(*sl), 
+            zip(*sl),
         )
         return (
             list(i),
             list(map(self.decode_val, v)),
-            list(map(self.decode_dt, t)), 
+            list(map(self.decode_dt, t)),
         )
 
     def head(
-        self, 
+        self,
         n: int = 1,
         where_i: list[tuple[Comp, ID]] | None = None,
         where_dt: list[tuple[Comp, DtO]] | None = None,
@@ -185,13 +185,13 @@ class Queue(
         res = self.slice(
             n,
             where_i=where_i,
-            where_dt = self.encode_where_dt(where_dt),
-            head=True
+            where_dt=self.encode_where_dt(where_dt),
+            head=True,
         )
         return list(map(self.decode_val, res))
 
     def tail(
-        self, 
+        self,
         n: int = 1,
         where_i: list[tuple[Comp, ID]] | None = None,
         where_dt: list[tuple[Comp, DtO]] | None = None,
@@ -199,13 +199,13 @@ class Queue(
         res = self.slice(
             n,
             where_i=where_i,
-            where_dt = self.encode_where_dt(where_dt),
-            head=False
+            where_dt=self.encode_where_dt(where_dt),
+            head=False,
         )
         return list(map(self.decode_val, res))
 
     def ihead(
-        self, 
+        self,
         n: int = 1,
         where_i: list[tuple[Comp, ID]] | None = None,
         where_dt: list[tuple[Comp, DtO]] | None = None,
@@ -213,13 +213,13 @@ class Queue(
         res = self.islice(
             n,
             where_i=where_i,
-            where_dt = self.encode_where_dt(where_dt),
-            head=True
+            where_dt=self.encode_where_dt(where_dt),
+            head=True,
         )
         return self.unzip_decode_slice(res)
 
     def itail(
-        self, 
+        self,
         n: int = 1,
         where_i: list[tuple[Comp, ID]] | None = None,
         where_dt: list[tuple[Comp, DtO]] | None = None,
@@ -227,8 +227,8 @@ class Queue(
         res = self.islice(
             n,
             where_i=where_i,
-            where_dt = self.encode_where_dt(where_dt),
-            head=False
+            where_dt=self.encode_where_dt(where_dt),
+            head=False,
         )
         return self.unzip_decode_slice(res)
 
@@ -261,7 +261,7 @@ class MemoryQueue(Queue[ID, DtI, ValI, DtO, ValO]):
         return self
 
     def slice(
-        self, 
+        self,
         n: int = 1,
         where_i: list[tuple[Comp, ID]] | None = None,
         where_dt: list[tuple[Comp, DtI]] | None = None,
@@ -271,7 +271,7 @@ class MemoryQueue(Queue[ID, DtI, ValI, DtO, ValO]):
             n=n,
             where_i=where_i,
             where_dt=where_dt,
-            head=head
+            head=head,
         )
         if not len(i_dt_vs):
             return []
@@ -279,7 +279,7 @@ class MemoryQueue(Queue[ID, DtI, ValI, DtO, ValO]):
         return cast(list[ValI], list(vs))
 
     def islice(
-        self, 
+        self,
         n: int = 1,
         where_i: list[tuple[Comp, ID]] | None = None,
         where_dt: list[tuple[Comp, DtI]] | None = None,
@@ -287,23 +287,31 @@ class MemoryQueue(Queue[ID, DtI, ValI, DtO, ValO]):
     ) -> list[tuple[ID, ValI, DtI]]:
         acc_n: int = 0
         acc: list[tuple[ID, ValI, DtI]] = []
-        comp_i = [] if where_i is None else [
-            comparator(comp, i) for comp, i in where_i
-        ]
-        comp_dt = [] if where_dt is None else [
-            comparator(comp, dt) for comp, dt in where_dt
-        ]
+        comp_i = (
+            []
+            if where_i is None
+            else [
+                comparator(comp, i) for comp, i in where_i
+            ]
+        )
+        comp_dt = (
+            []
+            if where_dt is None
+            else [
+                comparator(comp, dt)
+                for comp, dt in where_dt
+            ]
+        )
         for i, (v, dt) in (
-            enumerate(self.data) 
-            if head 
+            enumerate(self.data)
+            if head
             else reversed(list(enumerate(self.data)))
         ):
             i = cast(ID, i)
-            if not (all((
-                wh(i) for wh in comp_i
-            )) and all((
-                wh(dt) for wh in comp_dt
-            ))):
+            if not (
+                all((wh(i) for wh in comp_i))
+                and all((wh(dt) for wh in comp_dt))
+            ):
                 continue
             acc.append((i, v, dt))
             acc_n += 1
@@ -317,7 +325,12 @@ class MemoryQueue(Queue[ID, DtI, ValI, DtO, ValO]):
     ) -> tuple[ID, DtI]:
         dt = self.encode_dt(self.init_dt())
         i = cast(ID, len(self.data))
-        self.data.append((val, dt,))
+        self.data.append(
+            (
+                val,
+                dt,
+            )
+        )
         return i, dt
 
 
@@ -334,7 +347,9 @@ class QueueTimestampAsFloat(
     def init_dt(self) -> dt.datetime:
         return dt.datetime.now()
 
-    def encode_dt_type(self, t: Type[dt.datetime]) -> Type[float]:
+    def encode_dt_type(
+        self, t: Type[dt.datetime]
+    ) -> Type[float]:
         return float
 
     def encode_dt(self, dt: dt.datetime) -> float:
@@ -343,16 +358,18 @@ class QueueTimestampAsFloat(
     def decode_dt(self, dt: float) -> dt.datetime:
         return datetime.datetime.fromtimestamp(dt)
 
+
 @dataclass(frozen=True)
 class ExampleQueue(QueueTimestampAsFloat[int, int, float]):
-
     type_id: Type[int] = int
     type_dt_i: Type[float] = float
     type_val_i: Type[int] = int
     type_dt_o: Type[dt.datetime] = dt.datetime
     type_val_o: Type[float] = float
 
-    def encode_dt_type(self, t: Type[dt.datetime]) -> Type[float]:
+    def encode_dt_type(
+        self, t: Type[dt.datetime]
+    ) -> Type[float]:
         return float
 
     def encode_val_type(self, t: Type[float]) -> Type[int]:
@@ -370,11 +387,12 @@ class ExampleQueue(QueueTimestampAsFloat[int, int, float]):
     def decode_val(self, v: int) -> float:
         return float(v)
 
+
 @final
 @dataclass(frozen=True)
 class ExampleMemoryQueue(
     ExampleQueue,
-    MemoryQueue[int, float, int, dt.datetime, float]
+    MemoryQueue[int, float, int, dt.datetime, float],
 ):
     """
     >>> import time
@@ -409,7 +427,9 @@ class ExampleMemoryQueue(
     >>> kv.head(n=3, where_i=[("le", 1)])
     [0.0, 1.0]
     """
+
     config: QueueConfig = QueueConfig()
+
 
 __all__ = [
     "gt",

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -44,6 +43,7 @@ O = TypeVar("O", bound=Object)
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class DailyMParams(DailyParams):
     chunk: int = 32
@@ -55,7 +55,7 @@ class DailyMParams(DailyParams):
     # only back-end layout
     # NOTE: likewise for back-end type: np vs pq etc.
 
-    def build_path(
+    def build_id(
         self,
         cls: Type[DailyM],
     ):
@@ -80,7 +80,7 @@ class DailyM(DailyWithDailyParent, DailyChunked):
 
     SUFFIX: ClassVar[str] = "M"
     # NOTE: to override
-    
+
     @classmethod
     def new(
         cls,
@@ -92,28 +92,29 @@ class DailyM(DailyWithDailyParent, DailyChunked):
             window=window,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
 
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class HandleNewDailyM(
     HandleNewDailyFromDailyParentPl,
 ):
-    
     pass
 
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class DailyMA(DailyM):
@@ -127,7 +128,7 @@ class DailyMA(DailyM):
     ... )
     >>> obj = DailyMA.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-ma-4' [f64]
     [
@@ -141,6 +142,7 @@ class DailyMA(DailyM):
         5737.0625
     ]
     """
+
     version: int = 0
     type: Literal["DailyMA"] = "DailyMA"
 
@@ -149,15 +151,13 @@ class DailyMA(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyMASnap"] = "DailyMASnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyMA:
+
+    def handler_object_new(self) -> HandleNewDailyMA:
         return HandleNewDailyMA()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyMA(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -177,15 +177,14 @@ class HandleNewDailyMA(HandleNewDailyM):
         obj: DailyM,
     ) -> pl.Expr:
         params = obj.params
-        return (
-            pl.col(VALUE).rolling_mean(
-                len(df) 
-                if params.window is None 
-                else params.window,
-                min_samples=1, # TODO: or more?
-            )
+        return pl.col(VALUE).rolling_mean(
+            len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
-    
+
+
 @dataclass(frozen=True)
 class DailyKurt(DailyM):
     """
@@ -198,7 +197,7 @@ class DailyKurt(DailyM):
     ... )
     >>> obj = DailyKurt.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rx-kurt-4' [f64]
     [
@@ -212,6 +211,7 @@ class DailyKurt(DailyM):
         -1.379246
     ]
     """
+
     version: int = 0
     type: Literal["DailyKurt"] = "DailyKurt"
 
@@ -220,15 +220,13 @@ class DailyKurt(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyKurtSnap"] = "DailyKurtSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyKurt:
+
+    def handler_object_new(self) -> HandleNewDailyKurt:
         return HandleNewDailyKurt()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyKurt(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -248,12 +246,13 @@ class HandleNewDailyKurt(HandleNewDailyM):
         obj: DailyM,
     ) -> pl.Expr:
         params = obj.params
-        return (
-            pl.col(VALUE).rolling_kurtosis(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
-            )
+        return pl.col(VALUE).rolling_kurtosis(
+            len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
+
 
 @dataclass(frozen=True)
 class DailyMax(DailyM):
@@ -267,7 +266,7 @@ class DailyMax(DailyM):
     ... )
     >>> obj = DailyMax.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-max-4' [f64]
     [
@@ -281,6 +280,7 @@ class DailyMax(DailyM):
         5826.5
     ]
     """
+
     version: int = 0
     type: Literal["DailyMax"] = "DailyMax"
 
@@ -289,14 +289,13 @@ class DailyMax(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyMaxSnap"] = "DailyMaxSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyMax:
+
+    def handler_object_new(self) -> HandleNewDailyMax:
         return HandleNewDailyMax()
+
+
 @dataclass(frozen=True)
 class HandleNewDailyMax(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -316,13 +315,13 @@ class HandleNewDailyMax(HandleNewDailyM):
         obj: DailyM,
     ) -> pl.Expr:
         params = obj.params
-        return(
-            pl.col(VALUE).rolling_max(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
-            )
+        return pl.col(VALUE).rolling_max(
+            len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
-    
+
 
 @dataclass(frozen=True)
 class DailyMed(DailyM):
@@ -336,7 +335,7 @@ class DailyMed(DailyM):
     ... )
     >>> obj = DailyMed.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-med-4' [f64]
     [
@@ -350,6 +349,7 @@ class DailyMed(DailyM):
         5749.375
     ]
     """
+
     version: int = 0
     type: Literal["DailyMed"] = "DailyMed"
 
@@ -358,15 +358,13 @@ class DailyMed(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyMedSnap"] = "DailyMedSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyMed:
+
+    def handler_object_new(self) -> HandleNewDailyMed:
         return HandleNewDailyMed()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyMed(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -386,12 +384,13 @@ class HandleNewDailyMed(HandleNewDailyM):
         obj: DailyM,
     ) -> pl.Expr:
         params = obj.params
-        return(
-            pl.col(VALUE).rolling_median(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
-            )
+        return pl.col(VALUE).rolling_median(
+            len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
+
 
 @dataclass(frozen=True)
 class DailyMid(DailyM):
@@ -405,7 +404,7 @@ class DailyMid(DailyM):
     ... )
     >>> obj = DailyMid.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-mid-4' [f64]
     [
@@ -419,6 +418,7 @@ class DailyMid(DailyM):
         5724.75
     ]
     """
+
     params: DailyMidParams
 
     version: int = 0
@@ -429,12 +429,10 @@ class DailyMid(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyMidSnap"] = "DailyMidSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyMid:
+
+    def handler_object_new(self) -> HandleNewDailyMid:
         return HandleNewDailyMid()
-    
+
     @classmethod
     def new(
         cls,
@@ -443,24 +441,22 @@ class DailyMid(DailyM):
         width: float | None = None,
         project: Project | None = None,
     ):
-        params=DailyMidParams(
+        params = DailyMidParams(
             window=window,
             width=width,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
-    
-    
+
+
 @dataclass(frozen=True)
 class DailyMidParams(DailyMParams):
     chunk: int = 32
@@ -469,7 +465,7 @@ class DailyMidParams(DailyMParams):
     window: int | None = None
     width: float | None = None
 
-    def build_path(
+    def build_id(
         self,
         cls: Type[DailyM],
     ):
@@ -479,16 +475,15 @@ class DailyMidParams(DailyMParams):
             params = "ex"
         else:
             params = str(window)
-        return f"{cls.SUFFIX}-" + params + (
-            ""
-            if width is None
-            else f"-{width}"
+        return (
+            f"{cls.SUFFIX}-"
+            + params
+            + ("" if width is None else f"-{width}")
         )
 
-    
+
 @dataclass(frozen=True)
 class HandleNewDailyMid(HandleNewDailyM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -511,26 +506,34 @@ class HandleNewDailyMid(HandleNewDailyM):
         e = pl.col(VALUE)
         u = (
             e.rolling_max(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
+                len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
             )
             if params.width is None
             else e.rolling_quantile(
                 0.5 + params.width,
-                window_size=len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
+                window_size=len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
             )
         )
         l = (
             e.rolling_min(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
+                len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
             )
             if params.width is None
             else e.rolling_quantile(
                 0.5 - params.width,
-                window_size=len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
+                window_size=len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
             )
         )
         e = (u + l) / 2
@@ -542,7 +545,7 @@ class HandleNewDailyMid(HandleNewDailyM):
             .alias(VALUE)
         )
         return df
-    
+
 
 @dataclass(frozen=True)
 class DailyMin(DailyM):
@@ -556,7 +559,7 @@ class DailyMin(DailyM):
     ... )
     >>> obj = DailyMin.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-min-4' [f64]
     [
@@ -570,6 +573,7 @@ class DailyMin(DailyM):
         5623.0
     ]
     """
+
     version: int = 0
     type: Literal["DailyMin"] = "DailyMin"
 
@@ -578,15 +582,13 @@ class DailyMin(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyMinSnap"] = "DailyMinSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyMin:
+
+    def handler_object_new(self) -> HandleNewDailyMin:
         return HandleNewDailyMin()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyMin(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -606,18 +608,17 @@ class HandleNewDailyMin(HandleNewDailyM):
         obj: DailyM,
     ) -> pl.Expr:
         params = obj.params
-        
-        return(
-            pl.col(VALUE).rolling_min(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
-            )
+
+        return pl.col(VALUE).rolling_min(
+            len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
 
 
 @dataclass(frozen=True)
 class DailyMOscParams(DailyMParams):
-    
     chunk: int = 32
     # TODO: db?
 
@@ -628,7 +629,7 @@ class DailyMOscParams(DailyMParams):
 
     # TODO: norm
 
-    def build_path(
+    def build_id(
         self,
         cls: Type[DailyOsc],
     ):
@@ -645,6 +646,7 @@ class DailyMOscParams(DailyMParams):
             return f"{res}-{activation}"
         return res
 
+
 @dataclass(frozen=True)
 class DailyOsc(DailyM):
     """
@@ -658,7 +660,7 @@ class DailyOsc(DailyM):
     >>> obj = DailyOsc.new(ord, fast=4, slow=12, vol=8)
     >>> unit = DailyOsc.new(ord, fast=4, slow=12, vol=8, activation="tanh")
     >>> Graph().with_objs(obj, unit).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-osc-4-12-8' [f64]
     [
@@ -671,7 +673,7 @@ class DailyOsc(DailyM):
         0.828809
         0.060248
     ]
-    >>> unit.value_key_val().get(unit.path).tail(8)
+    >>> unit.value_key_val().get(unit.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-osc-4-12-8-tanh' [f64]
     [
@@ -685,6 +687,7 @@ class DailyOsc(DailyM):
         0.060175
     ]
     """
+
     parent: (
         str
         | Daily
@@ -729,20 +732,18 @@ class DailyOsc(DailyM):
         #
         project: Project | None = None,
     ):
-        params=DailyMOscParams(
+        params = DailyMOscParams(
             window=fast,
             slow=slow,
             vol=vol,
-            activation=activation
+            activation=activation,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
@@ -751,17 +752,15 @@ class DailyOsc(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyOscSnap"] = "DailyOscSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyOsc:
+
+    def handler_object_new(self) -> HandleNewDailyOsc:
         return HandleNewDailyOsc()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyOsc(
     HandleNewDailyFromDailyParentPl,
 ):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -774,65 +773,56 @@ class HandleNewDailyOsc(
             tags = parent.get_parent().tags
             rx = pl.col(VALUE)
             if tags.adjust == "pct":
-                px = (1 + rx).cum_prod().pipe(
-                    null_mask, rx
-                )
+                px = (1 + rx).cum_prod().pipe(null_mask, rx)
             elif tags.adjust == "abs":
-                px = rx.cum_sum().pipe(
-                    null_mask, rx
-                )
+                px = rx.cum_sum().pipe(null_mask, rx)
             else:
                 raise ValueError(obj)
         elif isinstance(parent, FutDailyOrdinal):
             tags = parent.tags
             px = pl.col(VALUE)
             if tags.adjust == "pct":
-                rx = px.forward_fill().pct_change().pipe(
-                    null_mask, px
+                rx = (
+                    px.forward_fill()
+                    .pct_change()
+                    .pipe(null_mask, px)
                 )
             elif tags.adjust == "abs":
-                rx = px.forward_fill().diff().pipe(
-                    null_mask, px
+                rx = (
+                    px.forward_fill()
+                    .diff()
+                    .pipe(null_mask, px)
                 )
             else:
                 raise ValueError(obj)
         else:
             raise ValueError((obj, parent))
-        
+
         df = df.select(VALUE=pl.col(VALUE), px=px, rx=rx)
         px = pl.col("px")
         rx = pl.col("rx")
 
         px_fast = (
-            px 
+            px
             if params.window is None or params.window == 1
             else px.rolling_mean(
                 params.window, min_samples=2
             )
         )
         px_slow = (
-            px.rolling_mean(
-                len(df), min_samples=2
-            )
+            px.rolling_mean(len(df), min_samples=2)
             if params.slow is None
-            else px.rolling_mean(
-                params.slow, min_samples=2
-            )
+            else px.rolling_mean(params.slow, min_samples=2)
         )
         # TODO: or default to rms?
         rx_vol = (
-            rx.rolling_std(
-                len(df), min_samples=2
-            )
+            rx.rolling_std(len(df), min_samples=2)
             if params.vol is None
-            else px.rolling_std(
-                params.vol, min_samples=2
-            )
+            else px.rolling_std(params.vol, min_samples=2)
         )
 
-        e = (
-            ((px_fast - px_slow) / rx_vol)
-            .pipe(null_mask, pl.col(VALUE))
+        e = ((px_fast - px_slow) / rx_vol).pipe(
+            null_mask, pl.col(VALUE)
         )
         if params.activation is None:
             pass
@@ -841,10 +831,9 @@ class HandleNewDailyOsc(
         else:
             raise ValueError(obj)
 
-        df = df.select(
-            e.alias(VALUE)
-        )
+        df = df.select(e.alias(VALUE))
         return df
+
 
 @dataclass(frozen=True)
 class DailyPLast(DailyM):
@@ -858,7 +847,7 @@ class DailyPLast(DailyM):
     ... )
     >>> obj = DailyPLast.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-plast-4' [f64]
     [
@@ -872,6 +861,7 @@ class DailyPLast(DailyM):
         1.0
     ]
     """
+
     version: int = 0
     type: Literal["DailyPLast"] = "DailyPLast"
 
@@ -880,16 +870,13 @@ class DailyPLast(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyPLastSnap"] = "DailyPLastSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyPLast:
+
+    def handler_object_new(self) -> HandleNewDailyPLast:
         return HandleNewDailyPLast()
 
 
 @dataclass(frozen=True)
 class HandleNewDailyPLast(HandleNewDailyM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -901,6 +888,7 @@ class HandleNewDailyPLast(HandleNewDailyM):
             event,
             obj,
         )
+
     def _calc_df(
         self,
         df: pl.DataFrame,
@@ -915,25 +903,26 @@ class HandleNewDailyPLast(HandleNewDailyM):
             v,
             v,
             is_null,
-            l=len(df) if params.window is None else params.window,
-            norm = False, # TODO: parametrise in path?
+            l=len(df)
+            if params.window is None
+            else params.window,
+            norm=False,  # TODO: parametrise in path?
         )
 
-        return pl.DataFrame({
-            "mask": s,
-            VALUE: res
-        }).select(
+        return pl.DataFrame({"mask": s, VALUE: res}).select(
             pl.when(pl.col("mask").is_null())
             .then(None)
             .otherwise(VALUE)
             .alias(VALUE)
         )
 
+
 import numba as nb
 
 # rolling window, indicator series of gt last
 # then exp decay over binary series?
 # so actually needs sliding window of weights
+
 
 @nb.jit()
 def calc_p_last(
@@ -970,9 +959,10 @@ def calc_p_last(
                 ij = i - j
                 if not is_null[ij]:
                     vv = (
-                        0 
+                        0
                         if v[ij] < loc[i]
-                        else 0.5 if v[ij] == loc[i]
+                        else 0.5
+                        if v[ij] == loc[i]
                         else 1
                     )
                     w = 1 / (l + 1)
@@ -980,7 +970,7 @@ def calc_p_last(
                     w_acc += w
                     k += 1
                 j += 1
-            
+
             if w_acc > 0:
                 scale = 1 / w_acc
                 acc *= scale
@@ -993,9 +983,10 @@ def calc_p_last(
                     max_v = acc
 
         i += 1
-        
+
     return res
-    
+
+
 @dataclass(frozen=True)
 class DailyQile(DailyM):
     """
@@ -1008,7 +999,7 @@ class DailyQile(DailyM):
     ... )
     >>> obj = DailyQile.new(ord, window=4, quantile=.5)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-qile-4-0.5' [f64]
     [
@@ -1033,12 +1024,10 @@ class DailyQile(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyQileSnap"] = "DailyQileSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyQile:
+
+    def handler_object_new(self) -> HandleNewDailyQile:
         return HandleNewDailyQile()
-    
+
     @classmethod
     def new(
         cls,
@@ -1047,23 +1036,22 @@ class DailyQile(DailyM):
         quantile: float | None = None,
         project: Project | None = None,
     ):
-        params=DailyQileParams(
+        params = DailyQileParams(
             window=window,
             quantile=quantile,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
-    
+
+
 @dataclass(frozen=True)
 class DailyQileParams(DailyMParams):
     chunk: int = 32
@@ -1072,7 +1060,7 @@ class DailyQileParams(DailyMParams):
     window: int | None = None
     quantile: float | None = None
 
-    def build_path(
+    def build_id(
         self,
         cls: Type[DailyM],
     ):
@@ -1084,10 +1072,10 @@ class DailyQileParams(DailyMParams):
         else:
             params = str(window)
         return f"{cls.SUFFIX}-" + params + f"-{quantile}"
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyQile(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1099,7 +1087,7 @@ class HandleNewDailyQile(HandleNewDailyM):
             event,
             obj,
         )
-        
+
     def _calc_expr(
         self,
         df: pl.DataFrame,
@@ -1108,15 +1096,15 @@ class HandleNewDailyQile(HandleNewDailyM):
     ) -> pl.Expr:
         params = obj.params
         assert params.quantile is not None, obj
-        
-        return(
-            pl.col(VALUE).rolling_quantile(
-                params.quantile,
-                window_size=len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
-            )
+
+        return pl.col(VALUE).rolling_quantile(
+            params.quantile,
+            window_size=len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
-    
+
 
 @dataclass(frozen=True)
 class DailyRank(DailyM):
@@ -1130,7 +1118,7 @@ class DailyRank(DailyM):
     ... )
     >>> obj = DailyRank.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rank-4' [f64]
     [
@@ -1144,6 +1132,7 @@ class DailyRank(DailyM):
         1.0
     ]
     """
+
     version: int = 0
     type: Literal["DailyRank"] = "DailyRank"
 
@@ -1152,14 +1141,13 @@ class DailyRank(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyRankSnap"] = "DailyRankSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyRank:
+
+    def handler_object_new(self) -> HandleNewDailyRank:
         return HandleNewDailyRank()
+
+
 @dataclass(frozen=True)
 class HandleNewDailyRank(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1179,14 +1167,14 @@ class HandleNewDailyRank(HandleNewDailyM):
         obj: DailyM,
     ) -> pl.Expr:
         params = obj.params
-        return(
-            pl.col(VALUE).rolling_rank(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
-            )
+        return pl.col(VALUE).rolling_rank(
+            len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
 
-    
+
 @dataclass(frozen=True)
 class DailyRms(DailyM):
     """
@@ -1199,7 +1187,7 @@ class DailyRms(DailyM):
     ... )
     >>> obj = DailyRms.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rx-rms-4' [f64]
     [
@@ -1213,6 +1201,7 @@ class DailyRms(DailyM):
         0.011816
     ]
     """
+
     version: int = 0
     type: Literal["DailyRms"] = "DailyRms"
 
@@ -1221,15 +1210,13 @@ class DailyRms(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyRmsSnap"] = "DailyRmsSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyRms:
+
+    def handler_object_new(self) -> HandleNewDailyRms:
         return HandleNewDailyRms()
+
 
 @dataclass(frozen=True)
 class HandleNewDailyRms(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1249,12 +1236,18 @@ class HandleNewDailyRms(HandleNewDailyM):
         obj: DailyM,
     ) -> pl.Expr:
         params = obj.params
-        return(
-            pl.col(VALUE).pow(2).rolling_mean(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
-            ).sqrt()
+        return (
+            pl.col(VALUE)
+            .pow(2)
+            .rolling_mean(
+                len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
+            )
+            .sqrt()
         )
+
 
 @dataclass(frozen=True)
 class DailyRng(DailyM):
@@ -1268,7 +1261,7 @@ class DailyRng(DailyM):
     ... )
     >>> obj = DailyRng.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rng-4' [f64]
     [
@@ -1293,12 +1286,10 @@ class DailyRng(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyRngSnap"] = "DailyRngSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyRng:
+
+    def handler_object_new(self) -> HandleNewDailyRng:
         return HandleNewDailyRng()
-    
+
     @classmethod
     def new(
         cls,
@@ -1307,24 +1298,22 @@ class DailyRng(DailyM):
         width: float | None = None,
         project: Project | None = None,
     ):
-        params=DailyRngParams(
+        params = DailyRngParams(
             window=window,
             width=width,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
-    
-    
+
+
 @dataclass(frozen=True)
 class DailyRngParams(DailyMParams):
     chunk: int = 32
@@ -1333,7 +1322,7 @@ class DailyRngParams(DailyMParams):
     window: int | None = None
     width: float | None = None
 
-    def build_path(
+    def build_id(
         self,
         cls: Type[DailyRng],
     ):
@@ -1343,16 +1332,15 @@ class DailyRngParams(DailyMParams):
             params = "ex"
         else:
             params = str(window)
-        return f"{cls.SUFFIX}-" + params + (
-            ""
-            if width is None
-            else f"-{width}"
+        return (
+            f"{cls.SUFFIX}-"
+            + params
+            + ("" if width is None else f"-{width}")
         )
 
 
 @dataclass(frozen=True)
 class HandleNewDailyRng(HandleNewDailyM):
-
     def calc_df(
         self,
         df: pl.DataFrame,
@@ -1364,6 +1352,7 @@ class HandleNewDailyRng(HandleNewDailyM):
             event,
             obj,
         )
+
     def _calc_df(
         self,
         df: pl.DataFrame,
@@ -1374,26 +1363,34 @@ class HandleNewDailyRng(HandleNewDailyM):
         e = pl.col(VALUE)
         u = (
             e.rolling_max(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
+                len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
             )
             if params.width is None
             else e.rolling_quantile(
                 0.5 + params.width,
-                window_size=len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
+                window_size=len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
             )
         )
         l = (
             e.rolling_min(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
+                len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
             )
             if params.width is None
             else e.rolling_quantile(
                 0.5 - params.width,
-                window_size=len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
+                window_size=len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
             )
         )
         e = u - l
@@ -1405,6 +1402,7 @@ class HandleNewDailyRng(HandleNewDailyM):
             .alias(VALUE)
         )
         return df
+
 
 @dataclass(frozen=True)
 class DailySDev(DailyM):
@@ -1418,7 +1416,7 @@ class DailySDev(DailyM):
     ... )
     >>> obj = DailySDev.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rx-sdev-4' [f64]
     [
@@ -1432,6 +1430,7 @@ class DailySDev(DailyM):
         0.009659
     ]
     """
+
     version: int = 0
     type: Literal["DailySDev"] = "DailySDev"
 
@@ -1440,14 +1439,13 @@ class DailySDev(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailySDevSnap"] = "DailySDevSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailySDev:
+
+    def handler_object_new(self) -> HandleNewDailySDev:
         return HandleNewDailySDev()
+
+
 @dataclass(frozen=True)
 class HandleNewDailySDev(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1467,12 +1465,14 @@ class HandleNewDailySDev(HandleNewDailyM):
         obj: DailyM,
     ) -> pl.Expr:
         params = obj.params
-        return(
-            pl.col(VALUE).rolling_std(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
-            )
+        return pl.col(VALUE).rolling_std(
+            len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
+
+
 @dataclass(frozen=True)
 class DailySkew(DailyM):
     """
@@ -1485,7 +1485,7 @@ class DailySkew(DailyM):
     ... )
     >>> obj = DailySkew.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rx-skew-4' [f64]
     [
@@ -1499,6 +1499,7 @@ class DailySkew(DailyM):
         -0.228863
     ]
     """
+
     version: int = 0
     type: Literal["DailySkew"] = "DailySkew"
 
@@ -1507,16 +1508,13 @@ class DailySkew(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailySkewSnap"] = "DailySkewSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailySkew:
+
+    def handler_object_new(self) -> HandleNewDailySkew:
         return HandleNewDailySkew()
 
-    
+
 @dataclass(frozen=True)
 class HandleNewDailySkew(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1536,13 +1534,13 @@ class HandleNewDailySkew(HandleNewDailyM):
         obj: DailyM,
     ) -> pl.Expr:
         params = obj.params
-        return(
-            pl.col(VALUE).rolling_skew(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
-            )
+        return pl.col(VALUE).rolling_skew(
+            len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
-    
+
 
 @dataclass(frozen=True)
 class DailyVar(DailyM):
@@ -1556,7 +1554,7 @@ class DailyVar(DailyM):
     ... )
     >>> obj = DailyVar.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rx-var-4' [f64]
     [
@@ -1570,6 +1568,7 @@ class DailyVar(DailyM):
         0.000093
     ]
     """
+
     version: int = 0
     type: Literal["DailyVar"] = "DailyVar"
 
@@ -1578,15 +1577,13 @@ class DailyVar(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyVarSnap"] = "DailyVarSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyVar:
+
+    def handler_object_new(self) -> HandleNewDailyVar:
         return HandleNewDailyVar()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyVar(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1606,12 +1603,13 @@ class HandleNewDailyVar(HandleNewDailyM):
         obj: DailyM,
     ) -> pl.Expr:
         params = obj.params
-        return(
-            pl.col(VALUE).rolling_var(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
-            )
+        return pl.col(VALUE).rolling_var(
+            len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
+
 
 @dataclass(frozen=True)
 class DailyZ(DailyM):
@@ -1625,7 +1623,7 @@ class DailyZ(DailyM):
     ... )
     >>> obj = DailyZ.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-z-4' [f64]
     [
@@ -1639,6 +1637,7 @@ class DailyZ(DailyM):
         -1.346812
     ]
     """
+
     version: int = 0
     type: Literal["DailyZ"] = "DailyZ"
 
@@ -1647,15 +1646,13 @@ class DailyZ(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyZSnap"] = "DailyZSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyZ:
+
+    def handler_object_new(self) -> HandleNewDailyZ:
         return HandleNewDailyZ()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyZ(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1676,21 +1673,20 @@ class HandleNewDailyZ(HandleNewDailyM):
     ) -> pl.Expr:
         params = obj.params
         mu = pl.col(VALUE).rolling_mean(
-            len(df) if params.window is None else params.window,
-            min_samples=1, # TODO: or more?
+            len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
-        sig = (
-            pl.col(VALUE)
-            .rolling_std(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
-            )
+        sig = pl.col(VALUE).rolling_std(
+            len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
-        return (
-            (pl.col(VALUE) - mu) / sig
-        ).fill_nan(None)
+        return ((pl.col(VALUE) - mu) / sig).fill_nan(None)
 
-    
+
 @dataclass(frozen=True)
 class DailyZW(DailyM):
     """
@@ -1703,7 +1699,7 @@ class DailyZW(DailyM):
     ... )
     >>> obj = DailyZW.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-zw-4' [f64]
     [
@@ -1717,6 +1713,7 @@ class DailyZW(DailyM):
         -1.346812
     ]
     """
+
     version: int = 0
     type: Literal["DailyZW"] = "DailyZW"
 
@@ -1725,15 +1722,13 @@ class DailyZW(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyZWSnap"] = "DailyZWSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyZ:
+
+    def handler_object_new(self) -> HandleNewDailyZ:
         return HandleNewDailyZ()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyZW(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1754,8 +1749,10 @@ class HandleNewDailyZW(HandleNewDailyM):
     ) -> pl.Expr:
         params = obj.params
         mu = pl.col(VALUE).rolling_mean(
-            len(df) if params.window is None else params.window,
-            min_samples=1, # TODO: or more?
+            len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
         sig = (
             pl.col(VALUE)
@@ -1763,16 +1760,15 @@ class HandleNewDailyZW(HandleNewDailyM):
             .diff()
             .pipe(apis.pl.null_mask, pl.col(VALUE))
             .rolling_std(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
+                len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
             )
         )
-        return (
-            (pl.col(VALUE) - mu) / sig
-        ).fill_nan(None)
+        return ((pl.col(VALUE) - mu) / sig).fill_nan(None)
 
-    
-    
+
 @dataclass(frozen=True)
 class DailyRZParams(DailyMParams):
     chunk: int = 32
@@ -1783,7 +1779,7 @@ class DailyRZParams(DailyMParams):
     symmetric: bool = True
     rescale: bool = False
 
-    def build_path(
+    def build_id(
         self,
         cls: Type[DailyRZ],
     ):
@@ -1795,19 +1791,14 @@ class DailyRZParams(DailyMParams):
             params = "ex"
         else:
             params = str(window)
-        return f"{cls.SUFFIX}-" + params + (
-            ""
-            if width is None
-            else f"-{width}"
-        ) + (
-            "-sym"
-            if symmetric
-            else ""
-        ) + (
-            "-norm"
-            if rescale
-            else ""
+        return (
+            f"{cls.SUFFIX}-"
+            + params
+            + ("" if width is None else f"-{width}")
+            + ("-sym" if symmetric else "")
+            + ("-norm" if rescale else "")
         )
+
 
 @dataclass(frozen=True)
 class DailyRZ(DailyM):
@@ -1821,7 +1812,7 @@ class DailyRZ(DailyM):
     ... )
     >>> obj = DailyRZ.new(ord, window=4)
     >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-fut-d-ES-1-close-pct-frd-rz-4-0.25-sym' [f64]
     [
@@ -1846,13 +1837,10 @@ class DailyRZ(DailyM):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyRZSnap"] = "DailyRZSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyRZ:
+
+    def handler_object_new(self) -> HandleNewDailyRZ:
         return HandleNewDailyRZ()
-    
-    
+
     @classmethod
     def new(
         cls,
@@ -1863,28 +1851,26 @@ class DailyRZ(DailyM):
         rescale: bool = False,
         project: Project | None = None,
     ):
-        params=DailyRZParams(
+        params = DailyRZParams(
             window=window,
             width=width,
             symmetric=symmetric,
             rescale=rescale,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyRZ(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -1907,21 +1893,27 @@ class HandleNewDailyRZ(HandleNewDailyM):
         assert params.width is not None, params
         v = pl.col(VALUE)
         med = v.rolling_median(
-            len(df) if params.window is None else params.window,
-            min_samples=1, # TODO: or more?
+            len(df)
+            if params.window is None
+            else params.window,
+            min_samples=1,  # TODO: or more?
         )
         if params.symmetric:
             q_up = v.rolling_quantile(
                 0.5 + params.width,
                 interpolation="linear",
-                window_size=len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
+                window_size=len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
             )
             q_dn = v.rolling_quantile(
                 0.5 - params.width,
                 interpolation="linear",
-                window_size=len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
+                window_size=len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
             )
             iqr = q_up - q_dn
             mad = iqr / 2
@@ -1929,16 +1921,18 @@ class HandleNewDailyRZ(HandleNewDailyM):
             # iqr/2 == mad
         else:
             med = v.rolling_median(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
+                len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
             )
-            mad = (
-                (v - med).abs()
-            ).rolling_median(
-                len(df) if params.window is None else params.window,
-                min_samples=1, # TODO: or more?
+            mad = ((v - med).abs()).rolling_median(
+                len(df)
+                if params.window is None
+                else params.window,
+                min_samples=1,  # TODO: or more?
             )
-        
+
         if params.rescale:
             if not params.symmetric:
                 mad = mad * 1.4826
@@ -1948,6 +1942,7 @@ class HandleNewDailyRZ(HandleNewDailyM):
                 )
 
         return ((v - med) / mad).fill_nan(None)
+
 
 @dataclass(frozen=True)
 class DailyRZW(DailyRZ):
@@ -1962,6 +1957,7 @@ class DailyRZW(DailyRZ):
     >>> obj = DailyRZW.new(ord, window=4)
     >>> Graph().with_obj(obj)
     """
+
     # .sync()
 
     params: DailyRZParams
@@ -1974,15 +1970,13 @@ class DailyRZW(DailyRZ):
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["DailyRZWSnap"] = "DailyRZWSnap"
- 
-    def handler_object_new(
-        self
-    ) -> HandleNewDailyRZW:
+
+    def handler_object_new(self) -> HandleNewDailyRZW:
         return HandleNewDailyRZW()
-    
+
+
 @dataclass(frozen=True)
 class HandleNewDailyRZW(HandleNewDailyM):
-
     def calc_expr(
         self,
         df: pl.DataFrame,
@@ -2003,11 +1997,13 @@ class HandleNewDailyRZW(HandleNewDailyM):
     ) -> pl.Expr:
         params = obj.params
         raise NotImplementedError()
-    
+
+
 #  ------------------
 
 __all__ = [
-    "P", "O",
+    "P",
+    "O",
     "DailyMParams",
     "DailyM",
     "HandleNewDailyM",
@@ -2052,5 +2048,5 @@ __all__ = [
     "DailyZW",
     "HandleNewDailyRZW",
     "DailyRZW",
-    "DailyOsc"
+    "DailyOsc",
 ]

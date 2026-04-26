@@ -1,4 +1,3 @@
-
 # stress signal via ewmax delta
 
 # for a range of risk assets

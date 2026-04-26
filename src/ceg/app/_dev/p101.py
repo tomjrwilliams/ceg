@@ -61,7 +61,7 @@ class Project_101(strat.StratExplorer):
 
         name = self.univ_name("es-tn")
 
-        universes: dict[str, pfo.CollectionDaily] = {}
+        universes: dict[str, pfo.ContainerDaily] = {}
          univ, universes = (
             strat.StratDomain.new()
             .with_univ(
@@ -426,7 +426,7 @@ class Project_101(strat.StratExplorer):
                     strat.Strategy(
                         asset=bt_mo_cap,
                         scale=strat.ScaleFactor(
-                            pf_ntl_cap_ratio_mu.path,
+                            pf_ntl_cap_ratio_mu.id,
                             f"cap_ratio_{cap_span}"
                         ),
                         rebal="3D"

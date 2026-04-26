@@ -28,8 +28,12 @@ def cov_inv_next(
         k - np.matmul(np.matmul(cov_k.t, cov_C_inv), cov_k)
     ) ** -1
     m_vec = -m * (np.matmul(cov_C_inv, cov_k))
-    M = cov_C_inv + (1 / m) * (np.matmul(m_vec, m_vec.T) / m)
-    return np.hstack((np.vstack((M, m.T)), np.vstack((m, m))))
+    M = cov_C_inv + (1 / m) * (
+        np.matmul(m_vec, m_vec.T) / m
+    )
+    return np.hstack(
+        (np.vstack((M, m.T)), np.vstack((m, m)))
+    )
 
 
 def mean_next(
@@ -99,9 +103,9 @@ class Kernel:
 
 def kernel_cov(x, *kernels: Kernel) -> np.ndarray:
     res = None
-    i = np.linspace(0, x.shape[0] - 1, num=x.shape[0]).astype(
-        np.int32
-    )
+    i = np.linspace(
+        0, x.shape[0] - 1, num=x.shape[0]
+    ).astype(np.int32)
     for kernel in kernels:
         if kernel.kind == "value":
             v = kernel.outer(x, x)
@@ -139,14 +143,18 @@ if __name__ == "__main__":
 
     kernels = (
         Kernel(kernel_sq_exp, dict(l=l, sig=sig)),
-        Kernel(kernel_diag_const, dict(sig=x_sig), kind="index"),
+        Kernel(
+            kernel_diag_const, dict(sig=x_sig), kind="index"
+        ),
     )
 
     cov_C = kernel_cov(x, *kernels)
 
     cov_C_inv = np.linalg.inv(cov_C)
 
-    x_new = np.array(sys.argv[3].split(",")).astype(np.float64)
+    x_new = np.array(sys.argv[3].split(",")).astype(
+        np.float64
+    )
 
     kernel = kernels[0]
 

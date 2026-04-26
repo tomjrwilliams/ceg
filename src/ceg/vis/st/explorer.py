@@ -11,6 +11,7 @@ from pathlib import Path
 import polars as pl
 
 from ... import apis
+
 st = apis.st.library()
 
 from ...engine import *
@@ -47,12 +48,14 @@ class ExplorerObject:
     group: str | None
     params: str | None
 
+
 @dataclass(frozen=True)
 class ExplorerVis:
     viz: int | None
     type: str | None
     params: str | None
     name: str | None
+
 
 @dataclass(frozen=True)
 class ExplorerPage:
@@ -64,7 +67,7 @@ class ExplorerPage:
     vizs: list[ExplorerVis]
 
     def with_object(
-        self,   
+        self,
         obj: str | ExplorerObject,
         viz: int | None = None,
         label: str | None = None,
@@ -97,9 +100,9 @@ class ExplorerPage:
         # return replace(
         #     self, objects = self.objects + [obj]
         # )
-    
+
     def with_viz(
-        self,   
+        self,
         viz: int | ExplorerVis | None = None,
         type: str | None = None,
         params: str | None = None,
@@ -119,12 +122,11 @@ class ExplorerPage:
         #     self, vizs = self.vizs + [viz]
         # )
 
+
 @dataclass(frozen=True)
 class ExplorerConfig:
-    app: str # of the app
-    pages: list[ExplorerPage] = field(
-        default_factory=list
-    )
+    app: str  # of the app
+    pages: list[ExplorerPage] = field(default_factory=list)
 
     def write(self, root: str = "./__local__/apps"):
         dp = Path(root) / self.app
@@ -134,7 +136,7 @@ class ExplorerConfig:
                 shutil.rmtree(dp)
                 dp.mkdir(exist_ok=True, parents=True)
         for page in self.pages:
-            log("INFO")( writing_page=page.name)
+            log("INFO")(writing_page=page.name)
             name = page.name
             dp_page = dp / name
             dp_page.mkdir(exist_ok=True, parents=True)
@@ -143,9 +145,9 @@ class ExplorerConfig:
             fp_vizs = dp_page / "vizs.parquet"
             fp_objs = dp_page / "rows.parquet"
 
-            with fp_config.open('w+') as f:
+            with fp_config.open("w+") as f:
                 json.dump({"type": page.type}, f)
-            with fp_graph.open('w+') as f:
+            with fp_graph.open("w+") as f:
                 json.dump({"value": page.graph}, f)
 
             def viz_row(r: ExplorerVis):
@@ -153,9 +155,9 @@ class ExplorerConfig:
                     viz=r.viz,
                     name=r.name,
                     type=r.type,
-                    params =r.params,
+                    params=r.params,
                 )
-            
+
             def obj_row(r: ExplorerObject):
                 return dict(
                     viz=r.viz,
@@ -164,10 +166,8 @@ class ExplorerConfig:
                     group=r.group,
                     params=r.params,
                 )
-            
-            df_vizs = pl.DataFrame(
-                map(viz_row, page.vizs)
-            )
+
+            df_vizs = pl.DataFrame(map(viz_row, page.vizs))
             df_vizs.write_parquet(fp_vizs)
             objs = list(map(obj_row, page.objects))
             df_objs = pl.DataFrame(objs)
@@ -178,17 +178,16 @@ class ExplorerConfig:
     def with_page(
         self,
         page: str | ExplorerPage,
-        type: str | None=None,
-        graph: str | None=None,
+        type: str | None = None,
+        graph: str | None = None,
     ) -> ExplorerConfig:
         params = (page, type, graph)
         if isinstance(page, ExplorerPage):
             assert type is None and graph is None, params
         else:
-            assert (
-                type is not None 
-                and graph is not None
-            ), params
+            assert type is not None and graph is not None, (
+                params
+            )
             page = ExplorerPage(page, type, graph, [], [])
         # return replace(
         #     self, pages = self.pages + [page]
@@ -197,7 +196,7 @@ class ExplorerConfig:
         return self
 
     def with_object(
-        self,   
+        self,
         obj: str | ExplorerObject,
         viz: int | None = None,
         label: str | None = None,
@@ -217,9 +216,9 @@ class ExplorerConfig:
         # )
         self.pages[-1] = page
         return self
-    
+
     def with_viz(
-        self,   
+        self,
         viz: int | ExplorerVis | None = None,
         type: str | None = None,
         params: str | None = None,
@@ -238,6 +237,7 @@ class ExplorerConfig:
         self.pages[-1] = page
         return self
 
+
 @dataclass(frozen=True)
 class Explorer:
     graphs: dict[str, str] = field(default_factory=dict)
@@ -255,7 +255,7 @@ class Explorer:
 
     def run(self):
         raise ValueError()
-    
+
     # TODO: rename page
     # rename graph to viz
     # rename viz to Vis? component?
@@ -266,51 +266,63 @@ class Explorer:
         graph: Graph,
         t: Type[TExplorer],
     ) -> TExplorer:
-        self = replace(self, graphs={
-            **self.graphs,
-            **{graph.name: graph.name}
-        })
+        self = replace(
+            self,
+            graphs={
+                **self.graphs,
+                **{graph.name: graph.name},
+            },
+        )
         return assert_is(self, t)
-    
+
     def with_graphs(
         self,
         t: Type[TExplorer],
         **graphs: Graph,
     ) -> TExplorer:
-        return assert_is(replace(self, graphs={
-            **self.graphs,
-            **{k: g.name for k, g in graphs.items()}
-        }), t)
-    
+        return assert_is(
+            replace(
+                self,
+                graphs={
+                    **self.graphs,
+                    **{
+                        k: g.name for k, g in graphs.items()
+                    },
+                },
+            ),
+            t,
+        )
+
     def with_config(self, config: ExplorerConfig):
         return replace(self, config=config)
 
     def with_root(self, root: str):
         return replace(self, root=root)
-    
+
     def with_page(
         self,
         page: str | ExplorerPage,
         t: Type[TExplorer],
-        type: str | None=None,
-        graph: str | bool | None=None,
+        type: str | None = None,
+        graph: str | bool | None = None,
     ) -> TExplorer:
         assert self.config is not None, self
         if isinstance(graph, bool) and graph:
             graph = (
-                page if isinstance(page, str)
-                else page.name
+                page if isinstance(page, str) else page.name
             )
         if graph is not None:
             assert isinstance(graph, str), graph
         config = self.config.with_page(
-            page, type=type, graph=graph,
+            page,
+            type=type,
+            graph=graph,
         )
         self = self.with_config(config)
         return assert_is(self, t)
-    
+
     def with_object(
-        self,   
+        self,
         obj: str | ExplorerObject,
         t: Type[TExplorer],
         viz: int | None = None,
@@ -330,7 +342,7 @@ class Explorer:
         return assert_is(self, t)
 
     def with_viz(
-        self,   
+        self,
         t: Type[TExplorer],
         viz: int | ExplorerVis | None = None,
         type: str | None = None,
@@ -346,14 +358,14 @@ class Explorer:
         )
         self = self.with_config(config)
         return assert_is(self, t)
-    
+
     def with_objects_from_template(
         self,
         name: str,
         template: str,
         objects: list[TTemplateObject],
         t: Type[TExplorer],
-        params: str | None = None, # viz params not obj
+        params: str | None = None,  # viz params not obj
         kws: dict | None = None,
         # TODO: encode dict params automatically?
     ) -> TExplorer:
@@ -383,7 +395,9 @@ class Explorer:
 
         return assert_is(self, t)
 
+
 TTemplateObject = tuple[str, str, dict] | tuple[str, str]
+
 
 def prepare_app(
     name: str,
@@ -396,9 +410,11 @@ def prepare_app(
 
     app = apps.App(name=name, root=root_fp, pages={})
     return legacy.apps.app(
-        [app.list_pages(
-            # TODO: pass the graph funcs to check for new pages?
-        )]
+        [
+            app.list_pages(
+                # TODO: pass the graph funcs to check for new pages?
+            )
+        ]
         + list(
             app.get_pages(
                 daily_cls=ExploreDailyFromRows,
@@ -406,7 +422,7 @@ def prepare_app(
                 # ...
             ).values()
         ),
-        init_elements=app.init_page
+        init_elements=app.init_page,
     )
 
 
@@ -421,5 +437,5 @@ __all__ = [
     "prepare_app",
     "TPage",
     "TExplorer",
-    "TTemplateObject"
+    "TTemplateObject",
 ]

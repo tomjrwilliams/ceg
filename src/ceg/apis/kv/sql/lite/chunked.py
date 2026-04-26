@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass
 
 from typing import (
@@ -15,21 +14,23 @@ from ...core import (
     KeyChunk,
     KeyChunkConfig,
     ExampleKeyChunk,
-    # _, 
-    KeyO, 
-    ValO, 
+    # _,
+    KeyO,
+    ValO,
     ValT,
     #
-    HEAD, BODY, TAIL,
+    HEAD,
+    BODY,
+    TAIL,
 )
 from .... import sqlite
-from .key_val import (
-    ID, KeyI, ValI, SQLiteKeyValConfig
-)
+from .key_val import ID, KeyI, ValI, SQLiteKeyValConfig
 
 # TODO: env variable
 import os
+
 TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
+
 
 @dataclass(frozen=True)
 class SQLiteKeyChunkConfig(
@@ -38,11 +39,11 @@ class SQLiteKeyChunkConfig(
 ):
     pass
 
+
 @dataclass(frozen=True)
 class SQLiteKeyChunk(
     KeyChunk[ID, KeyI, ValI, KeyO, ValO, ValT]
 ):
-
     config: SQLiteKeyChunkConfig
 
     # TODO: we can in theory set this different ot generic param in the subclass def - is there a way to err that?
@@ -51,8 +52,9 @@ class SQLiteKeyChunk(
     type_key_i: Type[KeyI]
     type_val_i: Type[ValI]
 
-    
-    CONFIG: ClassVar[Type[SQLiteKeyChunkConfig]] = SQLiteKeyChunkConfig
+    CONFIG: ClassVar[Type[SQLiteKeyChunkConfig]] = (
+        SQLiteKeyChunkConfig
+    )
 
     def prepare(self):
         # TODO: annot return sefl
@@ -65,7 +67,7 @@ class SQLiteKeyChunk(
             val=self.type_val_i,
             chunk=int,
             # TODO: dict, col names
-            unique=(("key","chunk"),),
+            unique=(("key", "chunk"),),
         ).create(self.config.db)
 
         # TODO: if exists, assert types match!
@@ -85,7 +87,7 @@ class SQLiteKeyChunk(
         key: KeyI,
         chunk: int,
     ) -> None | int:
-    
+
         table = self.config.table
         assert table is not None, self
 
@@ -94,7 +96,7 @@ class SQLiteKeyChunk(
             where=[
                 table.col("key") == key,
                 table.col("chunk") == chunk,
-            ]
+            ],
         )
 
         if not len(res):
@@ -108,8 +110,10 @@ class SQLiteKeyChunk(
 
         return id
 
-    def lookup(self, id: int) -> tuple[KeyI, int] | tuple[None, None]:
-        
+    def lookup(
+        self, id: int
+    ) -> tuple[KeyI, int] | tuple[None, None]:
+
         table = self.config.table
         assert table is not None, self
 
@@ -152,7 +156,7 @@ class SQLiteKeyChunk(
             where=[
                 table.col("key") == key,
                 table.col("chunk") == chunk,
-            ]
+            ],
         )
 
         if not len(res):
@@ -196,10 +200,11 @@ class SQLiteKeyChunk(
         assert table is not None, self.config
         if i is None:
             res = table.update(
-                val=val, where=[
+                val=val,
+                where=[
                     table.col("key") == key,
                     table.col("chunk") == chunk,
-                ]
+                ],
             )
         else:
             res = table.update(
@@ -211,11 +216,12 @@ class SQLiteKeyChunk(
 
         return id
 
+
 @final
 @dataclass(frozen=True)
 class ExampleSQLiteKeyChunk(
     ExampleKeyChunk,
-    SQLiteKeyChunk[int, str, bytes, str, np.ndarray, float]
+    SQLiteKeyChunk[int, str, bytes, str, np.ndarray, float],
 ):
     """
     >>> j, k, l, updated = ("j", "k", "l", [])
@@ -244,9 +250,11 @@ class ExampleSQLiteKeyChunk(
     >>> kv.get(j, HEAD), kv.get(j, BODY), kv.get(j, TAIL)
     (array([0.]), array([1., 2., 3., 2., 1.]), array([0.]))
     """
+
     config: SQLiteKeyChunkConfig = SQLiteKeyChunkConfig(
         size=1, db=TEST_DB, name="ExampleKeyChunk"
     )
+
 
 __all__ = [
     "SQLiteKeyChunkConfig",

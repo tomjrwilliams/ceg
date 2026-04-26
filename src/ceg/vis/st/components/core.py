@@ -8,7 +8,6 @@ from typing import (
     Literal,
     overload,
     cast,
-
 )
 from pathlib import Path
 import datetime as dt
@@ -16,6 +15,7 @@ import numpy as np
 import polars as pl
 
 from .... import apis
+
 st = apis.st.library()
 
 from dataclasses import replace
@@ -31,18 +31,19 @@ from ..variables import *
 # class Page:
 #     pass
 
+
 @dataclass(frozen=True)
 class Component:
     key: str
-    
+
     def child_key(self, key: str) -> str:
         return f"{self.key}_{key}"
-    
-    def pre_render(self, Project = None) -> None: ...
 
-    def render(self, Project = None) -> Component: ...
+    def pre_render(self, Project=None) -> None: ...
 
-    def post_render(self, Project = None) -> None: ...
+    def render(self, Project=None) -> Component: ...
+
+    def post_render(self, Project=None) -> None: ...
 
     def page(self, Project) -> Callable[[], None]:
         def f():
@@ -50,6 +51,8 @@ class Component:
             self.render(Project)
             self.post_render(Project)
             return
+
         return f
-    
+
+
 __all__ = ["Component"]

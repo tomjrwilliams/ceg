@@ -18,15 +18,20 @@ from typing import (
     get_origin,
     final,
 )
+import heapq
+from heapq import heapify, heappush, heappushpop, heappop
 import logging
 import functools
 from functools import partial, lru_cache
+
+import datetime as dt
+from datetime import tzinfo
 
 if TYPE_CHECKING:
     from dataclasses import dataclass
 else:
     from pydantic.dataclasses import dataclass
-from dataclasses import field, replace, fields
+from dataclasses import field, replace, fields, MISSING
 
 from contextlib import contextmanager
 
@@ -53,27 +58,28 @@ TEST_DB = os.environ.get("TEST_DB", "./__local__/test.db")
 
 T = TypeVar("T")
 
+
 def log_when(d: dict):
     when = d.get("when", None)
     if when is None:
         return True
     return bool(os.environ.get(f"LOG.objects.{when}"))
 
+
 logger, log = logs.logger(
-    __file__,
-    streams = dict(formatter=True),
-    when=log_when
+    __file__, streams=dict(formatter=True), when=log_when
 )
+
 
 @dataclass(frozen=True)
 class Handler:
-    
     def handle(
         self,
         event: Event,
         snap: Snap,
         obj: Object,
     ) -> frozendict[str, tuple[Snap, list[Event]]]: ...
+
 
 @dataclass(frozen=True)
 class ObjectParser:
@@ -86,18 +92,84 @@ class ObjectParser:
     def dump_bytes(self) -> bytes:
         return self.ta().dump_json(self)
 
+
 @functools.lru_cache(maxsize=128, typed=True)
 def object_parser(cls: Type[Object]) -> Type[ObjectParser]:
-    return dataclass(frozen=True)(type(
-        cls.__name__ + "Parser",
-        (ObjectParser,),
-        {
-            "obj": Field(discriminator="type"),
-            "__annotations__": {"obj": cls}
-        }
-    ))
+    return dataclass(frozen=True)(
+        type(
+            cls.__name__ + "Parser",
+            (ObjectParser,),
+            {
+                "obj": Field(discriminator="type"),
+                "__annotations__": {"obj": cls},
+            },
+        )
+    )
+
 
 TSnap = TypeVar("TSnap", bound=Snap)
+
+
+class BaseInterface:
+
+    # NOTE: subclass as "Interface" if one class per file
+    # or, if many, arg specs can be shared in named interfaces
+    
+    # in both cases, do not export
+
+    class Args:
+        pass
+
+    class Object:
+        id: str
+
+def init_new(
+    f: Callable[P, Any],
+    t: Type[O],
+) -> Callable[P, O]:
+    # TODO: cache fields, encoder
+    def new(*args: P.args, **kwargs: P.kwargs) -> O:
+        parent = args[0]
+        # TODO: type check using parent type from object
+        id = kwargs.pop("uid", None)
+        t_fields = fields(t)
+        i = 0
+        for i, (f, arg) in enumerate(zip(t_fields[2:], args[1:])):
+            kwargs[f.name] = arg
+        i += 2
+        extra_kwargs = {}
+        for f in t_fields[i:]:
+            if f.name in kwargs or f.name in {
+                "id",
+                "parent",
+                "xid",
+                "uid",
+            }:
+                continue
+            elif f.default is not MISSING:
+                extra_kwargs[f.name] = f.default
+            elif f.default_factory is not MISSING:
+                extra_kwargs[f.name] = f.default_factory()
+        if id is None:
+            xid = kwargs.pop("xid", None)
+            if xid is not None:
+                id = t.build_id(
+                    parent, str(xid)
+                )
+            else:
+                encoder = t.encoder()
+                id = t.build_id(
+                    parent,
+                    *[
+                        encoder.get(k, str)(v)
+                        for k, v in kwargs.items()
+                    ],
+                )
+        try:
+            return t(id, parent, **kwargs, **extra_kwargs)
+        except Exception as e:
+            raise ValueError(t, id, args, kwargs, extra_kwargs) from e
+    return new
 
 @dataclass(frozen=True)
 class Object:
@@ -117,25 +189,30 @@ class Object:
     >>> b = ObjectB("b", a)
     >>> _ = ObjectParserAB(a) # init parser type
     >>> Object.parse_json(a.dump_bytes(), ObjectParserAB)
-    ObjectA(path='a')
-    >>> Object.parse_json(b.dump_bytes(), ObjectParserAB) 
-    ObjectB(path='b', parent='a')
+    ObjectA(id='a')
+    >>> Object.parse_json(b.dump_bytes(), ObjectParserAB)
+    ObjectB(id='b', parent='a')
     """
-    path: str
+
+    id: str
     parent: str | Object | None
 
     # NOTE: string to avoid duplication on insert
-    
+
     @dataclass(frozen=True)
     class Snap(Snap):
         type: Literal["NullSnap"] = "NullSnap"
+
+    @classmethod
+    def encoder(cls) -> frozendict[int | str, Callable[[Any], str]]:
+        return frozendict()
 
     def get_parent(self):
         return context.get().get(self.parent, Object)
 
     @property
     def type(self) -> str: ...
-    
+
     @classmethod
     def union_field(cls):
         return Field(discriminator="type")
@@ -147,8 +224,8 @@ class Object:
     @classmethod
     def parent_field(
         cls,
-        default: Object | None = None, 
-        repr: bool = False
+        default: Object | None = None,
+        repr: bool = False,
     ):
         return Field(default=default, repr=repr)
 
@@ -159,18 +236,18 @@ class Object:
     def dump_bytes(self) -> bytes:
         parser = self.parser()
         if isinstance(self.parent, Object):
-            self = replace(self, parent=self.parent.path)
+            self = replace(self, parent=self.parent.id)
         return parser(self).dump_bytes()
 
     @classmethod
     def parse_json(
         cls,
         data: str | bytes | bytearray,
-        into: Type[ObjectParser]
+        into: Type[ObjectParser],
     ) -> Object:
         try:
-            parser: ObjectParser = (
-                into.ta().validate_json(data)
+            parser: ObjectParser = into.ta().validate_json(
+                data
             )
         except:
             if isinstance(data, (bytes, bytearray)):
@@ -179,45 +256,49 @@ class Object:
         return parser.obj
 
     def check(self):
-        assert self.type == type(self).__name__, self
+        assert self.type == type(self).__name__, (
+            self, type(self)
+        )
         return self
-    
+
     # def log_repr(self):
     #     return self.alias_parents()
 
     def alias_parents(self):
         return alias_parents(self)
 
-    def extend_path(self, s: str) -> str:
-        return f"{self.path}-{s}"
-    
+    def extend_id(self, s: str) -> str:
+        return f"{self.id}-{s}"
+
     @classmethod
-    def build_path(
+    def build_id(
         cls,
         parent: str | Object | None,
         *segs: Any,
         strict: bool = False,
     ):
-        s = "-".join(map(str, segs))
+        s = "-".join([
+            s for s in map(str, segs)
+            if len(s)
+        ])
         if parent is None:
             if not strict:
                 return s
-            raise ValueError(dict(
-                parent=parent, strict=strict
-            ))
+            raise ValueError(
+                dict(parent=parent, strict=strict)
+            )
         elif isinstance(parent, str):
             return f"{parent}-{s}"
         else:
-            return parent.extend_path(s)
-        
+            return parent.extend_id(s)
 
     # -------------
-    
+
     @classmethod
-    def from_path(cls, s: str):
+    def from_id(cls, s: str):
         # not always implemented, only for fixed, non anonymised, paths
         raise ValueError()
-    
+
     # TODO: parse/ strip prefix / suffix to get specific values (eg. osc params)
 
     # TODO: standardise the other from_x constructors?
@@ -226,80 +307,97 @@ class Object:
     # from_spec (?) (ie. building futures sub derivs)
 
     # -------------
-    
+
     def diff(self, new: Object) -> ObjectDiff | None:
         return ObjectDiff.new(self, new)
 
     # TODO: separate classmethods that arent override for getting obj, snap, value, etc.
 
     # NOTE: not classmethod so can be override more specifically
-    def get_obj(self) -> Object | None: 
+    def get_obj(self) -> Object | None:
         kv = self.obj_key_val()
         if kv is None:
             raise ValueError(self)
-        return kv.get(self.path)
+        return kv.get(self.id)
 
     def set_obj(self) -> Object:
         kv = self.obj_key_val()
         if kv is None:
             raise ValueError(self)
-        return kv.set(self.path, self)
+        return kv.set(self.id, self)
 
-    def get_events(
-        self
-    ) -> EventList:
+    # TODO: separate out the n events
+    # from the events themselves
+
+    # and then below we call get event individually?
+
+    def get_event(self, i: int | None = None) -> Event | None:
         kv = self.event_key_val()
         if kv is None:
             raise ValueError(self)
-        res = kv.get(self.path)
-        if res is None:
-            return EventList()
-        return res
-    
+        if i is None:
+            res = kv.get(self.id)
+            return res
+        try:
+            return assert_is(kv.get(f"{self.id}/{i}"), Event)
+        except Exception as e:
+            raise ValueError(self, i) from e
+
     def extend_events(
         self, events: Sequence[Event]
     ) -> list[Event]:
         kv = self.event_key_val()
         if kv is None:
             raise ValueError(self)
-        acc = self.get_events()
-        return kv.set(
-            self.path,
-            acc + [
-                replace(e, i=len(acc) + i)
-                for i, e in enumerate(events)
-            ]
-        )
+        curr = self.get_event()
+        if curr is None:
+            acc = 0
+        else:
+            acc = curr.i + 1
+        res = []
+        for i, e in enumerate(events):
+            i=acc + i
+            e = replace(
+                e,
+                i=i,
+                t = dt.datetime.now(dt.UTC).timestamp(),
+            )
+            e = kv.set(f"{self.id}/{i}", e)
+            res.append(e)
+            _ = kv.set(self.id, e)
+        return res
 
     # NOTE: not a classmethod, so can be overriden with more specific type by child
     @overload
     def get_snap(self, t: None = None) -> Snap: ...
     @overload
     def get_snap(self, t: Type[TSnap]) -> TSnap: ...
-    def get_snap(self, t: Type[TSnap] | None =None) -> Snap:
+    def get_snap(
+        self, t: Type[TSnap] | None = None
+    ) -> Snap:
         try:
-            o = self.snap_key_val().get(self.path)
+            o = self.snap_key_val().get(self.id)
             if o is None:
-                o = type(self).Snap.new(self.path)
+                o = type(self).Snap.new(self.id)
             if t is None:
                 return assert_is(o, Snap)
             return assert_is(o, t)
         except:
             raise ValueError(self)
-        
+
     def _get_snap(self):
-        return self.snap_key_val().get(self.path)
+        return self.snap_key_val().get(self.id)
 
     def set_snap(self, snap: Snap) -> Snap:
-        return self.snap_key_val().set(self.path, snap)
+        return self.snap_key_val().set(self.id, snap)
 
     # NOTE: not classmethod so can be override more specifically
     def get_value(self) -> Value | None:
-        return self.value_key_val().get(self.path)
+        return self.value_key_val().get(self.id)
 
     def set_value(self, value: Value) -> Value:
-        return self.value_key_val().set(self.path, value)
-        
+        return self.value_key_val().set(self.id, value)
+
     # NOTE: value change isnt emit by set by default
     # rather, up to object to decide if updating their own value, to emit the event (as part of the handle)
     # eg. for append / prepend - more specific than just update
@@ -324,17 +422,16 @@ class Object:
 
     # NOTE: as for snap, but likely more object specific, migth be key_val subtype (eg. chunked), depending on value type (get_value then calls value_key_val)
     @overload
-    def value_key_val(
-        self, t: Type[T]
-    ) -> T: ...
+    def value_key_val(self, t: Type[T]) -> T: ...
 
     @overload
     def value_key_val(
-        self, t: None = None,
+        self,
+        t: None = None,
     ) -> ValueKeyVal: ...
 
     def value_key_val(
-        self, 
+        self,
         t: Type[T] | None = None,
     ) -> ValueKeyVal | T: ...
 
@@ -343,16 +440,16 @@ class Object:
 
     # NOTE: return the handlers to run for a given event
     # versus having to init all up front, even if not used
-    def handler(self, event: Event, snap: Snap) -> Handler: ...
+    def handler(
+        self, event: Event, snap: Snap
+    ) -> Handler: ...
 
     # -------------
 
+
 # TODO: possibly suffix with asbytes
 @dataclass(frozen=True)
-class ObjectKeyVal(
-    kv.KeyValStrKeyIOBytesValI[int, Object]
-):
-    
+class ObjectKeyVal(kv.KeyValStrKeyIOBytesValI[int, Object]):
     type_id: Type[int] = int
     type_key_i: Type[str] = str
     type_val_i: Type[bytes] = bytes
@@ -361,7 +458,9 @@ class ObjectKeyVal(
 
     parser: Type[ObjectParser] | None = None
 
-    def encode_val_type(self, t: Type[Object]) -> Type[bytes]:
+    def encode_val_type(
+        self, t: Type[Object]
+    ) -> Type[bytes]:
         return bytes
 
     def encode_val(self, k: str, v: Object) -> bytes:
@@ -372,9 +471,9 @@ class ObjectKeyVal(
         return Object.parse_json(v, into=self.parser)
 
 @dataclass(frozen=True)
-class ObjectKeyValSQLite(
+class ObjectKeyValRedis(
     ObjectKeyVal,
-    kv.SQLiteKeyVal[int, str, bytes, str, Object]
+    kv.RedisKeyVal[int, str, bytes, str, Object],
 ):
     """
     >>> j, k, l, updated = ("j", "k", "l", [])
@@ -400,29 +499,78 @@ class ObjectKeyValSQLite(
 
     @classmethod
     def new(
-        cls, db: str, 
-        parser: Type[ObjectParser],table: str = "Objects",
-        on_update: Callable[[str, Object], None] | None = lambda k, o: None
+        cls,
+        db: str,
+        parser: Type[ObjectParser],
+        table: str = "Objects",
+        on_update: Callable[[str, Object], None]
+        | None = lambda k, o: None,
+    ) -> ObjectKeyValRedis:
+        self = cls(
+            config=kv.RedisKeyValConfig(db=db, name=table),
+            on_update=on_update,
+            parser=parser,
+        )
+        return cast(ObjectKeyValRedis, self.prepare())
+
+@dataclass(frozen=True)
+class ObjectKeyValSQLite(
+    ObjectKeyVal,
+    kv.SQLiteKeyVal[int, str, bytes, str, Object],
+):
+    """
+    >>> j, k, l, updated = ("j", "k", "l", [])
+    >>> @dataclass(frozen=True)
+    ... class ObjectEx(Object):
+    ...     parent: Object | None = Object.parent_field()
+    ...     type: Literal['Ex'] = Object.type_field("Ex")
+    >>> kv = ObjectKeyValSQLite.new(
+    ...     TEST_DB,
+    ...     parser=ObjectEx.parser(),
+    ...     on_update = lambda k, v: updated.append((k, v))
+    ... ).prepare()
+    >>> kv.get(k)
+    >>> v = kv.set(k, ObjectEx(k))
+    >>> assert v == ObjectEx(k) == kv.get(k), kv.get(k)
+    >>> assert (1, ObjectEx(k)) == kv.iget(k), kv.iget(k)
+    >>> v = kv.set(j, ObjectEx(j))
+    >>> v = kv.set(k, ObjectEx(l))
+    >>> assert (2, ObjectEx(j)) == kv.iget(j)
+    >>> assert (1, ObjectEx(l)) == kv.iget(k)
+    >>> assert updated == [(k, ObjectEx(l))]
+    """
+
+    @classmethod
+    def new(
+        cls,
+        db: str,
+        parser: Type[ObjectParser],
+        table: str = "Objects",
+        on_update: Callable[[str, Object], None]
+        | None = lambda k, o: None,
     ) -> ObjectKeyValSQLite:
-        self = cls(config=kv.SQLiteKeyValConfig(
-            db=db, name=table
-        ), on_update=on_update, parser=parser)
+        self = cls(
+            config=kv.SQLiteKeyValConfig(db=db, name=table),
+            on_update=on_update,
+            parser=parser,
+        )
         return cast(ObjectKeyValSQLite, self.prepare())
+
 
 @dataclass(frozen=True)
 class FieldDiff:
     key: str
     old: Any | None
     new: Any | None
-    present: tuple[bool, bool] # old, new
+    present: tuple[bool, bool]  # old, new
+
 
 @functools.lru_cache(maxsize=512)
 def _fields(t):
     return fields(t)
 
-def diff_field(
-    fld, old, new, flds
-):
+
+def diff_field(fld, old, new, flds):
     k = fld.name
     has_old = hasattr(old, k)
     has_new = hasattr(new, k)
@@ -432,21 +580,21 @@ def diff_field(
         return
     if (has_old or has_new) and (v_old != v_new):
         flds[k] = FieldDiff(
-            k,
-            v_old,
-            v_new,
-            (has_old, has_new)
+            k, v_old, v_new, (has_old, has_new)
         )
+
 
 @dataclass(frozen=True)
 class ObjectDiff:
-    path: str
+    id: str
     types: tuple[str, str]
     fields: dict[str, FieldDiff]
 
     @classmethod
     def new(
-        cls, old: Object, new: Object,
+        cls,
+        old: Object,
+        new: Object,
     ) -> ObjectDiff | None:
         flds = {}
         _diff_field = functools.partial(
@@ -455,42 +603,45 @@ class ObjectDiff:
             new=new,
             flds=flds,
         )
-        _ = list(map(_diff_field, set(
-            _fields(type(old))
-        ).union(
-            _fields(type(new))
-        )))
-        if (
-            type(old).__name__ == type(new).__name__
-            and not len(flds)
-        ):
+        _ = list(
+            map(
+                _diff_field,
+                set(_fields(type(old))).union(
+                    _fields(type(new))
+                ),
+            )
+        )
+        if type(old).__name__ == type(
+            new
+        ).__name__ and not len(flds):
             return None
         return ObjectDiff(
-            new.path,
+            new.id,
             (
                 type(old).__name__,
                 type(new).__name__,
             ),
-            flds
+            flds,
         )
 
+
 O = TypeVar("O", bound=Object)
+
+
+DEPENDS_FLAGS = {"ALL"}
+
 
 @dataclass(frozen=True)
 class Graph:
     name: str | None = None
-    objects: dict[str, Object] = Field(
-        default_factory=dict
-    )
-    triggers: dict[str, dict[str, Dependency]] = Field(
-        default_factory=dict
-    )
+    objects: t.frozen.dict[str, Object] = t.frozen.dict()
+    depends: t.frozen.dict[str, int] = t.frozen.dict()
+    triggers: t.frozen.dict[str, t.frozen.dict[str, Dependency]] =  t.frozen.dict()
 
     @property
-    def path(self):
-        # TODO: replace name with path?
+    def id(self):
         return assert_is(self.name)
-    
+
     @property
     def event_parser(self) -> Type[EventParser]:
         return DefaultEventParser
@@ -518,7 +669,7 @@ class Graph:
     def get(self, obj: str | Object, t: None) -> Object: ...
 
     def get(
-        self, 
+        self,
         obj: str | Object | None,
         t: Type[O] | None,
     ) -> O | Object | None:
@@ -532,7 +683,7 @@ class Graph:
             return obj
         assert isinstance(obj, t), (o, obj, t)
         return obj
-    
+
     # TODO: use update?
     # what other changes actually are there?
 
@@ -543,21 +694,21 @@ class Graph:
     def with_objs(
         self,
         *obj: Object | None,
-        t: None=None,
-        force: bool = False
+        t: None = None,
+        force: bool = False,
     ) -> Graph: ...
     @overload
     def with_objs(
         self,
         *obj: Object | None,
         t: Type[G],
-        force: bool = False
+        force: bool = False,
     ) -> G: ...
     def with_objs(
         self,
         *obj: Object | None,
         t: Type[G] | None = None,
-        force: bool = False
+        force: bool = False,
     ) -> Graph | G:
         for o in obj:
             if o is None:
@@ -569,50 +720,59 @@ class Graph:
 
     @overload
     def with_obj(
-        self, obj: Object, t: None=None, force: bool = False, 
+        self,
+        obj: Object,
+        t: None = None,
+        force: bool = False,
     ) -> Graph: ...
     @overload
     def with_obj(
-        self, obj: Object, t: Type[G], force: bool = False, 
+        self,
+        obj: Object,
+        t: Type[G],
+        force: bool = False,
     ) -> G: ...
     def with_obj(
-        self, obj: Object, t: Type[G] | None = None, force: bool = False
+        self,
+        obj: Object,
+        t: Type[G] | None = None,
+        force: bool = False,
     ) -> Graph | G:
-        assert obj.path != self.name, dict(
+        assert obj.id != self.name, dict(
             obj=obj,
             self=self.name,
         )
         # TODO: proper frozendict subtpye -> replace with set rather than dict spread
-        if not force and obj.path in self.objects:
+        if not force and obj.id in self.objects:
             if t is not None:
                 assert isinstance(self, t), (self, t)
             return self
         if isinstance(obj.parent, Object):
-            if not obj.parent.path in self.objects:
+            if not obj.parent.id in self.objects:
                 self = self.with_obj(
                     obj.parent, force=force
                 )
         obj = obj.check().alias_parents()
-        objects={
-            **self.objects,
-            obj.path: obj
-        }
+        objects = objects = self.objects.set(obj.id, obj)
+        
         triggers = self.triggers
         obj_depends = obj.depends()
+
+        self = replace(
+            self, depends = self.depends.set(
+                obj.id, 0 if obj_depends is None else len(obj_depends)
+            )
+        )
 
         # TODO: we key on object, be very careful that deps are specified at once per trigger
 
         if obj_depends is not None:
             for dep in obj_depends:
-                assert dep.obj == obj.path
-                obj_peers = triggers.get(dep.depends, {})
-                triggers = {
-                    **triggers,
-                    dep.depends: {
-                        **obj_peers,
-                        obj.path: dep
-                    }
-                }
+                assert dep.obj == obj.id
+                obj_peers = triggers.get(dep.depends, frozendict())
+                triggers = triggers.set(
+                    dep.depends, obj_peers.set(obj.id, dep)
+                )
         self = replace(
             self, objects=objects, triggers=triggers
         )
@@ -620,19 +780,23 @@ class Graph:
             assert isinstance(self, t), (self, t)
         context.set(self)
         return self
-    
+
     # NOTE: we dont need to diff the domain itself
     # if we add objects then their depends will be picked up on sync, and we know to iter the whole queue again, regardless of the domains own latest
-    def sync(self) -> Graph:
-        log("INFO")( sync=self.name)
+    def sync(
+        self,
+        n: int | None = None,
+        **log_kwargs
+    ) -> Graph:
+        log("INFO")(sync=self.name, **log_kwargs)
 
         snaps: frozendict[str, Snap] = frozendict()
-        events: frozendict[
-            str, tuple[Event, ...]
-        ] = frozendict()
-        
+        events: frozendict[str, Event] = (
+            frozendict()
+        )
+
         for k, obj_new in self.objects.items():
-            obj_new = sync_object_def(
+            obj_new, events = sync_object_def(
                 events,
                 obj_new,
                 k,
@@ -641,288 +805,345 @@ class Graph:
         name = assert_is(self.name)
 
         snaps = snaps.set(name, Snap(name))
-        events = events.set(name, (GraphSync(
-            name, i = 0
-        ),))
+        events = events.set(name, GraphSync(name, i=0, t= dt.datetime.now(
+            dt.UTC
+        ).timestamp()))
 
-        # TODO: anything that has changed def (not value)
-        # propagate
-        # drop event history
-        # drop all values
-        # re-fire created
+        queued_graph_sync = False
+        queue = []
 
-        # separate to the normal flow?
+        heapify(queue)
 
-        # TODO: can then use the version flag, if you load from args for any to auto increment
-        # to force all downstream of that node
-        # eg. if they're project children
+        # TODO: redis pubsub if using?
+        # else - is there a way to have theevents written by sub proc as well?
 
-        # ie. a 'domain' is just a root node with a verison flag you can use to easily flush all the non fixed path objects
+        queued: frozendict[str, set[int]] = frozendict()
 
-        # rename project
+        for obj_path, obj in self.objects.items():
+            snap = obj.get_snap(Snap)
+            snaps = snaps.set(obj_path, snap)
 
-        triggered = set(self.triggers.keys())
+            depends = obj.depends() or []
+            
+            for dep in depends:
+                parent_path = dep.depends
+                if (
+                    dep.events != ("GraphSync",)
+                    and parent_path not in self.objects
+                ):
+                    log("WARNING")(parent_not_found=parent_path, for_obj=obj_path)
+                    continue
 
-        while len(triggered):
-            changed: dict[str, int] = {}
-            for trigger in triggered:
-                obj_deps = self.triggers.get(trigger, {})
+                i = snap.handled.get(parent_path, -1)
 
-                trigger_obj = (
-                    self
-                    if trigger == name
-                    else (
-                        context.get()
-                        .get(trigger, Object)
+                parent_latest = events.get(parent_path, None)
+                if parent_latest is None:
+                    parent = self.get(parent_path, Object)
+                    parent_latest = parent.get_event()
+                    events = events.set(parent_path,parent_latest)
+
+                parent_latest = assert_is(parent_latest, Event)
+
+                parent_queued = queued.get(parent_path, set())
+
+                if i < parent_latest.i or isinstance(
+                    parent_latest,
+                    GraphSync
+                ):
+                    if isinstance(parent_latest, GraphSync):
+                        e = parent_latest
+                        if not queued_graph_sync:
+                            heappush(
+                                queue,
+                                (e.t, e)
+                            )
+                            queued_graph_sync = True
+                    else:
+                        i += 1
+                        if i in parent_queued:
+                            continue
+                        parent = self.get(parent_path, Object)
+                        e = parent.get_event(i)
+                        parent_queued = parent_queued | {i}
+                        heappush(
+                            queue,
+                            (e.t, e)
+                        )
+
+                queued = queued.set(parent_path, parent_queued)
+
+        i = 0
+        while len(queue):
+            t, e = heappop(queue)
+            e = assert_is(e, Event)
+
+            if isinstance(e, GraphSync):
+                trigger = self
+            elif e.obj not in self.objects:
+                # NOTE: created event for not bound object
+                continue
+            else:
+                trigger = self.get(e.obj, Object)
+
+
+            deps = self.triggers.get(e.obj, {})
+
+            for dep_path, dep in deps.items():
+                
+                dep_obj = self.get(dep_path, Object)
+                dep_snap = snaps[dep_path]
+
+                dep_handled = dep_snap.handled.get(e.obj, -1)
+
+                if e.i is None:
+                    raise ValueError(e)
+
+                if dep_handled < e.i:
+
+                    snaps, events = handle_event(
+                        dep_obj,
+                        trigger,
+                        dep_snap,
+                        e,
+                        dep,
+                        queue,
+                        snaps,
+                        events,
+                        # changes,
+                        self.depends,
                     )
-                )
 
-                (
-                    snaps, events, obj_changes
-                ) = handle_events(
-                    trigger_obj,
-                    obj_deps,
-                    snaps=snaps,
-                    events=events,
-                )
-                changed = {
-                    **changed,
-                    **obj_changes,
-                }
-            triggered = set([
-                k for k, n in changed.items() if n > 0
-            ])
-        
+                if isinstance(trigger, Object):
+                    next_i = e.i + 1
+                    if next_i <= events[e.obj].i and (
+                        next_i not in queued[e.obj]
+                    ):
+                        next_e = trigger.get_event(next_i)
+                        heappush(queue, (next_e.t, next_e))
+
+            i += 1
+            if n is not None and i >= n:
+                break
+
         return self
+
+def handle_event(
+    obj: Object,
+    trigger: Object  | Graph,
+    snap: Snap,
+    e: Event,
+    dep: Dependency,
+    queue: list,
+    snaps: frozendict[str, Snap],
+    events: frozendict[str, Event],
+    # changes: frozendict[str, int],
+    n_depends: frozendict[str, int],
+):
+    e_type_match = (
+        dep.events is None
+        or e.type in dep.events
+    )
+
+    if e_type_match:
+        h = obj.handler(e, snap)
+    else:
+        h = None
+
+    # log("INFO")(e=e, h=h)
+
+    fire_triage = False
+    set_latest = False
+
+    if snap.triage:
+        set_latest = h is not None
+        if len(snap.latest) < n_depends[obj.id] - 1:
+            h = None
+        elif (
+            len(snap.latest) == n_depends[obj.id] - 1
+            and snap.latest.get(e.obj, 0.) == 0.
+        ):
+            fire_triage=True
+        else:
+            raise ValueError(snap)
+        
+    run = h is not None
+
+    if snap.triage:
+        log("INFO")(e=e, obj=obj.id, run = (run, set_latest))
+    elif run:
+        log("INFO")(e=e, obj=obj.id, run = run, h = type(h))
+    else:
+        log("INFO")(e=e, obj=obj.id, run = run)
+
+    if not run:
+        # e.type not in dep.events
+        # log("INFO")(
+        #     when="skip_event",
+        #     trigger=(
+        #         f"{type(trigger).__name__}"
+        #         f"({trigger.id})"
+        #         f".{e.type}"
+        #         f".{e.i}"
+        #     ),
+        #     skipping=(f"{type(obj).__name__}({obj.id})"),
+        # )
+        pass
+    else:
+        # log("INFO")(
+        #     when="handle_event",
+        #     trigger=(
+        #         f"{type(trigger).__name__}"
+        #         f"({trigger.id})"
+        #         f".{e.type}"
+        #         f".{e.i}"
+        #     ),
+        #     handling=(
+        #         f"{type(obj).__name__}({obj.id})"
+        #         f".{type(h).__name__}"
+        #     ),
+        # )
+        caused: frozendict[
+            str, tuple[Snap, list[Event]]
+        ] = h.handle(e, snap, obj)
+
+        snaps, events = update_snaps(
+            obj,
+            trigger,
+            e,
+            caused,
+            snaps,
+            events,
+            # changes,
+            queue,
+        )
+
+    snap = assert_is(snaps.get(snap.obj), Snap)
+
+    snap = (
+        snap
+        if isinstance(trigger, Graph)
+        else snap.set_handled(
+            trigger.id,
+            (assert_is(e.i, int), assert_is(e.t, float)),
+        )
+    )
+    if set_latest:
+        snap = snap.set_latest(trigger.id, (
+            e.i, e.t
+        ) if not fire_triage else None)
+
+    snaps = snaps.set(snap.obj, obj.set_snap(snap))
+    return snaps, events
+
+# TODO: in theory, handle can be farmed out to sub process?
+# just have to change the model so that we get objects from store
+# eg. redis
+# rather than central dict
+
+# TODO: if objects register who they update snaps on behalf of
+# can make sure we never dispatch to two updating the same
+# then we can batch out to sub process for each round of event deps
+
+# TODO:
+# when we call update snap in the handle method we check it's alreayd been registered
+
+# TODO: also then helps with the issue of tracing dependency graph
+# as previously those edges weren't available
+
+# TODO: so we can then do an up front cyclicality check on graph sync
+# and broken edge check - no unreachable nodes
+
+# TODO: so we have to pass down those dpeendent snaps as well?
+# to the sub process
+# in theory they can do their own update calls saving events, latest etc
+# and then we return them back from the subprocess
+
+def update_snaps(
+    obj: Object,
+    trigger: Object | Graph,
+    e: Event,
+    caused: frozendict[str, tuple[Snap, list[Event]]],
+    snaps: frozendict[str, Snap],
+    events: frozendict[str, Event],
+    # changes: frozendict[str, int],
+    queue,
+):
+    self: Graph = context.get(Graph)
+    for snap_path, (snap, es) in caused.items():
+
+        assert snap_path != trigger.id, dict(
+            snap=snap,
+            trigger=trigger.id
+        )
+
+        if isinstance(es, Event):
+            es = [es]
+        try:
+            snap_obj: Object = self.get(snap_path, Object)
+        except:
+            raise ValueError(
+                (
+                    snap_path,
+                    type(obj),
+                )
+            )
+        if len(es):
+            es = snap_obj.extend_events(es)
+            events = events.set(
+                snap_path, es[-1]
+            )
+            for e in es:
+                heappush(queue, (e.t, e))
+
+        snaps = snaps.set(
+            snap_path, snap_obj.set_snap(snap)
+        )
+
+    return snaps, events
 
 
 G = TypeVar("G", bound=Graph)
 P = ParamSpec("P")
 
+
 def sync_object_def(
-    events: frozendict[str, tuple[Event, ...]],
+    events: frozendict[str, Event],
     obj: Object,
     k: str,
 ):
     obj_old = obj.get_obj()
-    
+
     if obj_old is None:
         log("INFO")(when="new_object", obj_new=k)
-        e = ObjectNew(k, i = 0)
+        e = ObjectNew(k, i=0)
+        es = obj.extend_events([e])
         events = events.set(
-            obj.path,
-            tuple(obj.extend_events([e]))
+            obj.id, es[-1]
         )
         obj.set_obj()
     else:
         diff = obj_old.diff(obj)
         if diff is None:
-            
             # TODO: listen to object sync
             # method on object if they publish sync?
 
-            return obj
+            return obj, events
         log("INFO")(when="diff_object", object_changed=diff)
+        es = obj.extend_events([ObjectChange(k, diff)])
         events = events.set(
-            obj.path,
-            tuple(obj.extend_events([
-                ObjectChange(k, diff)
-            ]))
+            obj.id,
+            es[-1]
         )
         obj.set_obj()
-    return obj
-
-def handle_events(
-    trigger: Object | Graph,
-    depends: dict[str, Dependency],
-    snaps: frozendict[str, Snap],
-    events: frozendict[str, tuple[Event, ...]],
-):
-    changes: frozendict[str, int] = frozendict()
-
-    if trigger.path not in snaps:
-        snap = assert_is(
-            trigger, Object
-        ).get_snap(Snap)
-        snaps = snaps.set(trigger.path, snap)
-    else:
-        snap = snaps[trigger.path]
-
-    if trigger.path not in events:
-        trigger_events = assert_is(
-            trigger, Object
-        ).get_events()
-        events = events.set(
-            trigger.path, tuple(trigger_events)
-        )
-    else:
-        trigger_events = events[trigger.path]
-
-    for k, dep in depends.items():
-        obj = context.get().get(k, Object)
-        if obj.path not in snaps:
-            obj_snap = obj.get_snap(Snap)
-            snaps = snaps.set(obj.path, obj_snap)
-        else:
-            obj_snap = snaps[obj.path]
-
-        trigger_handled = obj_snap.handled.get(
-            trigger.path, -1
-        )
-        for e in sorted(
-            trigger_events,
-            key = lambda e: assert_is(e.i),
-        ):
-            if trigger_handled < assert_is(e.i):
-                if (
-                    dep.events is None
-                    or e.type in dep.events
-                ):
-                    h = obj.handler(e, obj_snap)
-                else:
-                    h = None
-                    
-                (
-                    snaps, 
-                    events,
-                    changes,
-                ) = handle_event(
-                    obj,
-                    trigger,
-                    obj_snap,
-                    e,
-                    h,
-                    snaps,
-                    events,
-                    changes
-                )
-
-    # TODO: if has batching on obj
-    # acc the triggering events
-    # and dispatch at once (eg. latest_value_update?)
-    
-    return snaps, events, changes
-
-def handle_event(
-    obj: Object,
-    trigger: Object | Graph,
-    snap: Snap,
-    e: Event,
-    h: Handler | None,
-    snaps: frozendict[str, Snap],
-    events: frozendict[str, tuple[Event, ...]],
-    changes: frozendict[str, int],
-):
-    if h is None:
-        # e.type not in dep.events
-        log("INFO")(
-            when="skip_event",
-            trigger=(
-                f"{type(trigger).__name__}"
-                f"({trigger.path})"
-                f".{e.type}"
-                f".{e.i}"
-            ),
-            skipping=(
-                f"{type(obj).__name__}({obj.path})"
-            )
-        )
-        caused = frozendict({
-            # snap.obj: (snap, [])
-        })
-    else:
-        log("INFO")(
-            when="handle_event",
-            trigger=(
-                f"{type(trigger).__name__}"
-                f"({trigger.path})"
-                f".{e.type}"
-                f".{e.i}"
-            ),
-            handling=(
-                f"{type(obj).__name__}({obj.path})"
-                f".{type(h).__name__}"
-            )
-        )
-        caused: frozendict[
-            str, tuple[Snap, list[Event]]
-        ] = h.handle(e, snap, obj)
-
-    if caused is None:
-        raise ValueError((obj, h))
-
-    snaps, events, changes = update_snap(
-        obj,
-        trigger,
-        e,
-        caused,
-        snaps,
-        events,
-        changes,
-    )
-
-    # TODO: for collections, this gets quite slow
-    # better to update just the one field handled rather than rewrite the whole dict
-    # ie. have to store each handled entry as a separate row / key?
-
-    snap = assert_is(snaps.get(snap.obj), Snap)
-    snap = replace(
-        snap, 
-        handled=(
-            snap.handled
-            if isinstance(trigger, Graph)
-            else snap.handled.set(
-                trigger.path, assert_is(e.i),
-            )
-        )
-    )
-    snaps = snaps.set(
-        snap.obj, obj.set_snap(snap)
-    )
-    return snaps, events, changes
-
-def update_snap(
-    obj: Object,
-    trigger: Object | Graph,
-    e: Event,
-    caused: frozendict[
-        str, tuple[Snap, list[Event]]
-    ],
-    snaps: frozendict[str, Snap],
-    events: frozendict[str, tuple[Event, ...]],
-    changes: frozendict[str, int],
-):
-    self = context.get()
-    for snap_path, (snap, es) in caused.items():
-        if isinstance(es, Event):
-            es = [es]
-        try:
-            snap_obj = self.get(snap_path, Object)
-        except:
-            raise ValueError((
-                snap_path,
-                type(obj),
-            ))
-        
-        events = events.set(
-            snap_path, 
-            tuple(snap_obj.extend_events(es))
-        )
-        snaps = snaps.set(
-            snap_path, snap_obj.set_snap(snap)
-        )
-        changes = changes.set(
-            snap_path,
-            changes.get(snap_path, 0) + len(es)
-        )
-    
-    return snaps, events, changes
+    return obj, events
 
 @dataclass(frozen=True)
 class GraphSync(Event):
-    obj: str # = graph name
+    obj: str  # = graph name
     i: int | None = Event.i_field()
+    t: float | None = Event.t_field()
     type: Literal["GraphSync"] = "GraphSync"
+
 
 @dataclass(frozen=True)
 class ObjectChange(Event):
@@ -930,7 +1151,9 @@ class ObjectChange(Event):
     # we dont store old, so need the diff itself?
     diff: ObjectDiff | None
     i: int | None = Event.i_field()
+    t: float | None = Event.t_field()
     type: Literal["ObjectChange"] = "ObjectChange"
+
 
 @dataclass(frozen=True)
 class ObjectNew(ObjectChange):
@@ -941,6 +1164,7 @@ class ObjectNew(ObjectChange):
 @dataclass(frozen=True)
 class ValueUpdate(Event):
     i: int | None = Event.i_field()
+    t: float | None = Event.t_field()
     type: Literal["ValueUpdate"] = "ValueUpdate"
 
     @overload
@@ -955,31 +1179,32 @@ class ValueUpdate(Event):
     def from_snap(
         cls,
         snap: Snap,
-        into: frozendict[str, tuple[Snap, Event]]
+        into: frozendict[str, tuple[Snap, Event]],
     ) -> frozendict[str, tuple[Snap, Event]]: ...
     @classmethod
     def from_snap(
         cls,
         snap: Snap,
         into: (
-            frozendict[str, tuple[Snap, Event]]
-            | None
-        ) = None
+            frozendict[str, tuple[Snap, Event]] | None
+        ) = None,
     ):
         if into is None:
             return ValueUpdate(snap.obj)
         return into.set(
             snap.obj, (snap, ValueUpdate(snap.obj))
         )
-        
+
 
 @dataclass(frozen=True)
 class ValueAppend(ValueUpdate):
     type: Literal["ValueAppend"] = "ValueAppend"
 
+
 @dataclass(frozen=True)
 class ValuePrepend(ValueUpdate):
     type: Literal["ValuePrepend"] = "ValuePrepend"
+
 
 @dataclass(frozen=True)
 class DefaultEventParser(EventParser):
@@ -991,30 +1216,65 @@ class DefaultEventParser(EventParser):
         | ValueAppend
         | ValuePrepend
     )
-    
+
+
 @dataclass(frozen=True)
 class DependsSelf(Object):
     def depends_self(self) -> list[Dependency]: ...
+
 
 @dataclass(frozen=True)
 class DependsGraphSync(Object):
     def depends_graph(self) -> list[Dependency]:
         return [
             Dependency(
-                self.path,
+                self.id,
                 assert_is(context.get().name),
-                events=("GraphSync",)
+                events=("GraphSync",),
             )
         ]
 
     def depends(self):
         return self.depends_graph()
+
+
+@dataclass(frozen=True)
+class DependsParamsValue(Object):
+    params: t.frozen.dict[str, str]
     
+    def depends(self) -> list[Dependency]:
+        g = context.get()
+        parent = g.get(self.parent, Object)
+        env = os.environ.get("ENV", "prod")
+        try:
+            return [
+                # Dependency(
+                #     self.id,
+                #     assert_is(context.get().name),
+                #     events=("ValueUpdate",),
+                # )
+            ] + [
+                Dependency(
+                    self.id,
+                    p if env == "test" else g.get(p, Object).id,
+                    events=("ValueUpdate",),
+                )
+                for p in (
+                    self.params
+                    if isinstance(self.params, tuple)
+                    else self.params.values()
+                )
+            ]
+        except:
+            raise ValueError(self)
+
+
 @dataclass(frozen=True)
 class DependsParent(Object):
     parent: str | Object
 
     def get_parent(self) -> Object: ...
+
 
 @dataclass(frozen=True)
 class DependsParentNew(DependsParent):
@@ -1022,52 +1282,55 @@ class DependsParentNew(DependsParent):
         parent = context.get().get(self.parent, Object)
         return [
             Dependency(
-                self.path,
-                parent.path,
-                events=("ObjectNew",)
+                self.id,
+                parent.id,
+                events=("ObjectNew",),
             )
         ]
-    
+
     # TODO: change, value, etc.
+
 
 @dataclass(frozen=True)
 class DependsParentValue(DependsParent):
-
     # TODO: object_update?
     def handler_object_new(self) -> Handler: ...
 
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ValueUpdate):
-            assert (
-                self.get_parent().path == event.obj
-            ), (self, event)
+            assert self.get_parent().id == event.obj, (
+                self,
+                event,
+            )
             return self.handler_object_new()
 
         raise ValueError((self, event))
-    
+
     def depends(self) -> list[Dependency]:
         return self.depends_parent()
-    
+
     def depends_parent(self) -> list[Dependency]:
         return [
             Dependency(
-                self.path,
+                self.id,
                 assert_is(
                     self.parent
                     if isinstance(self.parent, str)
                     else self.parent
                     if self.parent is None
-                    else self.parent.path
+                    else self.parent.id
                 ),
-                events=("ValueUpdate",)
+                events=("ValueUpdate",),
                 # TODO: append, prepend?
             )
         ]
+
+
 @dataclass(frozen=True)
 class DependsGrandParentValue(DependsParent):
     def depends(self) -> list[Dependency]:
         return self.depends_grand_parent()
-    
+
     def depends_grand_parent(self) -> list[Dependency]:
         parent = context.get().get(self.parent, Object)
         grand = assert_is(
@@ -1075,83 +1338,81 @@ class DependsGrandParentValue(DependsParent):
         )
         return [
             Dependency(
-                self.path,
-                assert_is(grand).path,
-                events=("ValueUpdate",)
+                self.id,
+                assert_is(grand).id,
+                events=("ValueUpdate",),
                 # TODO: append, prepend?
             )
         ]
-    
+
 
 @dataclass(frozen=True)
 class DependsSelfNew(DependsSelf):
-        
     def depends(self) -> list[Dependency]:
         return [
             Dependency(
-                self.path,
-                self.path,
-                events=(
-                    "ObjectNew",
-                )
+                self.id, self.id, events=("ObjectNew",)
             )
         ]
-    
+
+
 @dataclass(frozen=True)
 class DependsSelfNewUpdate(DependsSelf):
-        
     def depends(self) -> list[Dependency]:
         return [
             Dependency(
-                self.path,
-                self.path,
+                self.id,
+                self.id,
                 events=(
                     "ObjectNew",
                     "ValueUpdate",
-                )
+                ),
             ),
         ]
-    
+
+
 @dataclass(frozen=True)
 class DependsSelfUpdate(DependsSelf):
-        
     def depends(self) -> list[Dependency]:
 
         # TODO: how to not fire continually?
-        
+
         return [
             Dependency(
-                self.path,
-                self.path,
-                events=("ValueUpdate",)
+                self.id,
+                self.id,
+                events=("ValueUpdate",),
             )
         ]
-    
+
+
 def is_obj_class(t: Type[Any]):
     return t is Object or issubclass(t, Object)
+
 
 def is_obj_hint(hint: Any):
     if isinstance(hint, type) and is_obj_class(hint):
         return True
     elif get_origin(hint) is Union:
-        return any([
-            is_obj_hint(h) for h in get_args(hint)
-        ])
+        return any([is_obj_hint(h) for h in get_args(hint)])
     else:
         return False
+
 
 @lru_cache(maxsize=512)
 def obj_type_hints(t: Type[Object]):
     hints = get_type_hints(t)
     return hints, {
-        k: hint for k, hint in hints.items()
+        k: hint
+        for k, hint in hints.items()
         # if is_obj_hint(hint)
     }
+
 
 def obj_to_alias(v: Any):
     # TODO: wrap in type v if subclass of container?
     if isinstance(v, Object):
-        return v.path
+        return v.id
     elif isinstance(v, list):
         return [obj_to_alias(vv) for vv in v]
     elif isinstance(v, tuple):
@@ -1167,6 +1428,7 @@ def obj_to_alias(v: Any):
     else:
         return v
 
+
 def alias_parents(obj: Object):
     hints, obj_hints = obj_type_hints(type(obj))
     assert "parent" in obj_hints, (obj, hints, obj_hints)
@@ -1176,40 +1438,42 @@ def alias_parents(obj: Object):
     }
     return replace(obj, **aliases)
 
+
 @overload
 def obj_path(
     obj: Object | str,
 ) -> str: ...
 
+
 @overload
 def obj_path(
-    obj: tuple[Object | str, ...]
-) -> tuple[str,  ...]: ...
+    obj: tuple[Object | str, ...],
+) -> tuple[str, ...]: ...
 
-def obj_path(
-    obj: Object | str | tuple[Object | str, ...]
-):
+
+def obj_path(obj: Object | str | tuple[Object | str, ...]):
     if isinstance(obj, tuple):
         return tuple([obj_path(o) for o in obj])
-    return obj if isinstance(obj, str) else obj.path
+    return obj if isinstance(obj, str) else obj.id
+
 
 def find_object(
     obj: Object | str, objs: tuple[Object | str, ...] | None
 ) -> int | None:
     if objs is None:
         return None
-    path = obj_path(obj)
+    id=obj_path(obj)
     for i, o in enumerate(objs):
-        if obj_path(o) == path:
+        if obj_path(o) == id:
             return i
     return None
 
 
+# TODO; context update for multi proc
 @dataclass(frozen=True)
 class Update:
-
     # TODO: i: int (for order in sync)
-    
+
     @property
     def type(self) -> str: ...
 
@@ -1232,10 +1496,11 @@ class Update:
     def parse_json(
         cls,
         data: str | bytes | bytearray,
-        into: Type[UpdateParser]
+        into: Type[UpdateParser],
     ) -> Update:
         parser: UpdateParser = into.ta().validate_json(data)
         return parser.update
+
 
 @dataclass(frozen=True)
 class UpdateParser:
@@ -1248,16 +1513,20 @@ class UpdateParser:
     def dump_bytes(self) -> bytes:
         return self.ta().dump_json(self)
 
+
 @functools.lru_cache(maxsize=128, typed=True)
 def update_parser(cls: Type[Update]) -> Type[UpdateParser]:
-    return dataclass(frozen=True)(type(
-        cls.__name__ + "Parser",
-        (UpdateParser,),
-        {
-            "snap": Field(discriminator="type"),
-            "__annotations__": {"snap": cls}
-        }
-    ))
+    return dataclass(frozen=True)(
+        type(
+            cls.__name__ + "Parser",
+            (UpdateParser,),
+            {
+                "snap": Field(discriminator="type"),
+                "__annotations__": {"snap": cls},
+            },
+        )
+    )
+
 
 @dataclass(frozen=False)
 class EncodedContext:
@@ -1270,7 +1539,7 @@ class EncodedContext:
         self,
         group: None = None,
         target: Callable | None = None,
-        name: str | None = None, 
+        name: str | None = None,
         daemon: bool | None = None,
         *args,
         **kwargs,
@@ -1281,7 +1550,7 @@ class EncodedContext:
             name=name,
             daemon=daemon,
             args=(self.queue, self.context) + args,
-            kwargs=kwargs
+            kwargs=kwargs,
         )
 
 
@@ -1317,7 +1586,7 @@ class Context:
     #     self, queue = self.assume_safe()
     #     b: bytes = b'' # TODO
     #     return EncodedContext(queue, b)
-    
+
     # @classmethod
     # def decode( # TODO: rename to do with multi
     #     cls,
@@ -1332,7 +1601,7 @@ class Context:
         return
 
     # TODO: various sub methods of graph update spawn
-    # if safe, publish 
+    # if safe, publish
     # else do directly (?)
 
     def sync(self):
@@ -1371,6 +1640,9 @@ class Context:
             assert isinstance(graph, t), (graph, name, t)
         return graph
 
+    def drop(self, name: str):
+        self.graphs = self.graphs.delete(name)
+
     @contextmanager
     def graph(
         self,
@@ -1396,7 +1668,7 @@ class Context:
     def fork_graph(
         self,
         name: str,
-        target: str | None = None, # if none, current
+        target: str | None = None,  # if none, current
     ):
         # existing graph, but with new attributes
         # use .graph()
@@ -1404,6 +1676,7 @@ class Context:
             raise ValueError()
         finally:
             pass
+
 
 # def _example():
 #     with context.graph("a"):
@@ -1434,6 +1707,9 @@ class Context:
 context = Context([])
 
 __all__ = [
+    "BaseInterface",
+    "init_new",
+    "P",
     "O",
     "Handler",
     "FieldDiff",
@@ -1442,6 +1718,7 @@ __all__ = [
     "Object",
     "ObjectKeyVal",
     "ObjectKeyValSQLite",
+    "ObjectKeyValRedis",
     "alias_parents",
     #
     "Graph",
@@ -1464,6 +1741,7 @@ __all__ = [
     "DependsParentNew",
     "DependsGrandParentValue",
     "DependsParentValue",
+    "DependsParamsValue",
     #
     "obj_path",
     "find_object",

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -38,16 +37,14 @@ from .....engine import *
 
 from .m import *
 
+
 @dataclass(frozen=True)
 class DailyMEPParams(DailyMParams):
     window: int | None = None
     pspan: float | None = None
     palpha: float | None = None
 
-    def build_path(
-        self,
-        cls: Type[DailyM]
-    ):
+    def build_id(self, cls: Type[DailyM]):
         window = self.window
         palpha = self.palpha
         pspan = self.pspan
@@ -63,11 +60,10 @@ class DailyMEPParams(DailyMParams):
             raise ValueError(cls)
         return f"{cls.SUFFIX}-" + params
 
+
 @dataclass(frozen=True)
 class DailyMEP(DailyM):
-
     params: DailyMEPParams
-
 
     @classmethod
     def new(
@@ -78,23 +74,22 @@ class DailyMEP(DailyM):
         palpha: float | None = None,
         project: Project | None = None,
     ):
-        params=DailyMEPParams(
+        params = DailyMEPParams(
             window=window,
             pspan=pspan,
             palpha=palpha,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
+
 
 __all__ = [
     "DailyMEPParams",

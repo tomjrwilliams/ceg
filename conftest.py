@@ -1,6 +1,9 @@
 import os
 from pathlib import Path
 
+os.environ["ENV"] = "test"
+os.environ["TEST"] = "true"
+
 TEST_DB = Path("./__local__/test.db")
 TEST_LOGS = Path("./__local__/test.log")
 
@@ -8,6 +11,7 @@ os.environ["MOCK_STREAMLIT"] = "true"
 os.environ["FRD_DATA"] = "./__local__/frd"
 
 import shutil
+
 if Path("./__local__/test").exists():
     shutil.rmtree("./__local__/test")
 
@@ -33,20 +37,25 @@ log_handler = logging.FileHandler(TEST_LOGS)
 log_handler.setLevel(logging.DEBUG)
 logger.addHandler(log_handler)
 
+
 def pytest_runtest_logstart(nodeid, location):
     filename, lineno, testname = location
     spec = dict(file=filename, line=lineno, name=testname)
     logger.debug("----")
     for k, v in spec.items():
         logger.debug(f"PYTEST {k}: {v}")
-    
+
+
 def pytest_runtest_logreport(report: pytest.TestReport):
     if report.when == "call":
         result: str = report.longreprtext
         if len(result.strip()):
             logger.debug("PYTEST result:")
             logger.debug(result)
-        logger.debug(f"PYTEST outcome: {report.outcome} in {report.duration}")
+        logger.debug(
+            f"PYTEST outcome: {report.outcome} in {report.duration}"
+        )
+
 
 def pytest_runtest_logfinish(nodeid, location):
     logger.debug(f"----")

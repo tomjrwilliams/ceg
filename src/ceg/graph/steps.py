@@ -48,7 +48,9 @@ class GraphEvents(NamedTuple):
     t: float | None
 
     def last(self) -> GraphEvent:
-        return GraphEvent(self.graph, self.events[-1], self.t)
+        return GraphEvent(
+            self.graph, self.events[-1], self.t
+        )
 
 
 class GraphBatches(NamedTuple):
@@ -98,12 +100,15 @@ def step(graph: Graph, *events: Event) -> GraphEvent:
     res = node(event, graph)
 
     if res is not None:
-
         hist = data[ref.i]
         try:
             if isinstance(hist, History.Null):
-                hist = Ref.history(ref, res, required.get(ref.i))
-                data = set_tuple(data, ref.i, hist, History.null)
+                hist = Ref.history(
+                    ref, res, required.get(ref.i)
+                )
+                data = set_tuple(
+                    data, ref.i, hist, History.null
+                )
                 graph = graph._replace(data=data)
 
             if not isinstance(res, tuple):
@@ -119,9 +124,9 @@ def step(graph: Graph, *events: Event) -> GraphEvent:
     dstream = graph.dstream
     guards = graph.guards
 
-    for i in (() if res is None else dstream.get(ref.i, ())) + (
-        (ref.i,) if not len(graph.ustream[ref.i]) else ()
-    ):
+    for i in (
+        () if res is None else dstream.get(ref.i, ())
+    ) + ((ref.i,) if not len(graph.ustream[ref.i]) else ()):
         nd = nodes[i]
         assert nd is not None, ref
 
@@ -205,7 +210,9 @@ def batches(
     iter=False,
 ):
     if iter:
-        return lambda: iter_batches(graph, *events, n=n, g=g)
+        return lambda: iter_batches(
+            graph, *events, n=n, g=g
+        )
     e = None
     t = None
     es: list[list[Event | None]] = [
@@ -288,7 +295,9 @@ def steps(
             break
         t = e.t
         es[i] = e
-    return GraphEvents(graph, tuple(cast(list[Event], es)), t)
+    return GraphEvents(
+        graph, tuple(cast(list[Event], es)), t
+    )
 
 
 def until_triggered(

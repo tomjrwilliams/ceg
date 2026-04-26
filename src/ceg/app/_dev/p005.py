@@ -58,7 +58,7 @@ class Project_005(strat.StratExplorer):
         ):
             log("INFO")( building_page=name)
 
-            universes: dict[str, pfo.CollectionDaily] = {} univ, universes = (
+            universes: dict[str, pfo.ContainerDaily] = {} univ, universes = (
                 strat.StratDomain.new()
                 .with_univ(
                     self.univ_name(name),

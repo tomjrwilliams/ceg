@@ -1,4 +1,3 @@
-
 from ..... import apis
 from .....apis import t
 from .....apis import kv
@@ -59,7 +58,7 @@ def ex_00_strat():
         -0.007089
         -0.007451
     ]
-    >>> rx.value_key_val(dom).get(rx.path).tail(8)
+    >>> rx.value_key_val(dom).get(rx.id).tail(8)
     shape: (8,)
     Series: 'strat-0-bt-uv-000-rx' [f64]
     [
@@ -72,7 +71,7 @@ def ex_00_strat():
         0.139791
         0.824148
     ]
-    >>> pf_rx.value_key_val(dom).get(pf_rx.path).tail(8)
+    >>> pf_rx.value_key_val(dom).get(pf_rx.id).tail(8)
     shape: (8,)
     Series: 'strat-0-bt-uv-000-pf-rx-ES' [f64]
     [
@@ -85,7 +84,7 @@ def ex_00_strat():
         0.139791
         0.824148
     ]
-    >>> pf_agg.value_key_val(dom).get(pf_agg.path).tail(8)
+    >>> pf_agg.value_key_val(dom).get(pf_agg.id).tail(8)
     shape: (8,)
     Series: 'strat-0-bt-uv-000-pf-rx' [f64]
     [
@@ -98,7 +97,7 @@ def ex_00_strat():
         0.139791
         0.824148
     ]
-    >>> v_perf = perf.value_key_val(dom).get(perf.path)
+    >>> v_perf = perf.value_key_val(dom).get(perf.id)
     >>> v_perf.row(0, round=4, repr=True)
     key strat-0-bt-uv-000-rx-bench
     mu 4.2188

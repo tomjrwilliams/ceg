@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -44,11 +43,10 @@ from .pfo import *
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class DailyBtUvarDeriv(
-    Daily,
-    UseRootStorage,
-    DependsParentValue
+    Daily, UseRootStorage, DependsParentValue
 ):
     parent: DailyBtUvar | str
 
@@ -60,29 +58,22 @@ class DailyBtUvarDeriv(
         type: Literal["TBC"] = "TBC"
 
     def get_parent(self) -> DailyBtUvar:
-        return context.get().get(
-            self.parent, DailyBtUvar
-        )
-    
-    
-    
-    def handler_object_new(
-        self
-    ):
+        return context.get().get(self.parent, DailyBtUvar)
+
+    def handler_object_new(self):
         raise ValueError(self)
-    
+
     # NOTE: implement .new()
-    
+
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ValueUpdate):
-            # assert self.get_parent().path == event.obj, (self, event)
+            # assert self.get_parent().id == event.obj, (self, event)
             return self.handler_object_new()
         raise ValueError((self, event))
-      
+
+
 @dataclass(frozen=True)
-class HandleNewDailyBtUvarDeriv(
-    HandleNewValueFromPl
-):
+class HandleNewDailyBtUvarDeriv(HandleNewValueFromPl):
     def handle(
         self,
         event: ObjectChange,
@@ -90,15 +81,15 @@ class HandleNewDailyBtUvarDeriv(
     ):
         bt = obj.get_parent()
 
-        raise ValueError(obj) # implement
-    
+        raise ValueError(obj)  # implement
+
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class DailyBtMvarDeriv(
-    Daily,
-    UseRootStorage,
-    DependsParentValue
+    Daily, UseRootStorage, DependsParentValue
 ):
     parent: DailyBtMvar | str
 
@@ -110,27 +101,22 @@ class DailyBtMvarDeriv(
         type: Literal["TBC"] = "TBC"
 
     def get_parent(self) -> DailyBtMvar:
-        return context.get().get(
-            self.parent, DailyBtMvar
-        )
-    
-    def handler_object_new(
-        self
-    ):
+        return context.get().get(self.parent, DailyBtMvar)
+
+    def handler_object_new(self):
         raise ValueError(self)
-    
+
     # NOTE: implement .new()
-    
+
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ValueUpdate):
-            # assert self.get_parent().path == event.obj, (self, event)
+            # assert self.get_parent().id == event.obj, (self, event)
             return self.handler_object_new()
         raise ValueError((self, event))
-      
+
+
 @dataclass(frozen=True)
-class HandleNewDailyBtMvarDeriv(
-    HandleNewValueFromPl
-):
+class HandleNewDailyBtMvarDeriv(HandleNewValueFromPl):
     def handle(
         self,
         event: ObjectChange,
@@ -138,16 +124,15 @@ class HandleNewDailyBtMvarDeriv(
     ):
         bt = obj.get_parent()
 
-        raise ValueError(obj) # implement
-    
+        raise ValueError(obj)  # implement
+
+
 #  ------------------
 
 
 @dataclass(frozen=True)
 class DailyPfolioDeriv(
-    Daily,
-    UseRootStorage,
-    DependsParent
+    Daily, UseRootStorage, DependsParent
 ):
     parent: DailyPfolio | str
 
@@ -159,39 +144,34 @@ class DailyPfolioDeriv(
         type: Literal["TBC"] = "TBC"
 
     def get_parent(self) -> DailyPfolio:
-        return context.get().get(
-            self.parent, DailyPfolio
-        )
-    
+        return context.get().get(self.parent, DailyPfolio)
+
     def depends(self) -> list[Dependency]:
         parent = self.get_parent()
         rx = DailyPfolioRx.new(parent)
         return [
             Dependency(
-                self.path,
-                rx.path,
-                events=("ValueUpdate",)
+                self.id,
+                rx.id,
+                events=("ValueUpdate",),
                 # TODO: append, prepend?
             )
         ]
-    
-    def handler_object_new(
-        self
-    ):
+
+    def handler_object_new(self):
         raise ValueError(self)
-    
+
     # NOTE: implement .new()
-    
+
     def handler(self, event: Event, snap: Snap) -> Handler:
         if isinstance(event, ValueUpdate):
-            # assert self.get_parent().path == event.obj, (self, event)
+            # assert self.get_parent().id == event.obj, (self, event)
             return self.handler_object_new()
         raise ValueError((self, event))
-      
+
+
 @dataclass(frozen=True)
-class HandleNewDailyPfolioDeriv(
-    HandleNewValueFromPl
-):
+class HandleNewDailyPfolioDeriv(HandleNewValueFromPl):
     def handle(
         self,
         event: ObjectChange,
@@ -200,8 +180,9 @@ class HandleNewDailyPfolioDeriv(
         pf = obj.get_parent()
         data = assert_is(get_daily_pfolio_data(pf))
 
-        raise ValueError(obj) # implement
-    
+        raise ValueError(obj)  # implement
+
+
 #  ------------------
 
 __all__ = [

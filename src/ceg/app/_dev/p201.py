@@ -47,7 +47,7 @@ PROJECT = "p201"
             #         dd_reg, strat.StratDomain
             #     )
             #     dd_objs2.append((
-            #         dd_reg.path,
+            #         dd_reg.id,
             #         bt.params.label(),
             #         dict(
             #             group="regime",
@@ -92,7 +92,7 @@ class Project_201(strat.StratExplorer):
 
         name = self.univ_name("es-tn")
 
-        universes: dict[str, pfo.CollectionDaily] = {}
+        universes: dict[str, pfo.ContainerDaily] = {}
          univ, universes = (
             strat.StratDomain.new()
             .with_univ(
@@ -319,14 +319,14 @@ class Project_201(strat.StratExplorer):
                         dict(group="rx",)
                     ))
                     dd_objs.append((
-                        label.path,
+                        label.id,
                         bt.params.label() + reg_label,
                         dict(group="regime"),
                     ))
                 params = replace(
                     params_eq,
                     signal=strat.SignalFactor(
-                        factors=alloc.path,
+                        factors=alloc.id,
                         key="eq-reg-" + reg_label
                     )
                 )
@@ -347,7 +347,7 @@ class Project_201(strat.StratExplorer):
                 params = replace(
                     params_fi,
                     signal=strat.SignalFactor(
-                        factors=alloc.path,
+                        factors=alloc.id,
                         key="fi-reg-" + "-".join([
                             str(p) for p in reg_params
                         ])

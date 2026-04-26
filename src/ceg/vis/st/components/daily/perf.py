@@ -8,7 +8,6 @@ from typing import (
     Literal,
     overload,
     cast,
-
 )
 from pathlib import Path
 import datetime as dt
@@ -30,6 +29,7 @@ from ..dates import *
 from ..dfs import *
 
 from ..... import apis
+
 st = apis.st.library()
 
 from .....apis import t
@@ -39,7 +39,8 @@ from .explorer import *
 
 #  ------------------
 
-# TODO: rename perf_from_rx 
+
+# TODO: rename perf_from_rx
 @dataclass(frozen=True)
 class DailyPerformance(ExploreDailyComponent):
     key: str
@@ -49,18 +50,17 @@ class DailyPerformance(ExploreDailyComponent):
     # TODO: downsample params?
 
     def render(self) -> DailyPerformance:
-        
+
         df = self.df
         if not len(df):
             return self
-        
+
         exp = self.explorer
         df = self.render_date_filter(df)
 
         rs = []
         for (label,), label_df in df.partition_by(
-            exp.label_key,
-            as_dict=True
+            exp.label_key, as_dict=True
         ).items():
             if "group" in df.schema:
                 label_df = label_df.pivot(
@@ -72,7 +72,7 @@ class DailyPerformance(ExploreDailyComponent):
                     k=label,
                     sig="Y",
                     pos="pos",
-                    rx="rx"
+                    rx="rx",
                 )
             else:
                 r = perf.perf_row(
@@ -104,10 +104,12 @@ class DailyPerformance(ExploreDailyComponent):
         )
 
         st.plotly_chart(fig)
-        
+
         return self
-    
+
+
 #  ------------------
+
 
 @dataclass(frozen=True)
 class DailyPerfTable(ExploreDailyComponent):
@@ -118,30 +120,34 @@ class DailyPerfTable(ExploreDailyComponent):
     # TODO: downsample params?
 
     def render(self) -> DailyPerfTable:
-        
+
         df = self.df
         if not len(df):
             return self
-        
+
         exp = self.explorer
         # df = self.render_date_filter(df)
 
         if "group" in df.schema:
-            df = df.filter(pl.col("group") == "perf").drop("group")
+            df = df.filter(pl.col("group") == "perf").drop(
+                "group"
+            )
 
         if "key" in df.schema and "label" in df.schema:
             df = df.select(
                 "label",
                 *[
-                    k for k in df.schema.keys()
+                    k
+                    for k in df.schema.keys()
                     if k not in {"key", "label"}
-                ]
+                ],
             )
 
         st.dataframe(df)
-        
+
         return self
-        
+
+
 #  ------------------
 
 # given partn

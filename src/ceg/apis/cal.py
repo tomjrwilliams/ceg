@@ -4,6 +4,7 @@ from typing import (
     Annotated,
 )
 import datetime as dt
+
 if TYPE_CHECKING:
     from dataclasses import dataclass
 else:
@@ -11,23 +12,24 @@ else:
 
 import polars as pl
 
+
 def parse_lag(s: str):
     n, *segs = s.split("D")
     return dt.timedelta(days=int(n))
+
 
 @dataclass
 class FreqElement:
     unit: str
     n: int
 
+
 @dataclass(frozen=True)
 class Freq:
     els: list[FreqElement]
 
-def calc_sample_limit(
-    s: str,
-    freq: str
-):
+
+def calc_sample_limit(s: str, freq: str):
     s_d = "D" in s
     s_w = "W" in s
     s_m = "M" in s
@@ -41,7 +43,7 @@ def calc_sample_limit(
         return 12 if s_m else 1 if s_d else 2
 
     # TODO: if week specified, then only once per month
-    # unless m, then once per year 
+    # unless m, then once per year
     # if d specified, once per week
 
     # etc.
@@ -57,6 +59,7 @@ def calc_sample_limit(
     else:
         raise ValueError((s, freq))
 
+
 def rebalance_mask(s: str, dt: str = "date"):
     # TODO: range selection, set selection
     # TODO: every n (second month, etc.)
@@ -70,9 +73,7 @@ def rebalance_mask(s: str, dt: str = "date"):
     m_start = d.dt.month_start()
     m_weekday = m_start.dt.weekday()
 
-    w_in_m = (
-        (d - m_start).dt.total_days() / 7
-    ).floor() + 1
+    w_in_m = ((d - m_start).dt.total_days() / 7).floor() + 1
 
     exprs = []
     n_d = n_w = n_m = None

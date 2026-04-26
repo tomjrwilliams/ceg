@@ -11,18 +11,21 @@ from .validation import assert_is
 
 T = TypeVar("T")
 
+
 @overload
 def expr(
     e: bool | int | float | str | pl.Expr | None,
     default: None = None,
 ) -> pl.Expr | None: ...
-    
+
+
 @overload
 def expr(
     e: bool | int | float | str | pl.Expr | None,
     default: bool | int | float,
 ) -> pl.Expr: ...
-    
+
+
 def expr(
     e: bool | int | float | str | pl.Expr | None,
     default: bool | int | float | None = None,
@@ -31,17 +34,20 @@ def expr(
         assert default is not None, dict(e=e)
         return pl.lit(default)
     return (
-        e if isinstance(e, pl.Expr) 
+        e
+        if isinstance(e, pl.Expr)
         else pl.lit(e)
         if isinstance(e, (bool, int, float))
         else pl.col(e)
     )
 
+
 def is_null(e: pl.Expr, or_inf: bool = True):
-    e = e.fill_nan(None) # TODO: parametrise
+    e = e.fill_nan(None)  # TODO: parametrise
     if or_inf:
         return e.is_null().or_(e.is_infinite())
     return e.is_null()
+
 
 def to_numpy_with_null(s: pl.Series):
     s = s.fill_nan(None).cast(pl.Float64)
@@ -50,16 +56,17 @@ def to_numpy_with_null(s: pl.Series):
     #     -np.inf: None
     # })
     return s.to_numpy(), (
-        (s.is_null() | s.is_infinite())
+        s.is_null() | s.is_infinite()
     ).cast(pl.Boolean).to_numpy()
+
 
 def null_mask(e: pl.Expr, mask: pl.Expr) -> pl.Expr:
     return pl.when(is_null(mask)).then(None).otherwise(e)
 
+
 def cal_mask(e: pl.Series | pl.Expr, cal: str):
-    return pl.when(
-        pl.col(cal)
-    ).then(e).otherwise(None)
+    return pl.when(pl.col(cal)).then(e).otherwise(None)
+
 
 def select_item(
     df: pl.DataFrame,
@@ -71,12 +78,14 @@ def select_item(
     assert isinstance(v, t), (v, t)
     return v
 
+
 @overload
 def select_items(
     df: pl.DataFrame,
     ks: tuple[str | pl.Expr],
     t: Type[T],
 ) -> tuple[T]: ...
+
 
 @overload
 def select_items(
@@ -85,14 +94,14 @@ def select_items(
     t: Type[T],
 ) -> tuple[T, T]: ...
 
+
 @overload
 def select_items(
     df: pl.DataFrame,
-    ks: tuple[
-        str | pl.Expr, str | pl.Expr, str | pl.Expr
-    ],
+    ks: tuple[str | pl.Expr, str | pl.Expr, str | pl.Expr],
     t: Type[T],
 ) -> tuple[T, T, T]: ...
+
 
 @overload
 def select_items(
@@ -100,6 +109,7 @@ def select_items(
     ks: tuple[str | pl.Expr, ...],
     t: Type[T],
 ) -> tuple[T, ...]: ...
+
 
 def select_items(
     df: pl.DataFrame,
@@ -110,16 +120,20 @@ def select_items(
         k if not isinstance(k, str) else pl.col(k)
         for k in ks
     )
-    return tuple([
-        assert_is(df.select(e).item(), t) for e in es
-    ])
+    return tuple(
+        [assert_is(df.select(e).item(), t) for e in es]
+    )
+
 
 def select_min_max(
     df: pl.DataFrame, k: str, t: Type[T]
 ) -> tuple[T, T]:
     return df.pipe(
-        select_items, (pl.col(k).min(), pl.col(k).max()), t=t
+        select_items,
+        (pl.col(k).min(), pl.col(k).max()),
+        t=t,
     )
+
 
 def drop_zero(
     df: pl.DataFrame,
@@ -137,6 +151,7 @@ def drop_zero(
         expr = expr.round(dp)
     return df.filter(expr != 0)
 
+
 def join_dfs(
     dfs: list[pl.DataFrame],
     align: bool | None = None,
@@ -145,15 +160,16 @@ def join_dfs(
 ):
     if len(dfs) == 1:
         return dfs[0]
-    
+
     on = on if isinstance(on, list) else [assert_is(on)]
-    
+
     if align or (len(dfs) > 2 and align is None):
-        align_on = set.intersection(*[
-            set(df.schema.keys()) for df in dfs
-        ])
+        align_on = set.intersection(
+            *[set(df.schema.keys()) for df in dfs]
+        )
         assert set(on) == align_on, dict(
-            on=on, align_on=align_on,
+            on=on,
+            align_on=align_on,
         )
 
         df = pl.concat(dfs, how="align_full")
@@ -161,10 +177,9 @@ def join_dfs(
     else:
         df, *dfs = dfs
         for df_r in dfs:
-            df = df.join(
-                df_r, on=on, **kwargs
-            )
+            df = df.join(df_r, on=on, **kwargs)
     return df
+
 
 def partition_by_exprs(
     df: pl.DataFrame,
@@ -174,36 +189,39 @@ def partition_by_exprs(
     **exprs: pl.Expr,
 ):
     aliases = (
-        list(exprs.keys()) if with_alias
+        list(exprs.keys())
+        if with_alias
         else [f"{k}_" for k in exprs.keys()]
     )
     df = df.with_columns(
-        e.alias(k) for e, k in zip(
-            exprs.values(), aliases
-        )
+        e.alias(k) for e, k in zip(exprs.values(), aliases)
     )
     if with_keys and as_list:
         return [
             (
-                {
-                    k: v for k, v in zip(
-                        exprs.keys(),
-                        keys
-                    )
-                }, (
+                {k: v for k, v in zip(exprs.keys(), keys)},
+                (
                     df_partn
                     if with_alias
                     else df_partn.drop(*aliases)
-                )
+                ),
             )
-            for keys, df_partn
-            in df.partition_by(
+            for keys, df_partn in df.partition_by(
                 *aliases,
                 maintain_order=True,
                 as_dict=True,
             ).items()
         ]
-    raise ValueError((df, with_alias, with_keys, as_list, list(exprs.keys())))
+    raise ValueError(
+        (
+            df,
+            with_alias,
+            with_keys,
+            as_list,
+            list(exprs.keys()),
+        )
+    )
+
 
 def partition_by_regime(
     df: pl.DataFrame,
@@ -218,58 +236,54 @@ def partition_by_regime(
 ):
     reg = pl.col(regime)
     reg_ff = reg.forward_fill()
-    reg_chg = (
-        reg_ff.ne(reg_ff.shift())
-        .fill_null(False)
-    )
+    reg_chg = reg_ff.ne(reg_ff.shift()).fill_null(False)
     reg_ind = reg_chg.cast(pl.Int32).cum_sum()
 
     win_start = pl.col(f"_{window}_start")
     win_end = pl.col(f"_{window}_end")
 
-    df = df.with_columns(
-        reg_ind.alias(f"_{window}")
-    ).with_columns(
-        pl.col(date)
-        .min()
-        .over(f"_{window}")
-        .alias(f"_{window}_start"),
-        pl.col(date)
-        .max()
-        .over(f"_{window}")
-        .alias(f"_{window}_end"),
-    ).with_columns(
-        pl.concat_str(
-            win_start,
-            win_end,
-            separator="-"
+    df = (
+        df.with_columns(reg_ind.alias(f"_{window}"))
+        .with_columns(
+            pl.col(date)
+            .min()
+            .over(f"_{window}")
+            .alias(f"_{window}_start"),
+            pl.col(date)
+            .max()
+            .over(f"_{window}")
+            .alias(f"_{window}_end"),
         )
-        .alias(window)
-        if not truncate_dates
-        else pl.concat_str(
+        .with_columns(
             pl.concat_str(
-                (win_start.dt.year() - 2000).cast(
-                    pl.String
-                ).str.pad_start(2, "0"),
-                win_start.dt.month().cast(
-                    pl.String
-                ).str.pad_start(2, "0")
-            ),
-            pl.concat_str(
-                (win_end.dt.year() - 2000).cast(
-                    pl.String
-                ).str.pad_start(2, "0"),
-                win_end.dt.month().cast(
-                    pl.String
-                ).str.pad_start(2, "0")
-            ),
-            separator="-"
+                win_start, win_end, separator="-"
+            ).alias(window)
+            if not truncate_dates
+            else pl.concat_str(
+                pl.concat_str(
+                    (win_start.dt.year() - 2000)
+                    .cast(pl.String)
+                    .str.pad_start(2, "0"),
+                    win_start.dt.month()
+                    .cast(pl.String)
+                    .str.pad_start(2, "0"),
+                ),
+                pl.concat_str(
+                    (win_end.dt.year() - 2000)
+                    .cast(pl.String)
+                    .str.pad_start(2, "0"),
+                    win_end.dt.month()
+                    .cast(pl.String)
+                    .str.pad_start(2, "0"),
+                ),
+                separator="-",
+            ).alias(window)
         )
-        .alias(window)
-    ).drop(
-        f"_{window}",
-        f"_{window}_start",
-        f"_{window}_end",
+        .drop(
+            f"_{window}",
+            f"_{window}_start",
+            f"_{window}_end",
+        )
     )
     return df.pipe(
         partition_by_exprs,
@@ -280,14 +294,16 @@ def partition_by_regime(
         regime=pl.col("regime"),
     )
 
+
 f_round = round
+
 
 def get_row(
     df: pl.DataFrame,
     i: int,
     *keys: str,
     repr: bool = False,
-    round: int | None = None
+    round: int | None = None,
 ):
     r: dict = df.row(i, named=True)
     if not len(keys):
@@ -295,7 +311,8 @@ def get_row(
     if round:
         r = {
             k: (
-                v if not isinstance(v, float)
+                v
+                if not isinstance(v, float)
                 else f_round(v, round)
             )
             for k, v in r.items()
@@ -308,8 +325,7 @@ def get_row(
 
 
 def mask_col(
-    col: str,
-    is_valid: Callable[[pl.Expr], pl.Expr]
+    col: str, is_valid: Callable[[pl.Expr], pl.Expr]
 ):
     e = pl.col(col).fill_nan(None)
     is_null = is_valid(e).not_()
@@ -319,12 +335,13 @@ def mask_col(
             is_valid(e.forward_fill().shift(1)),
             is_null,
         )
-        .then(0) # first invalid is null
+        .then(0)  # first invalid is null
         .when(is_null)
-        .then(None) # else null
+        .then(None)  # else null
         .otherwise(e)
         .alias(col)
     )
+
 
 def signed_log(e: pl.Expr):
     e = e.fill_nan(None)
@@ -338,6 +355,7 @@ def signed_log(e: pl.Expr):
         .otherwise(None)
     )
 
+
 def with_sample_masks(
     df: pl.DataFrame,
     sample: str | float,
@@ -349,7 +367,7 @@ def with_sample_masks(
             pl.concat_str(
                 pl.col("date").dt.year().alias("year"),
                 pl.col("date").dt.month().alias("month"),
-                separator="-"
+                separator="-",
             ).alias(with_period or "_group")
         )
     elif isinstance(sample, (int, float)):
@@ -361,20 +379,23 @@ def with_sample_masks(
         )
     else:
         raise ValueError(df)
-    df = df.with_columns(*(
-        pl.col("date")
-        .filter(pl.col(k).is_not_null())
-        .last()
-        .over(with_period or "_group")
-        .eq(pl.col("date"))
-        .cast(pl.Boolean)
-        .fill_null(False)
-        .alias(f"{k}_{sample}")
-        for k in cols
-    ))
+    df = df.with_columns(
+        *(
+            pl.col("date")
+            .filter(pl.col(k).is_not_null())
+            .last()
+            .over(with_period or "_group")
+            .eq(pl.col("date"))
+            .cast(pl.Boolean)
+            .fill_null(False)
+            .alias(f"{k}_{sample}")
+            for k in cols
+        )
+    )
     if with_period is None:
         return df.drop("_group")
     return df
+
 
 __all__ = [
     "expr",
@@ -393,4 +414,3 @@ __all__ = [
     "is_null",
     "with_sample_masks",
 ]
-

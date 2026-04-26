@@ -1,4 +1,3 @@
-
 from typing import Callable
 import polars as pl
 import numpy as np
@@ -11,6 +10,7 @@ from ...pl import *
 from ..utils import *
 
 # ----------------------------------------
+
 
 @nb.jit()
 def norm_softmax(
@@ -26,18 +26,18 @@ def norm_softmax(
 
     if top == 0:
         top = n_x
-    
+
     t = 0
     while t < n_t:
-
         n_x_t = 0
         cum_exp = 0
 
         x = 0
         while x < top:
-            
             x_i = nd_order[t][x]
-            if not nd_active[t][x_i] or np.isnan(nd_v[t][x_i]):
+            if not nd_active[t][x_i] or np.isnan(
+                nd_v[t][x_i]
+            ):
                 x += 1
                 continue
             cum_exp += math.exp(nd_v[t][x_i])
@@ -77,6 +77,7 @@ def norm_softmax(
 
     return res
 
+
 @nb.jit()
 def norm_pow_rank(
     nd_v: np.ndarray,
@@ -84,18 +85,17 @@ def norm_pow_rank(
     nd_active: np.ndarray,
     n_x: int,
     n_t: int,
-    ratio: float=2.,
+    ratio: float = 2.0,
     top: int = 0,
 ):
     res = np.zeros(nd_v.shape)
     res_null = np.zeros(nd_v.shape, dtype=np.bool)
-    
+
     if top == 0:
         top = n_x
-    
+
     t = 0
     while t < n_t:
-
         n = 0
         w_sum = 0
         w = 1
@@ -109,19 +109,19 @@ def norm_pow_rank(
                 res_null[t][x_i] = True
                 x += 1
                 continue
-            w *= (1/ratio)
+            w *= 1 / ratio
             w_sum += w
             n += 1
             x += 1
 
         x = 0
         if n >= 1:
-            w_norm = 1/w_sum
+            w_norm = 1 / w_sum
             w = 1
             while x < top:
                 x_i = nd_order[t][x]
                 if nd_active[t][x_i]:
-                    w *= (1/ratio)
+                    w *= 1 / ratio
                     res[t][x_i] = w * w_norm
                 x += 1
 
@@ -134,6 +134,7 @@ def norm_pow_rank(
 
     return res
 
+
 @nb.jit()
 def norm_equal(
     nd_v: np.ndarray,
@@ -145,13 +146,12 @@ def norm_equal(
 ):
     res = np.zeros(nd_v.shape)
     res_null = np.zeros(nd_v.shape, dtype=np.bool)
-    
+
     if top == 0:
         top = n_x
-    
+
     t = 0
     while t < n_t:
-
         n = 0
         x = 0
         while x < top:
@@ -169,7 +169,7 @@ def norm_equal(
             while x < top:
                 x_i = nd_order[t][x]
                 if nd_active[t][x_i]:
-                    res[t][x_i] = 1/n
+                    res[t][x_i] = 1 / n
                 x += 1
 
         while x < n_x:
@@ -180,6 +180,7 @@ def norm_equal(
         t += 1
 
     return res
+
 
 @nb.jit()
 def norm_mvar(
@@ -200,13 +201,12 @@ def norm_mvar(
 ):
     res = np.zeros(nd_v.shape)
     res_null = np.zeros(nd_v.shape, dtype=np.bool)
-    
+
     if top == 0:
         top = n_x
-    
+
     t = 0
     while t < n_t:
-
         n = 0
         x = 0
         while x < top:
@@ -224,7 +224,7 @@ def norm_mvar(
             while x < top:
                 x_i = nd_order[t][x]
                 if nd_active[t][x_i]:
-                    res[t][x_i] = 1/n
+                    res[t][x_i] = 1 / n
                 x += 1
 
         while x < n_x:
@@ -258,7 +258,7 @@ def norm_hrp(
     n_p = nd_corr.shape[1]
     res = np.zeros(nd_v.shape)
     res_null = np.zeros(nd_v.shape, dtype=np.bool)
-    
+
     if top == 0:
         top = n_x
 
@@ -269,10 +269,9 @@ def norm_hrp(
     n_corr = 0
 
     r_active = np.zeros((n_x,), dtype=np.bool)
-    
+
     t = 0
     while t < n_t:
-
         n = 0
         x = 0
         while x < top:
@@ -345,23 +344,25 @@ def norm_hrp(
                     if (
                         np.isnan(wx) or wx == 0
                     ) and n_corr > 0:
-                        raise ValueError((
-                            w,
-                            nd_order[t],
-                            nd_corr[t],
-                            nd_corr_order[t],
-                            nd_vol[t],
-                            top,
-                            n,
-                            t,
-                        ))
+                        raise ValueError(
+                            (
+                                w,
+                                nd_order[t],
+                                nd_corr[t],
+                                nd_corr_order[t],
+                                nd_vol[t],
+                                top,
+                                n,
+                                t,
+                            )
+                        )
                     res[t][x_i] = wx
                     # / (
-                    #     n 
+                    #     n
                     #     # * n # TODO: tbc?
                     # )
                 x += 1
-        
+
         prev_n = n
 
         while x < n_x:
@@ -373,6 +374,7 @@ def norm_hrp(
 
     return res
 
+
 # TODO: masked-erms node that takes a signal as well as rx - only calculates the rx where the signal is non zero / null, no decay over the null periods
 
 # TODO: param to hard code correlations to 1 for first pairings
@@ -380,6 +382,7 @@ def norm_hrp(
 # TODO: pass the signals / mask as an extra argument, when active, weight is assumed zero, we skip the contribution to pfol weight / weigtht rescale for that iteration
 
 # TODO: vol with signal, we set the rx to nan not null so it gets skipped from the vol calc / decay / corr
+
 
 @nb.jit()
 def hrp_weights(
@@ -406,9 +409,14 @@ def hrp_weights(
         nd_included_assets[i_asset] = True
         x += 1
 
-    weights = np.zeros((n_x,n_x,))
+    weights = np.zeros(
+        (
+            n_x,
+            n_x,
+        )
+    )
 
-    nd_pf_map = np.zeros((n_x,), dtype=np.int32) -1
+    nd_pf_map = np.zeros((n_x,), dtype=np.int32) - 1
 
     # TODO: weights has to be matrix
 
@@ -422,23 +430,24 @@ def hrp_weights(
         y: int = nd_iy[i]
 
         if x == y:
-            raise ValueError((
-                nd_corr_order,
-                nd_ix,
-                nd_iy,
-                p,
-                i,
-                x,
-                y,
-            ))
+            raise ValueError(
+                (
+                    nd_corr_order,
+                    nd_ix,
+                    nd_iy,
+                    p,
+                    i,
+                    x,
+                    y,
+                )
+            )
 
         if np.isnan(nd_corr[i]):
             p += 1
             continue
 
         if not (
-            nd_included_assets[x]
-            and nd_included_assets[y]
+            nd_included_assets[x] and nd_included_assets[y]
         ):
             p += 1
             continue
@@ -453,15 +462,14 @@ def hrp_weights(
 
             xx = 0
             while xx < n_x:
-
                 wy = weights[pf_y][xx]
                 wx = weights[pf_x][xx]
 
                 if wy != 0 and wx != 0:
-                    raise ValueError((
-                        weights, pf_x, pf_y, xx, wx, wy
-                    ))
-                
+                    raise ValueError(
+                        (weights, pf_x, pf_y, xx, wx, wy)
+                    )
+
                 weights[pf_x][xx] = wx + wy
                 xx += 1
 
@@ -487,11 +495,9 @@ def hrp_weights(
             last_agg = pf_x
 
         elif pf_x >= 0 and pf_y >= 0:
-            
             last_agg = pf_x
 
         elif pf_x >= 0 and pf_y < 0:
-            
             # pf_corr = pf_corr(
             #     nd_vol,
             #     nd_corr,
@@ -517,7 +523,7 @@ def hrp_weights(
 
             xx = 0
             while xx < n_x:
-                weights[pf_x][xx] *= (1 / pf_vol)
+                weights[pf_x][xx] *= 1 / pf_vol
                 xx += 1
 
             last_agg = pf_x
@@ -525,7 +531,7 @@ def hrp_weights(
         elif pf_x < 0 and pf_y >= 0:
             if weights[pf_y][x] != 0:
                 raise ValueError((weights, pf_y, x))
-            
+
             # pf_corr = pf_corr(
             #     nd_vol,
             #     nd_corr,
@@ -549,7 +555,7 @@ def hrp_weights(
 
             xx = 0
             while xx < n_x:
-                weights[pf_y][xx] *= (1 / pf_vol)
+                weights[pf_y][xx] *= 1 / pf_vol
                 xx += 1
 
             last_agg = pf_y
@@ -562,7 +568,7 @@ def hrp_weights(
 
             weights[x][x] = 1 / n_active
             weights[x][y] = 1 / n_active
-            
+
             pf_vol = agg_vol(
                 nd_vol,
                 nd_corr,
@@ -572,8 +578,8 @@ def hrp_weights(
                 n_active,
             )
 
-            weights[x][x] *= (1 / pf_vol)
-            weights[x][y] *= (1 / pf_vol)
+            weights[x][x] *= 1 / pf_vol
+            weights[x][y] *= 1 / pf_vol
 
             nd_pf_map[x] = x
             nd_pf_map[y] = x
@@ -581,7 +587,7 @@ def hrp_weights(
             last_agg = x
         else:
             raise ValueError((pf_x, pf_y))
-            
+
         p += 1
 
     res_w = weights[int(last_agg)]
@@ -592,20 +598,22 @@ def hrp_weights(
         if res_w[x] != 0:
             n_w += 1
         x += 1
-    
+
     if n_w != n_active:
-        raise ValueError((
-            weights,
-            nd_pf_map,
-            last_agg,
-            nd_vol,
-            nd_corr,
-            nd_order,
-            nd_corr_order,
-            top,
-            n_active,
-            t,
-        ))
+        raise ValueError(
+            (
+                weights,
+                nd_pf_map,
+                last_agg,
+                nd_vol,
+                nd_corr,
+                nd_order,
+                nd_corr_order,
+                top,
+                n_active,
+                t,
+            )
+        )
 
     return res_w
 
@@ -614,7 +622,6 @@ def hrp_weights(
 # TODO: pass signal as well, when zero (or close to), ignore from the vol calculation entirely
 
 # ie. aggregate up but dont rescale non vol contributing elements? if signal = 0 for merged asset, skip rescale
-
 
 
 @nb.jit()
@@ -645,7 +652,7 @@ def agg_pf_vol(
 
         w_x_1: float = nd_w_1[x]
         w_y_2: float = nd_w_2[y]
-        
+
         vol_x: float = nd_vol[x]
         vol_y: float = nd_vol[y]
 
@@ -684,11 +691,12 @@ def agg_pf_vol(
 
     if acc_var == 0:
         return 1 / n_active
-    
+
     acc_vol = math.sqrt(acc_var)
     if acc_vol < 1 / n_active:
         return 1 / n_active
     return acc_vol
+
 
 @nb.jit()
 def agg_vol(
@@ -713,13 +721,17 @@ def agg_vol(
 
         w_x: float = nd_weights[x]
         w_y: float = nd_weights[y]
-        
+
         vol_x: float = nd_vol[x]
         vol_y: float = nd_vol[y]
 
         corr: float = nd_corr[p]
 
-        if np.isnan(vol_x) or np.isnan(vol_y) or np.isnan(corr):
+        if (
+            np.isnan(vol_x)
+            or np.isnan(vol_y)
+            or np.isnan(corr)
+        ):
             p += 1
             continue
 
@@ -748,12 +760,13 @@ def agg_vol(
 
     if acc_var == 0:
         return 1 / n_active
-    
+
     acc_vol = math.sqrt(acc_var)
     if acc_vol < 1 / n_active:
         return 1 / n_active
     return acc_vol
-    
+
+
 @nb.jit()
 def pf_corr(
     nd_vol: np.ndarray,
@@ -782,7 +795,7 @@ def pf_corr(
                 if px == x and w_y != 0:
                     # corr is with x
                     # y has weight
-                    acc_corr +=(
+                    acc_corr += (
                         w_y * nd_vol[py] * nd_corr[p]
                     )
                 p += 1
@@ -790,7 +803,7 @@ def pf_corr(
         x += 1
 
     return nd_acc_corr
-    
+
 
 __all__ = [
     "norm_softmax",

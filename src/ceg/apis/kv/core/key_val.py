@@ -15,9 +15,10 @@ from ...logs import logger
 
 logger, log = logger(
     __file__,
-    streams = dict(formatter=True),
+    streams=dict(formatter=True),
     # when=log_when
 )
+
 
 # TODO: rename keyValstoreConfig
 # TODO: convience registry on keyValStore to the class object
@@ -29,6 +30,7 @@ class KeyValConfig:
 @dataclass(frozen=True)
 class KeyValStore(ABC, Generic[ID, KeyI, ValI]):
     """KeyValStore[ID, KeyI, ValI]"""
+
     config: KeyValConfig
 
     type_id: Type[ID]
@@ -78,6 +80,7 @@ class KeyValStore(ABC, Generic[ID, KeyI, ValI]):
 @dataclass(frozen=True)
 class KeyValIO(Generic[ID, KeyI, ValI, KeyO, ValO]):
     """KeyValIO[ID, KeyI, ValI, KeyO, ValO]"""
+
     type_id: Type[ID]
     type_key_i: Type[KeyI]
     type_val_i: Type[ValI]
@@ -85,10 +88,14 @@ class KeyValIO(Generic[ID, KeyI, ValI, KeyO, ValO]):
     type_val_o: Type[ValO]
 
     @abstractmethod
-    def encode_key_type(self, t: Type[KeyO]) -> Type[KeyI]: ...
+    def encode_key_type(
+        self, t: Type[KeyO]
+    ) -> Type[KeyI]: ...
 
     @abstractmethod
-    def encode_val_type(self, t: Type[ValO]) -> Type[ValI]: ...
+    def encode_val_type(
+        self, t: Type[ValO]
+    ) -> Type[ValI]: ...
 
     @abstractmethod
     def encode_key(self, key: KeyO) -> KeyI: ...
@@ -120,22 +127,29 @@ class KeyValIO(Generic[ID, KeyI, ValI, KeyO, ValO]):
     def check_type_key_o(self, key_o: KeyO) -> KeyO:
         assert isinstance(key_o, self.type_key_o)
         return key_o
-    
+
     def check_type_val_i(self, val_i: ValI) -> ValI:
         assert isinstance(val_i, self.type_val_i)
         return val_i
-        
+
     def check_type_val_o(self, val_o: ValO) -> ValO:
         assert isinstance(val_o, self.type_val_o)
         return val_o
+
 
 def is_eq(v1, v2, k):
     try:
         return v1 == v2
     except TypeError as e:
-        log("INFO")(
-            eq_type_err=(k, e),
-        )
+        if "the truth value of a DataFrame is ambiguous" in str(e):
+            pass
+        else:
+            raise e
+    except ValueError as e:
+        if "DataFrame columns do not match" in str(e):
+            pass
+        else:
+            raise e
     return False
 
 
@@ -145,6 +159,7 @@ class KeyVal(
     KeyValStore[ID, KeyI, ValI],
 ):
     """KeyVal[ID, KeyI, ValI, KeyO, ValO]"""
+
     on_create: Callable[[KeyO, ValO], None] | None = None
     on_update: Callable[[KeyO, ValO], None] | None = None
 
@@ -156,7 +171,7 @@ class KeyVal(
     def get(
         self,
         key: KeyO,
-        t: None=None,
+        t: None = None,
         # TODO: default value if not found
     ) -> ValO | None: ...
     @overload
@@ -198,10 +213,10 @@ class KeyVal(
         if val_i is None:
             return i, val_i
         return (
-            self.check_type_id(i), 
-            self.check_type_val_o(self.decode_val(
-                key, val_i
-            ))
+            self.check_type_id(i),
+            self.check_type_val_o(
+                self.decode_val(key, val_i)
+            ),
         )
 
     @overload
@@ -241,12 +256,16 @@ class KeyVal(
         i, val_o = self.iget(key)
 
         if i is not None and (
-            val_o is None and val is None or is_eq(val_o, val, key)
+            val_o is None
+            and val is None
+            or is_eq(val_o, val, key)
         ):
             return i, val
 
         key_i = self.check_type_key_i(self.encode_key(key))
-        val_i = self.check_type_val_i(self.encode_val(key, val))
+        val_i = self.check_type_val_i(
+            self.encode_val(key, val)
+        )
 
         if i is None:
             if self.on_create is not None:
@@ -266,11 +285,11 @@ class KeyVal(
 
     # TODO: set_many
 
+
 @dataclass(frozen=True)
-class MemoryKeyVal(
-    KeyVal[ID, KeyI, ValI, KeyO, ValO]
-):
+class MemoryKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
     """KeyVal[ID, KeyI, ValI, KeyO, ValO]"""
+
     data: dict[KeyI, ValI] = field(default_factory=dict)
 
     def prepare(self) -> MemoryKeyVal:
@@ -321,9 +340,9 @@ class MemoryKeyVal(
         self.data[key] = val
         return i
 
+
 @dataclass(frozen=True)
 class ExampleKeyVal(KeyVal[int, str, int, str, float]):
-
     type_id: Type[int] = int
     type_key_i: Type[str] = str
     type_val_i: Type[int] = int
@@ -348,10 +367,9 @@ class ExampleKeyVal(KeyVal[int, str, int, str, float]):
     def decode_val(self, k: str, v: int) -> float:
         return float(v)
 
+
 @dataclass(frozen=True)
-class KeyValStrKeyIO(
-    KeyVal[ID, str, ValI, str, ValO]
-):
+class KeyValStrKeyIO(KeyVal[ID, str, ValI, str, ValO]):
     """KeyValStrKeyIO[ID, ValI, ValO]"""
 
     type_key_i: Type[str]
@@ -366,10 +384,9 @@ class KeyValStrKeyIO(
     def decode_key(self, k: str) -> str:
         return k
 
+
 @dataclass(frozen=True)
-class KeyValBytesValI(
-    KeyVal[ID, KeyI, bytes, KeyO, ValO]
-):
+class KeyValBytesValI(KeyVal[ID, KeyI, bytes, KeyO, ValO]):
     """KeyValBytesValI[ID, KeyI, KeyO, ValO]"""
 
     type_key_i: Type[str]
@@ -384,10 +401,11 @@ class KeyValBytesValI(
     def decode_key(self, k: str) -> str:
         return k
 
+
 @dataclass(frozen=True)
 class KeyValStrKeyIOBytesValI(
     KeyValStrKeyIO[ID, bytes, ValO],
-    KeyValBytesValI[ID, str, str, ValO]
+    KeyValBytesValI[ID, str, str, ValO],
 ):
     """KeyValStrKeyIOBytesValI"""
 
@@ -404,11 +422,11 @@ class KeyValStrKeyIOBytesValI(
     def decode_key(self, k: str) -> str:
         return k
 
+
 @final
 @dataclass(frozen=True)
 class ExampleMemoryKeyVal(
-    ExampleKeyVal,
-    MemoryKeyVal[int, str, int, str, float]
+    ExampleKeyVal, MemoryKeyVal[int, str, int, str, float]
 ):
     """
     >>> j, k, l, updated = ("j", "k", "l", [])
@@ -426,7 +444,9 @@ class ExampleMemoryKeyVal(
     >>> assert updated == [(k, 2.0)]
     >>> assert kv.data == {"K": 2, "J": 1}
     """
+
     config: KeyValConfig = KeyValConfig()
+
 
 # NOTE: typing example
 i, v = ExampleMemoryKeyVal().iselect("")

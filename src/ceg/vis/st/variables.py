@@ -8,7 +8,6 @@ from typing import (
     Literal,
     overload,
     cast,
-
 )
 from pathlib import Path
 import datetime as dt
@@ -16,6 +15,7 @@ import numpy as np
 import polars as pl
 
 from ... import apis
+
 st = apis.st.library()
 
 from dataclasses import replace
@@ -27,6 +27,7 @@ else:
 
 T = TypeVar("T")
 
+
 @dataclass(frozen=True)
 class StateVariable:
     k: str
@@ -34,7 +35,7 @@ class StateVariable:
     @property
     def key(self) -> str:
         return self.k
-    
+
     def exists(self) -> bool:
         return self.key in st.session_state
 
@@ -49,7 +50,7 @@ class StateVariable:
         if t is not None:
             assert isinstance(v, t), (v, t)
         return v
-    
+
     def set(self, val):
         st.session_state[self.key] = val
 
@@ -57,17 +58,19 @@ class StateVariable:
 @dataclass(frozen=True)
 class VersionVariable(StateVariable):
     def incr(self):
-        v = self.get(0, t = int) + 1
+        v = self.get(0, t=int) + 1
         self.set(v)
         return v
-    
+
+
 @dataclass(frozen=True)
 class VersionedVariable(StateVariable):
     version: VersionVariable
-    
+
     @property
     def key(self) -> str:
-        return f"{self.k}_{self.version.get(0, t = int)}"
+        return f"{self.k}_{self.version.get(0, t=int)}"
+
 
 __all__ = [
     "T",

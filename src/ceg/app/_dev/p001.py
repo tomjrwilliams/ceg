@@ -1,6 +1,7 @@
 from typing import cast, TYPE_CHECKING, ClassVar
 import itertools
 from dataclasses import replace
+
 if TYPE_CHECKING:
     from dataclasses import dataclass
 else:
@@ -29,7 +30,7 @@ SPAN_VOL_SCALE = [
 ]
 SPAN_VOL_SIG = [
     # 16,
-    48, 
+    48,
     # 48 * 4
 ]
 SPAN_POW_2 = [4, 8, 16, 32, 64, 128, 256, 512]
@@ -37,19 +38,19 @@ SPAN_POW_2_EVEN = [4, 16, 64, 256]
 SPAN_POW_2_ODD = [8, 32, 128, 512]
 
 SPAN_RATIO = [
-    1.5, 
+    1.5,
     # 3
 ]
 
 notional_caps = {
-    "TN": 20.,
-    "TLT": 20.,
-    "SCHP": 20.,
-    "SCHO": 20.,
-    "SCHR": 20.,
-    "SCHJ": 20.,
-    "SCHI": 20.,
-    "SCHZ": 20.,
+    "TN": 20.0,
+    "TLT": 20.0,
+    "SCHP": 20.0,
+    "SCHO": 20.0,
+    "SCHR": 20.0,
+    "SCHJ": 20.0,
+    "SCHI": 20.0,
+    "SCHZ": 20.0,
 }
 
 
@@ -78,7 +79,7 @@ class Project_001(strat.MomExplorer):
             # NOTE: since 2000
             # moderate fast neg mean reversion, outside of covid and 14/15
             # pos maybe best fast (eg. 8), or broader signal base (3rd and 4th qintile?)
-            # chunky 00 drawdown, great 05 rally, limited 08 drawdown? 2015 bad, covid bad, then flat 
+            # chunky 00 drawdown, great 05 rally, limited 08 drawdown? 2015 bad, covid bad, then flat
             ("xly", [("ETF", "XLY")], SPAN_POW_2),
             # NOTE: start 2000
             # medium pos good, fast pos
@@ -124,9 +125,7 @@ class Project_001(strat.MomExplorer):
             ("cst", [("ETF", "SCHJ")], SPAN_POW_2),
             # NOTE: corp 1-5
             # start 2020, wrecked in 2020 - but more or less upward drift thereafter? carry?
-
             # TODO: post credit shock recovery signal?
-
             ("clt", [("ETF", "SCHI")], SPAN_POW_2),
             # NOTE: corp 5-10
             # start 2020, wrecked in 2020 - but more or less upward drift thereafter? carry?
@@ -146,12 +145,12 @@ class Project_001(strat.MomExplorer):
             # pos signal adds, else mixed
             # weak poss MR for neg signal?
         ]
-    
+
     # TICKERS:
 
     # SP500 trackers:
     # US: SPY, VOO, and IVV
-    # UK/EU: VUSA, CSPX, and SPXP. 
+    # UK/EU: VUSA, CSPX, and SPXP.
 
     # ETFs:
     # XLY (Consumer Discretionary), XLE (Energy), XLU (Utilities), XLB (Materials).
@@ -161,25 +160,26 @@ class Project_001(strat.MomExplorer):
     # SCHG (U.S. Large-Cap Growth ETF).
     # FNDA (Fundamental U.S. Small Company ETF), SCHK (1000 Index® ETF), SCHP (U.S. TIPS ETF), SCYB (High Yield Bond ETF), SCMB (Municipal Bond ETF), SCHA (U.S. Small-Cap ETF), SCHR (Intermediate-Term U.S. Treasury ETF), SCHJ (1-5 Year Corporate Bond ETF), SCHO (Short-Term U.S. Treasury ETF), SCHZ (U.S. Aggregate Bond ETF), SCHI (5-10 Year Corporate Bond ETF), SCHF (International Equity ETF).
     # GLL (UltraShort Gold), EEV (UltraShort Emerging Markets), YXI (UltraShort Japan), BZQ (UltraShort Basic Materials).
-    # Vanguard High Dividend Yield ETF (VYM) 
+    # Vanguard High Dividend Yield ETF (VYM)
 
     # TODO: try long-spy short-tlt basket, run momentum
     # essentially, more volatile when normal corr, otherwise flat-ish?
 
     @classmethod
     def load_(cls, kw: dict):
-        return cls.load(**{
-            k: v for k, v in kw.items()
-            if k in [
-                "root", "test"
-            ]
-        })
-    
+        return cls.load(
+            **{
+                k: v
+                for k, v in kw.items()
+                if k in ["root", "test"]
+            }
+        )
+
     @classmethod
     def load(
         cls,
-        root: str = "./__local__/apps", 
-        test: bool = False
+        root: str = "./__local__/apps",
+        test: bool = False,
     ):
         """
         >>> root = "./__local__/test"
@@ -189,9 +189,8 @@ class Project_001(strat.MomExplorer):
         >>> nav[1]()
         """
 
-        self = (
-            Project_001(root=root)
-            .with_config(explorer.ExplorerConfig(PROJECT))
+        self = Project_001(root=root).with_config(
+            explorer.ExplorerConfig(PROJECT)
         )
 
         project = engine.Project.new(PROJECT)
@@ -199,13 +198,13 @@ class Project_001(strat.MomExplorer):
         qiles = {
             **{
                 (p, sym, span_f, span_vol, span_ratio): [
-                    None, 
-                    cls.qile(5, 0, m = -1, f="z"),
+                    None,
+                    cls.qile(5, 0, m=-1, f="z"),
                     cls.qile(5, 4, f="z"),
                 ]
                 for span_vol in cls.SPAN_VOL_SIG
                 for span_ratio in cls.SPAN_RATIO
-                for span_f in [4., 8]
+                for span_f in [4.0, 8]
                 for p, sym in [
                     ("FUT", "ES"),
                     ("ETF", "SPY"),
@@ -213,12 +212,12 @@ class Project_001(strat.MomExplorer):
             },
             **{
                 (p, sym, span_f, span_vol, span_ratio): [
-                    None, 
+                    None,
                     cls.qile(5, 3, 5, f="z"),
                 ]
                 for span_vol in cls.SPAN_VOL_SIG
                 for span_ratio in cls.SPAN_RATIO
-                for span_f in [16, 32., 64., 128]
+                for span_f in [16, 32.0, 64.0, 128]
                 for p, sym in [
                     ("ETF", "SPY"),
                     ("FUT", "ES"),
@@ -226,36 +225,43 @@ class Project_001(strat.MomExplorer):
             },
             **{
                 (p, sym, span_f, span_vol, span_ratio): [
-                    None, 
+                    None,
                     cls.qile(5, 2, 5, f="z"),
                 ]
                 for span_vol in cls.SPAN_VOL_SIG
                 for span_ratio in cls.SPAN_RATIO
-                for span_f in [8., 16, 32., 64.]
+                for span_f in [8.0, 16, 32.0, 64.0]
                 for p, sym in [
                     ("ETF", "TLT"),
                 ]
             },
             **{
                 (p, sym, span_f, span_vol, span_ratio): [
-                    None, 
+                    None,
                     cls.qile(5, 4, 1, f="z"),
                 ]
                 for span_vol in cls.SPAN_VOL_SIG
                 for span_ratio in cls.SPAN_RATIO
-                for span_f in [8., 16, 32.]
+                for span_f in [8.0, 16, 32.0]
                 for p, sym in [
                     ("FUT", "TN"),
                 ]
             },
             **{
                 (p, sym, span_f, span_vol, span_ratio): [
-                    None, 
+                    None,
                     cls.qile(5, 3, 5, f="z"),
                 ]
                 for span_vol in cls.SPAN_VOL_SIG
                 for span_ratio in cls.SPAN_RATIO
-                for span_f in [4, 8., 16, 32., 64., 128.]
+                for span_f in [
+                    4,
+                    8.0,
+                    16,
+                    32.0,
+                    64.0,
+                    128.0,
+                ]
                 for p, sym in [
                     ("FUT", "GC"),
                 ]
@@ -288,15 +294,13 @@ class Project_001(strat.MomExplorer):
             # ("f", 512, .5),
         ]
         i = 0
-        for (
-            name, product_symbols, spans
-         ), (
-            suff, rebal
-         ) in itertools.product(
+        for (name, product_symbols, spans), (
+            suff,
+            rebal,
+        ) in itertools.product(
             self.product_symbol_spans(),
-            self.rebal_variants()
+            self.rebal_variants(),
         ):
-            
             with engine.context.graph(
                 f"{PROJECT}-{name}", strat.StrategyGraph
             ):
@@ -307,21 +311,21 @@ class Project_001(strat.MomExplorer):
                     depth=0,
                 )
                 bt_raw: dict[
-                    tuple,
-                    strat.Strategy | strat.Basket
+                    tuple, strat.Strategy | strat.Basket
                 ] = {}
                 bt_norm = {}
                 for params in self.mom_params(
                     product_symbols,
                     spans,
                     rebal=rebal,
-                    z_clip = z_clip + [
+                    z_clip=z_clip
+                    + [
                         # ("z", 512, .5),
                         # ("z", 512, 1.0),
                         # ("z", 512, 1.5),
                     ],
-                    notional_caps = notional_caps,
-                    notional_caps_default = 10.,
+                    notional_caps=notional_caps,
+                    notional_caps_default=10.0,
                     # qiles = qiles
                 ):
                     univ_0, params = params.bind(
@@ -329,14 +333,16 @@ class Project_001(strat.MomExplorer):
                         strat.Strategies,
                     )
                     r = params
-                    bt_raw[(
-                        r.asset,
-                        r.params.signal,
-                        r.params.scale,
-                        r.params.cap
-                        if r.params.signal is None
-                        else None,
-                    )] = params
+                    bt_raw[
+                        (
+                            r.asset,
+                            r.params.signal,
+                            r.params.scale,
+                            r.params.cap
+                            if r.params.signal is None
+                            else None,
+                        )
+                    ] = params
                 univ_1 = strat.Strategies.under_project(
                     project,
                     name,
@@ -346,41 +352,49 @@ class Project_001(strat.MomExplorer):
                     product_symbols,
                     spans,
                     rebal=rebal,
-                    qiles = qiles,
-                    z_clip = z_clip,
-                    with_no_signal = False,
-                    notional_caps = notional_caps,
-                    notional_caps_default = 10.,
-                    qiles_default = [
+                    qiles=qiles,
+                    z_clip=z_clip,
+                    with_no_signal=False,
+                    notional_caps=notional_caps,
+                    notional_caps_default=10.0,
+                    qiles_default=[
                         None,
                         # cls.qile(5, 1, 4, f="z"),
                         cls.qile(5, 0, f="z"),
                         cls.qile(5, 4, f="z"),
-                    ]
+                    ],
                 ):
                     r = params
-                    bt_raw[(
-                        r.asset,
-                        r.params.signal,
-                        r.params.scale,
-                        r.params.cap
-                        if r.params.signal is None
-                        else None,
-                    )]
+                    bt_raw[
+                        (
+                            r.asset,
+                            r.params.signal,
+                            r.params.scale,
+                            r.params.cap
+                            if r.params.signal is None
+                            else None,
+                        )
+                    ]
                     univ_1, params = params.bind(
                         univ_1,
                         strat.Strategies,
                     )
-                    bt_norm[(
-                        r.asset,
-                        r.params.signal,
-                        r.params.scale,
-                        r.params.cap
-                    )] = params
+                    bt_norm[
+                        (
+                            r.asset,
+                            r.params.signal,
+                            r.params.scale,
+                            r.params.cap,
+                        )
+                    ] = params
                 bt_no_signal = {
                     (asset, sig, sc, c): bt
-                    for (asset, sig, sc, c), bt
-                    in bt_raw.items()
+                    for (
+                        asset,
+                        sig,
+                        sc,
+                        c,
+                    ), bt in bt_raw.items()
                     if sig is None
                 }
                 # bt_no_qile = {
@@ -416,13 +430,9 @@ class Project_001(strat.MomExplorer):
                     self.page_name(i, name, suffix=suff),
                     type="daily",
                     graph=True,
-                    t=Project_001
-                ).with_perf_table(
-                    bts, t=Project_001
-                )
-                (
-                    self,bts
-                ) = self.with_partn_heatmap(
+                    t=Project_001,
+                ).with_perf_table(bts, t=Project_001)
+                (self, bts) = self.with_partn_heatmap(
                     bts,
                     by="period",
                     ref="y",
@@ -434,45 +444,53 @@ class Project_001(strat.MomExplorer):
                 bt_ref = list(bt_no_signal.values())[0]
                 # long only?
 
-                (
-                    self,bts
-                ) = self.with_partn_heatmap(
+                (self, bts) = self.with_partn_heatmap(
                     bts,
                     by="dd",
-                    ref=f"{name}={assert_is(bt_ref.bt).rx().path}",
-                    threshold=(1., 756),
+                    ref=f"{name}={assert_is(bt_ref.bt).rx().id}",
+                    threshold=(1.0, 756),
                     value="shrp",
                     t=Project_001,
                     # include=lambda r: r.params.cap is None
                 )
                 res_no_signal = [
-                    r for r in bts
+                    r
+                    for r in bts
                     if r.params.signal is None
                 ]
                 res_no_qile = [
-                    r for r in bts
-                    if isinstance(r.params.signal, strat.SignalOsc)
+                    r
+                    for r in bts
+                    if isinstance(
+                        r.params.signal, strat.SignalOsc
+                    )
                     and r.params.signal.qile is None
                     and r.params.signal.zile is None
                 ]
                 res_qile = [
-                    r for r in bts
-                    if isinstance(r.params.signal, strat.SignalOsc)
+                    r
+                    for r in bts
+                    if isinstance(
+                        r.params.signal, strat.SignalOsc
+                    )
                     and (
                         r.params.signal.qile is not None
                         or r.params.signal.zile is not None
                     )
                 ]
-                (
-                    self,res_no_qile
-                ) = self.with_mutn_heatmap(
-                    res_no_qile,
-                    target="sig",
-                    change="sdev",
-                    params=(5, 0.5,),
-                    value="shrp",
-                    t=Project_001,
-                    # include=lambda r: r.params.cap is None
+                (self, res_no_qile) = (
+                    self.with_mutn_heatmap(
+                        res_no_qile,
+                        target="sig",
+                        change="sdev",
+                        params=(
+                            5,
+                            0.5,
+                        ),
+                        value="shrp",
+                        t=Project_001,
+                        # include=lambda r: r.params.cap is None
+                    )
                 )
                 # self,res_no_qile = self.with_mutn_heatmap(
                 #     res_no_qile,
@@ -483,23 +501,19 @@ class Project_001(strat.MomExplorer):
                 #     value="shrp",
                 #     t=Project_001
                 # )
-                res = (
-                    res_no_signal
-                    + res_no_qile
-                    + res_qile
-                )
-                self = self.with_rx_graph(
-                    res, t=Project_001
-                ).with_signal_graph(
-                    res, t=Project_001
-                ).with_graph(
-                    engine.context.get(),
-                    t=Project_001
+                res = res_no_signal + res_no_qile + res_qile
+                self = (
+                    self.with_rx_graph(res, t=Project_001)
+                    .with_signal_graph(res, t=Project_001)
+                    .with_graph(
+                        engine.context.get(), t=Project_001
+                    )
                 )
                 if test:
                     return self
                 i += 1
         return self
+
 
 PROJECTS[PROJECT] = Project_001
 

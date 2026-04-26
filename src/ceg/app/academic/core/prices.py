@@ -4,10 +4,11 @@ import pandas as pd
 from .types import *
 from .states import State
 
+
 def df_tall(
     v: F64_3D,
     agents: list[str] | None = None,
-    products: list[str] | None=None,
+    products: list[str] | None = None,
     agent: str = "a",
     product: str = "p",
 ) -> pl.DataFrame:
@@ -31,13 +32,14 @@ def df_tall(
             "time": pl.Int32,
             "agent": t_agents,
             "product": t_products,
-        }
+        },
     )
+
 
 def df_wide(
     v: F64_2D,
     agents: list[str] | None = None,
-    products: list[str] | None=None,
+    products: list[str] | None = None,
     agent: str = "a",
     product: str = "p",
 ) -> pd.DataFrame:
@@ -53,11 +55,11 @@ def df_wide(
         agents = enumerated_labels(agent, a, justify=3)
     return pd.DataFrame(
         data={
-            name: v[:, i]
-            for i, name in enumerate(products)
+            name: v[:, i] for i, name in enumerate(products)
         },
-        index=agents
+        index=agents,
     )
+
 
 def init_constant(
     n_agents: int,
@@ -66,11 +68,14 @@ def init_constant(
 ) -> Callable[[State], F64_2D]:
     assert n_agents == v.shape[0]
     assert n_products == v.shape[1]
+
     def f(state: State) -> F64_2D:
         assert state.n_agents == n_agents
         assert state.n_products == n_products
         return v
+
     return f
+
 
 # def init_product_prices(
 #     n_agents: int,
@@ -89,9 +94,7 @@ def cum_sqrt_imbalance(
 ):
     prices = state.prices
 
-    orders: F64_1D = np.sum(
-        state.orders, axis=(1, 2)
-    )
+    orders: F64_1D = np.sum(state.orders, axis=(1, 2))
     deliveries: F64_1D = np.sum(
         state.deliveries, axis=(1, 2)
     )
@@ -100,7 +103,8 @@ def cum_sqrt_imbalance(
 
     imbalance = orders - deliveries
 
-    d_price= np.sign(imbalance) * np.sqrt(np.abs(imbalance))
+    d_price = np.sign(imbalance) * np.sqrt(
+        np.abs(imbalance)
+    )
 
     return prices + np.expand_dims(d_price, 0)
-    

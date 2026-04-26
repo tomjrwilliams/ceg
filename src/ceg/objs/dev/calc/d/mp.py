@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -38,11 +37,12 @@ from .....engine import *
 
 from .m import *
 
+
 @dataclass(frozen=True)
 class DailyMPParams(DailyMParams):
     pwindow: int | None = None
 
-    def build_path(
+    def build_id(
         self,
         cls: Type[DailyM],
         window: int | None = None,
@@ -60,9 +60,9 @@ class DailyMPParams(DailyMParams):
             params += f"-{str(pwindow)}"
         return f"{cls.SUFFIX}-" + params
 
+
 @dataclass(frozen=True)
 class DailyMP(DailyM):
-
     params: DailyMPParams
 
     @classmethod
@@ -73,23 +73,22 @@ class DailyMP(DailyM):
         pwindow: int | None = None,
         project: Project | None = None,
     ):
-        params=DailyMPParams(
+        params = DailyMPParams(
             window=window,
             pwindow=pwindow,
         )
         assert cls.SUFFIX != "M", cls
-        path = parent.extend_path(
-            params.build_path(cls)
-        )
+        id=parent.extend_id(params.build_id(cls))
         if project is not None:
-            path = project.extend_path(path)
+            id=project.extend_id(path)
         return cls(
-            path=path,
+            id=id,
             parent=parent,
             params=params,
             project=project,
         )
-    
+
+
 __all__ = [
     "DailyMPParams",
     "DailyMP",

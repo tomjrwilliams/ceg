@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from typing import (
@@ -55,7 +54,7 @@ class EqDailyRx(
     ... )
     >>> obj = EqDailyRx.new(ord)
     >>> Graph.with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.path).tail(8)
+    >>> obj.value_key_val().get(obj.id).tail(8)
     shape: (8,)
     Series: 'test-eq-d-SPY-close-full-frd-rx' [f64]
     [
@@ -69,6 +68,7 @@ class EqDailyRx(
         1.877995
     ]
     """
+
     parent: EqDailyEtf | EqDailyStock | str
     # TODO: or stock
 
@@ -78,7 +78,7 @@ class EqDailyRx(
     @dataclass(frozen=True)
     class Snap(Daily.Snap):
         type: Literal["EqDailyRxSnap"] = "EqDailyRxSnap"
-    
+
     @classmethod
     def new(
         cls,
@@ -105,7 +105,7 @@ class EqDailyRx(
             )
         # assert ident is not None, parent
         return cls(
-            path=parent.extend_path("rx"),
+            id=parent.extend_id("rx"),
             parent=parent,
         )
 
@@ -113,9 +113,13 @@ class EqDailyRx(
         if isinstance(event, ValueAppend):
             return HandleUpdateEqDailyRx()
         elif isinstance(event, ValueUpdate):
-            assert self.get_parent().path == event.obj, (self, event)
+            assert self.get_parent().id == event.obj, (
+                self,
+                event,
+            )
             return HandleNewEqDailyRx()
         raise ValueError((self, event))
+
 
 @dataclass(frozen=True)
 class HandleUpdateEqDailyRx(Handler):
@@ -130,32 +134,27 @@ class HandleUpdateEqDailyRx(Handler):
         # if after snap.last, Wget and append
         return
 
+
 @dataclass(frozen=True)
-class HandleNewEqDailyRx(
-    HandleNewDailyFromDailyParentPl
-):
-    
+class HandleNewEqDailyRx(HandleNewDailyFromDailyParentPl):
     def calc_df(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
         obj: EqDailyRx,
     ) -> pl.DataFrame:
-        
+
         parent = obj.get_parent()
-        
+
         # split: adjust by split ratio
         # dividends: 1 - (Dividend Amount / Prior Day's Close Price)
 
         e = (
             pl.col(VALUE).forward_fill().pct_change()
-            if parent.tags.adjust in [
-                "pct", "split"
-            ]
+            if parent.tags.adjust in ["pct", "split"]
             else pl.col(VALUE).forward_fill().diff()
-            if parent.tags.adjust in [
-                "raw", "price", "full"
-            ]
+            if parent.tags.adjust
+            in ["raw", "price", "full"]
             # TODO: split only, raw
             else None
         )
@@ -170,6 +169,7 @@ class HandleNewEqDailyRx(
 
         return df
 
+
 # TODO: class HandleObjectChange:
 # if chunk, rechunk
 # if backend type / loc change, copy
@@ -177,12 +177,16 @@ class HandleNewEqDailyRx(
 
 #  ------------------
 
+
 @dataclass(frozen=True)
 class HasEqDailyGrandParent(Object):
     parent: EqDailyEtf | EqDailyRx | str
 
     def get_parent(self) -> EqDailyEtf | EqDailyRx:
-        return context.get().get(self.parent, EqDailyEtf | EqDailyRx)
+        return context.get().get(
+            self.parent, EqDailyEtf | EqDailyRx
+        )
+
 
 #  ------------------
 

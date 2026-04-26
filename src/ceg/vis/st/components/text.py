@@ -8,7 +8,6 @@ from typing import (
     Literal,
     overload,
     cast,
-
 )
 import json
 from pathlib import Path
@@ -28,12 +27,15 @@ from .core import *
 from ....apis import t
 
 from ....apis.st import cache, library
+
 st = library()
+
 
 @cache()
 def read_text(fp: Path):
-    with fp.open('r') as f:
+    with fp.open("r") as f:
         v_init = json.load(f)["value"]
+
 
 @dataclass(frozen=True)
 class CachedText(Component):
@@ -44,7 +46,7 @@ class CachedText(Component):
     @property
     def dirty(self) -> StateVariable:
         return StateVariable(f"{self.key}_dirty")
-    
+
     @property
     def data(self) -> StateVariable:
         return StateVariable(f"{self.key}_data")
@@ -58,10 +60,10 @@ class CachedText(Component):
         fp.parent.mkdir(exist_ok=True, parents=True)
         if fp.exists():
             if cached:
-                with fp.open('r') as f:
+                with fp.open("r") as f:
                     v_init = json.load(f)["value"]
             else:
-                v_init = read_text(fp)                
+                v_init = read_text(fp)
             if set:
                 self.data.set(v_init)
         else:
@@ -73,7 +75,7 @@ class CachedText(Component):
 
         # def on_change_df():
         #     self.dirty.set(True)
-    
+
         v_init = None
 
         if not self.data.exists():
@@ -89,8 +91,8 @@ class CachedText(Component):
 
         if not v == v_init:
             self.data.set(v)
-            with Path(self.fp).open('w+') as f:
+            with Path(self.fp).open("w+") as f:
                 json.dump({"value": v}, f)
-            st.rerun() # NOTE: needed, but moves focus?
+            st.rerun()  # NOTE: needed, but moves focus?
 
         return self

@@ -1,6 +1,6 @@
 import datetime as dt
 import polars as pl
-from streamlit.navigation.page import StreamlitPage
+# from streamlit.navigation.page import StreamlitPage
 
 import ceg.vis.st.pivot as pivot
 from ...vis.st.nav import Page, Shared
@@ -9,7 +9,9 @@ ONE_DAY = dt.timedelta(days=1)
 
 
 def dates_between(d0: dt.date, d1: dt.date):
-    res: list[dt.date] = [d0 for _ in range((d1 - d0).days + 1)]
+    res: list[dt.date] = [
+        d0 for _ in range((d1 - d0).days + 1)
+    ]
     i = 0
     while d0 <= d1:
         res[i] = d0

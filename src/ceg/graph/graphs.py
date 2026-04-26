@@ -147,7 +147,9 @@ class Graph(NamedTuple):
         queue = []
         heapify(queue)
         index: frozendict[Node.Any, int] = frozendict()  # type: ignore
-        dstream: frozendict[int, tuple[int, ...]] = frozendict()  # type: ignore
+        dstream: frozendict[int, tuple[int, ...]] = (
+            frozendict()
+        )  # type: ignore
         return cls(
             queue=queue,
             nodes=(),
@@ -165,7 +167,9 @@ class Graph(NamedTuple):
         )
 
     def with_state(self, key: Key, value: Value) -> Graph:
-        return self._replace(state=self.state.set(key, value))
+        return self._replace(
+            state=self.state.set(key, value)
+        )
 
     def bind(
         self,
@@ -185,7 +189,9 @@ class Graph(NamedTuple):
         )
 
     @contextlib.contextmanager
-    def mutable(self, partition: bool | Ref.Any | None = None):
+    def mutable(
+        self, partition: bool | Ref.Any | None = None
+    ):
         ctxt, is_done = graph_context(
             self, partition=partition, mutable=True
         )
@@ -195,7 +201,9 @@ class Graph(NamedTuple):
             assert is_done(), ctxt
 
     @contextlib.contextmanager
-    def implicit(self, partition: bool | Ref.Any | None = None):
+    def implicit(
+        self, partition: bool | Ref.Any | None = None
+    ):
         ctxt, is_done = graph_context(
             self, partition=partition, mutable=False
         )
@@ -206,7 +214,6 @@ class Graph(NamedTuple):
 
 
 class MutableBind(Protocol):
-
     def __call__(
         self,
         node: Node.Any[R] | None = None,
@@ -218,7 +225,6 @@ class MutableBind(Protocol):
 
 
 class ImplicitBind(Protocol):
-
     def __call__(
         self,
         node: Node.Any[R] | None = None,
@@ -371,7 +377,10 @@ def init_node(
         zip(acc.keys(), map(tuple, acc.values()))
     )  # type: ignore
     ustream = set_tuple(
-        ustream, i, params, frozendict()  # type: ignore
+        ustream,
+        i,
+        params,
+        frozendict(),  # type: ignore
     )
 
     if alias is not None:
@@ -482,7 +491,9 @@ def bind(
                 when=when,
                 alias=alias,
             )  # type: ignore
-    elif isinstance(node, Node.Any) and isinstance(ref, Ref.Any):
+    elif isinstance(node, Node.Any) and isinstance(
+        ref, Ref.Any
+    ):
         i = index.get(node, ref.i)
         assert i == ref.i, (node, ref, i)
         res = ref
@@ -613,7 +624,6 @@ class Annotation(NamedTuple):
 
 
 class define:
-
     fs = fs
     # bind_from_new = HasNew
 

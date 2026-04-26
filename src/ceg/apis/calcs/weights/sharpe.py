@@ -1,4 +1,3 @@
-
 from typing import Callable
 import polars as pl
 import numpy as np
@@ -15,7 +14,6 @@ from ..utils import *
 # TODO: sharpe calc on residual of each rx to equal weighted basket?
 
 
-
 @nb.jit()
 def calc_sharpe_rolling(
     nd_rx: np.ndarray,
@@ -23,9 +21,9 @@ def calc_sharpe_rolling(
     nd_sample: np.ndarray,
     window: int,
     n_t: int,
-    ann: float = 252.,
+    ann: float = 252.0,
 ):
-    
+
     res = np.zeros((n_t,), dtype=float)
     res_null = np.zeros((n_t,), dtype=np.bool)
 
@@ -37,13 +35,11 @@ def calc_sharpe_rolling(
     sum_rx_sq = 0
 
     while t < n_t:
-
         if not nd_null[t]:
-            
             rx = nd_rx[t]
 
             sum_rx += rx
-            sum_rx_sq += (rx * rx)
+            sum_rx_sq += rx * rx
             n_rx += 1
 
         if not nd_sample[t]:
@@ -66,7 +62,7 @@ def calc_sharpe_rolling(
                     continue
                 rx = nd_rx[l]
                 sum_rx -= rx
-                sum_rx_sq -= (rx * rx)
+                sum_rx_sq -= rx * rx
                 n_rx -= 1
 
                 l += 1
@@ -74,14 +70,12 @@ def calc_sharpe_rolling(
         if n_rx > 1:
             mu_rx = sum_rx / n_rx
             rms_rx = math.sqrt(sum_rx_sq / n_rx)
-            
+
             if rms_rx == 0:
                 res[t] = np.nan
                 res_null[t] = True
             else:
-                res[t] = (
-                    mu_rx * ann
-                ) / (
+                res[t] = (mu_rx * ann) / (
                     rms_rx * math.sqrt(ann)
                 )
         else:
@@ -89,8 +83,9 @@ def calc_sharpe_rolling(
             res_null[t] = True
 
         t += 1
-    
+
     return res, res_null
+
 
 @nb.jit()
 def calc_sharpe_ewm(
@@ -99,9 +94,9 @@ def calc_sharpe_ewm(
     nd_sample: np.ndarray,
     window: float,
     n_t: int,
-    ann: float = 252.,
+    ann: float = 252.0,
 ):
-    
+
     res = np.zeros((n_t,), dtype=float)
     res_null = np.zeros((n_t,), dtype=np.bool)
 
@@ -110,12 +105,10 @@ def calc_sharpe_ewm(
     n_rx = 0
     mu_rx = 0
     mu_rx_sq = 0
-    
+
     t: int = 0
     while t < n_t:
-
         if not nd_null[t]:
-        
             rx = nd_rx[t]
             rx_sq = rx * rx
 
@@ -123,20 +116,16 @@ def calc_sharpe_ewm(
                 mu_rx = rx
                 mu_rx_sq = rx * rx
             else:
-                mu_rx = (
-                    (mu_rx * decay) + (rx * window)
+                mu_rx = (mu_rx * decay) + (rx * window)
+                mu_rx_sq = (mu_rx_sq * decay) + (
+                    rx_sq * window
                 )
-                mu_rx_sq = (
-                    (mu_rx_sq * decay) + (rx_sq * window)
-                )
-            
+
             n_rx += 1
 
         if nd_sample[t] and n_rx > 1:
             if mu_rx_sq > 0:
-                res[t] = (
-                    mu_rx * ann
-                ) / (
+                res[t] = (mu_rx * ann) / (
                     math.sqrt(mu_rx_sq) * math.sqrt(ann)
                 )
             else:
@@ -146,6 +135,7 @@ def calc_sharpe_ewm(
         t += 1
 
     return res, res_null
+
 
 __all__ = [
     "calc_sharpe_rolling",

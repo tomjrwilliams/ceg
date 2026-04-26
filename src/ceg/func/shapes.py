@@ -217,7 +217,6 @@ class v_args_to_vec(Node.D1_F64):
 
 @dataclass(frozen=True)
 class mat_tup_to_v(Node.D1_F64):
-
     type: str
     vec: Ref.D1_F64_D2_F64
     i0: int
@@ -232,12 +231,16 @@ class mat_tup_to_v(Node.D1_F64):
         i1: int,
         slot: int = 1,
     ):
-        return mat_tup_to_v("mat_tup_to_v", vec, i0, i1, slot)
+        return mat_tup_to_v(
+            "mat_tup_to_v", vec, i0, i1, slot
+        )
 
     bind = define.bind_from_new(new, Node.D1_F64.ref)
 
     def __call__(self, event: Event, graph: Graph):
-        v = self.vec.history(graph, slot=1).last_before(event.t)
+        v = self.vec.history(graph, slot=1).last_before(
+            event.t
+        )
         if v is None:
             return None
         return v[self.i0][self.i1]
