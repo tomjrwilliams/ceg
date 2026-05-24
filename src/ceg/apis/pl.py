@@ -5,11 +5,60 @@ from typing import (
     overload,
     Callable,
 )
+from datetime import date
 import polars as pl
 import numpy as np
 from .validation import assert_is
 
 T = TypeVar("T")
+
+
+def unpivot_concatenated_keys(
+    df: pl.DataFrame,
+    variable_names: list[str],
+    value_name: str,
+    sep: str = "|",
+    index: str | None = None,
+):
+    unpack = lambda k : (
+        pl.col("concat")
+        .struct.field(k)
+        .alias(k)
+    )
+    return df.unpivot(
+        variable_name="concat",
+        value_name=value_name,
+        index=index,
+    ).with_columns(
+        pl.col("concat")
+        .str.split(by=pl.lit(sep))
+        .list.to_struct(fields= variable_names)
+        .alias("concat")
+    ).select(value_name, *(
+        [] if index is None else [index]
+    ), *(
+        unpack(variable_name) for variable_name in variable_names
+    ))
+
+
+def filter_dates_between(
+    df: pl.DataFrame,
+    d0: date | None = None,
+    d1: date | None = None,
+):
+    if d0 is not None and d1 is not None:
+        if d1 < d0:
+            d1 = d0
+        df = df.filter(
+            pl.col("date").is_between(d0, d1)
+        )
+    elif d0 is not None:
+        df = df.filter(pl.col("date") >= d0)
+    elif d1 is not None:
+        df = df.filter(pl.col("date") <= d1)
+    else:
+        pass
+    return df
 
 
 @overload

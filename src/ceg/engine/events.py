@@ -51,18 +51,18 @@ class EventParser:
         return self.ta().dump_json(self)
 
 
-@functools.lru_cache(maxsize=128, typed=True)
-def event_parser(cls: Type[Event]) -> Type[EventParser]:
-    return dataclass(frozen=True)(
-        type(
-            cls.__name__ + "Parser",
-            (EventParser,),
-            {
-                "event": Field(discriminator="type"),
-                "__annotations__": {"event": cls},
-            },
-        )
-    )
+# @functools.lru_cache(maxsize=128, typed=True)
+# def event_parser(cls: Type[Event]) -> Type[EventParser]:
+#     return dataclass(frozen=True)(
+#         type(
+#             cls.__name__ + "Parser",
+#             (EventParser,),
+#             {
+#                 "event": Field(discriminator="type"),
+#                 "__annotations__": {"event": cls},
+#             },
+#         )
+#     )
 
 from datetime import tzinfo
 
@@ -91,34 +91,12 @@ class Event:
     """
 
     obj: str  # NOTE: object path
+    i: int | None = None
+    t: float | None = None
 
-    @property
-    def i(self) -> int | None: ...
-
-    @property
-    def t(self) -> float | None: ...
-
-    @property
-    def type(self) -> str: ...
-
-    @classmethod
-    def union_field(cls):
-        return Field(discriminator="type")
-
-    @classmethod
-    def type_field(cls, name: str, repr: bool = False):
-        return Field(default=name, repr=repr)
-
-    @classmethod
-    def i_field(cls, repr: bool = False):
-        return Field(default=None, repr=repr)
-
-    @classmethod
-    def t_field(cls, repr: bool = False):
-        return Field(
-            default_factory=lambda: dt.datetime.now(dt.UTC).timestamp(),
-            repr=repr
-        )
+    # TODO:
+    # def new
+    # t=dt.datetime.now(dt.UTC).timestamp()
 
     @classmethod
     def parser(cls) -> Type[EventParser]:

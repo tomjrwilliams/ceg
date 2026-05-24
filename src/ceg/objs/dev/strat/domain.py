@@ -76,7 +76,7 @@ class StrategyGraph(Graph):
             | DailyERms
             | DailyBtPos
             | DailyBtRx
-            | DailyAggregate
+            | DailyComposition
             | DailyEMA
             | DailyZ
             | DailyEZ
@@ -103,7 +103,7 @@ class StrategyGraph(Graph):
             | DailyDDRegime
             | DailyEWmThold
             | Container
-            | DailyAggregateDeriv
+            | DailyOutput
             | Strategies
             | DailyBtWeights
             | DailyBtPx
@@ -127,8 +127,8 @@ class StrategyGraph(Graph):
             | DailyERms.Snap
             | DailyBtPos.Snap
             | DailyBtRx.Snap
-            | DailyAggregate.Snap
-            | DailyAggregateDeriv.Snap
+            | DailyComposition.Snap
+            | DailyOutput.Snap
             | DailyEMA.Snap
             | DailyZ.Snap
             | DailyEZ.Snap
@@ -143,7 +143,6 @@ class StrategyGraph(Graph):
             | DailyDEMA.Snap
             | EcoDailyObservation.Snap
             | Container.Snap
-            | DailyAggregate.Snap
             | Container.Snap
             | DailyBtPerf.Snap
             | DailyTF.Snap

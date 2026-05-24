@@ -60,21 +60,6 @@ class SQLiteKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
         SQLiteKeyValConfig
     )
 
-    @classmethod
-    def new(
-        cls,
-        db: str,
-        name: str,
-        table: sqlite.Table | None = None,
-        spec: dict | None = None,
-    ) -> SQLiteKeyValConfig:
-        return SQLiteKeyValConfig(
-            db=db,
-            name=name,
-            table=table,
-            spec=spec,
-        )
-
     def prepare(self):
         # TODO: annot return sefl
         # TODO STRICT

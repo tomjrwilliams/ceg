@@ -54,20 +54,48 @@ from ......apis.eq import *
 # Vanguard High Dividend Yield ETF (VYM)
 
 
-@dataclass(frozen=True)
-class EqDailyEtfTags(BarDailyTags):
-    symbol: str
-    ident: None
-    field: str
-    adjust: str
-    source: str
-    fx: str | None = None  # ccy to convert to
+def load_df_frd(
+    symbol: str, field: str, adjust: str, alias: str
+):
+    try:
+        return apis.data.frd.read_file(
+            os.environ.get("FRD_DATA", "TODO"),
+            folder=apis.data.frd.Folders.ETF,
+            symbol=symbol,
+            suffix=adjust,
+            snap="full",  # full
+            freq="1day",  # 1day
+            #
+            start=None,
+            end=None,
+            update=True,
+        ).select("date", pl.col(field).alias(alias))
+    except:
+        raise ValueError((symbol, adjust, alias))
 
+def load_join_dfs(
+    symbol: str,
+    field: str,
+    f_df: Callable[[str, str, str, str], pl.DataFrame],
+    adjust_aliases: list[tuple[str, str]],
+):
+    dfs = [
+        f_df(symbol, field, adjust, alias)
+        for adjust, alias in adjust_aliases
+    ]
+    return apis.pl.join_dfs(
+        dfs,
+        on="date",
+        how="full",
+        coalesce=True,
+        maintain_order="left_right",
+    )
 
 @dataclass(frozen=True)
 class EqDailyEtf(
-    DependsGraphSync,
-    BarDaily,
+    Daily,
+    DependsParent,
+    HasDataFrameValue
 ):
     """
     >>> universe = [
@@ -154,141 +182,50 @@ class EqDailyEtf(
     ]
     """
 
-    parent: Project | str | None
-
-    tags: EqDailyEtfTags
-
-    version: int = 0
-    type: Literal["EqDailyEtf"] = "EqDailyEtf"
-
     @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["EqDailyEtfSnap"] = "EqDailyEtfSnap"
+    class Params(Daily.Params):
+        symbol: str
+        field: str
+        adjust: str
+        source: str
+        fx: str | None = None  # ccy to convert to
 
-    @classmethod
-    def new(
-        cls,
-        symbol: str,
-        ident: int | str | None = None,
-        field: str | None = None,
-        adjust: str | None = None,
-        source: str | None = None,
-        fx: str | None = None,
-        parent: Project | str | None = None,
-    ):
-        (
-            ident,
-            symbol,
-            etf,
-            field,
-            adjust,
-            source,
-            fx,
-        ) = cls.identifier(
-            symbol,
-            ident,
-            field,
-            adjust,
-            source,
-            fx=fx,
-            expect=ETF,
-        )
-        assert adjust in EQ_ADJUSTMENTS, adjust
-        return cls(
-            id=cls.build_id(
-                parent,
-                "eq-etf-d",
-                ident,
-                strict=False,
-            ),
-            parent=parent,
-            tags=EqDailyEtfTags(
-                symbol=symbol,
-                ident=etf,
-                field=field,
-                adjust=adjust,
-                fx=fx,
-                source=source,
-            ),
-        )
+    parent: str | Date
+    params: Params
 
-    def handler(self, event: Event, snap: Snap) -> Handler:
-        if isinstance(event, GraphSync):
-            return HandleNewEqDailyEtf()
-        # elif isinstance(event, ValueUpdate):
-        raise ValueError((self, event))
+    def self(self) -> EqDailyEtf:
+        return self
+    
+    def get_parent(self) -> Date:
+        return get_parent(self)
 
+    def encode_type(self, params: EqDailyEtf.Params):
+        return "eq-d-etf"
 
-@dataclass(frozen=True)
-class HandleUpdateEqDailyEtf(Handler):
-    def handle(
-        self,
-        event: ObjectChange,
-        obj: EqDailyEtf,
-    ):
-        # TODO:
-        # check latest update, if today, skip
-        # check new data available
-        # if after snap.last, get and append
-        return
+    def encode_params(self, params: EqDailyEtf.Params):
+        return "-".join(map(str, [
+            params.symbol,
+            params.field,
+            params.adjust,
+            params.source,
+            # TODO: and fx if given
+        ]))
 
+    def handle(self, event: Event, snap: Snap):
 
-def load_df_frd(
-    symbol: str, field: str, adjust: str, alias: str
-):
-    try:
-        return apis.data.frd.read_file(
-            os.environ.get("FRD_DATA", "TODO"),
-            folder=apis.data.frd.Folders.ETF,
-            symbol=symbol,
-            suffix=adjust,
-            snap="full",  # full
-            freq="1day",  # 1day
-            #
-            start=None,
-            end=None,
-            update=True,
-        ).select("date", pl.col(field).alias(alias))
-    except:
-        raise ValueError((symbol, adjust, alias))
+        # TODO: possibly later on, deal with obj storage def changes?
+        # TODO: and data appends versus full regen
 
+        event = assert_is(event, ValueUpdate)
+        snap = assert_is(snap, Daily.Snap)
 
-def load_join_dfs(
-    symbol: str,
-    field: str,
-    f_df: Callable[[str, str, str, str], pl.DataFrame],
-    adjust_aliases: list[tuple[str, str]],
-):
-    dfs = [
-        f_df(symbol, field, adjust, alias)
-        for adjust, alias in adjust_aliases
-    ]
-    return apis.pl.join_dfs(
-        dfs,
-        on="date",
-        how="full",
-        coalesce=True,
-        maintain_order="left_right",
-    )
-
-
-@dataclass(frozen=True)
-class HandleNewEqDailyEtf(
-    HandleNewValueFromPl,
-    HandleNewDailyFromDf,
-):
-    def handle(
-        self,
-        event: ObjectChange,
-        snap: EqDailyEtf.Snap,
-        obj: EqDailyEtf,
-    ):
-        tags = obj.tags
+        tags = self.params
+        
 
         if tags.source == "frd":
             f_df = load_df_frd
         else:
-            raise ValueError(obj)
+            raise ValueError(self)
 
         if tags.adjust in ["pct", "split", "raw"]:
             df = f_df(
@@ -367,50 +304,20 @@ class HandleNewEqDailyEtf(
         else:
             raise ValueError(tags)
 
-        v = self.set_value_from_df(
-            obj,
+        _ = self.set_value_from_df(
             df,
             tags.field,
-            t=self.key_value_type(obj),
         )
-
-        new_snap = self.update_snap_from_df(snap, df)
-        if (
-            new_snap.first != snap.first
-            and new_snap.last != snap.last
-        ):
-            # TODO: new snap!!!??
-            return ValueUpdate.from_snap(
-                self.update_snap_from_df(snap, df),
-                into=frozendict(),
-            )
-
-        return frozendict().set(obj.id, (snap, []))
-
-
-# TODO: class HandleObjectChange:
-# if chunk, rechunk
-# if backend type / loc change, copy
-# else, throw
-
-#  ------------------
-
-
-@dataclass(frozen=True)
-class DependsEqDailyEtfParent(DependsParentValue):
-    parent: EqDailyEtf | str
-
-    def get_parent(self) -> EqDailyEtf:
-        return context.get().get(self.parent, EqDailyEtf)
-
+        return ValueUpdate.if_snap_changed(
+            snap,
+            snap.update_from_df(df),
+        )
+    
+eq_daily_etf = new(EqDailyEtf, EqDailyEtf.Params)
 
 #  ------------------
 
 __all__ = [
     "EqDailyEtf",
-    "HandleUpdateEqDailyEtf",
-    "HandleNewEqDailyEtf",
-    "DependsEqDailyEtfParent",
+    "eq_daily_etf",
 ]
-# TODO: if __name__ == __main__:
-# run domain by name

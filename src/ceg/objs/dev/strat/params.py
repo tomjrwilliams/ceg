@@ -80,22 +80,9 @@ class StrategyParams:
     cap_id: str | tuple[str, ...] | None = None
     rebal_id: str | tuple[str, ...] | None = None
 
-    def unpack(
-        self,
-        bound: Bound,
-        coll: Collection,
-        force: bool = False,
-    ):
-        f_unpack = partial(unpack_bound, bound=bound, coll=coll, force=force)
-        if self.scale is not None:
-            self = replace(self, scale=f_unpack(self.scale, "scale"))
-        if self.signal is not None:
-            self = replace(self, signal = f_unpack(self.signal, "signal"))
-        if self.weight is not None:
-            self = replace(self, weight = f_unpack(self.weight, "weight"))
-        if self.cap is not None:
-            self = replace(self, cap = f_unpack(self.cap, "cap"))
-        return self
+    # unpack() removed — Bound/Collection-based ref resolution machinery deleted
+    # during the Bound/Collection migration. If declarative ref-resolution is
+    # needed again, build against the new Graph.with_obj alias/tag/info API.
 
     def with_weight(self, weight: WeightFactor | None):
         return replace(self, weight=weight)
@@ -321,29 +308,7 @@ class Strategy(HasBackTest, HasAsset, AssetLike):
     def label(self):
         return f"{self.asset.label()}-{self.params.label()}"
 
-    def unpack(
-        self,
-        bound: Bound,
-        coll: Collection,
-        force: bool = False,
-    ):
-        return replace(
-            self,
-            asset=unpack_bound(
-                self.asset,
-                "asset",
-                bound,
-                coll,
-                force=force,
-            ),
-            params=unpack_bound(
-                self.params,
-                "params",
-                bound,
-                coll,
-                force=force,
-            ),
-        )
+    # unpack() removed — see StrategyParams.unpack comment.
 
     def bind_spec(
         self,
@@ -490,30 +455,8 @@ class Basket(HasBackTest, HasAsset, AssetLike):
     def universe(self):
         return assert_is(self.bt).get_parent()
 
-    def unpack(
-        self,
-        bound: Bound,
-        coll: Collection,
-        force: bool = False,
-    ):
-        return replace(
-            self,
-            asset=unpack_bound(
-                self.asset,
-                "asset",
-                bound,
-                coll,
-                force=force,
-            ),
-            params=unpack_bound(
-                self.params,
-                "params",
-                bound,
-                coll,
-                force=force,
-            ),
-        )
-    
+    # unpack() removed — see StrategyParams.unpack comment.
+
     def bind_specs(
         self,
         univ: Container,
@@ -647,15 +590,21 @@ def new_container(
 
 
 def cv(
-    asset: AssetConcrete | tuple[str, str],
+    asset: AssetConcrete | tuple[str, str] | str,
     span: int,
     signal: TSignal | None = None,
     cap: CapNotional | CapVol | None = None,
     rebal: str | None = None,
     scale: float = 1.0,
+    notional: float | None = None
 ):
+    if isinstance(asset, str):
+        ac, sym = asset.split("-")
+        asset = (ac, sym)
     if isinstance(asset, tuple):
         asset = AssetConcrete(*asset)
+    if notional is not None:
+        cap = CapNotional(notional)
     return Strategy(
         asset,
         StrategyParams(
@@ -679,6 +628,7 @@ def cv_osc(
     qile: SignalQile | SignalZile | None = None,
     scale: float = 1.0,
     variant: str | None = None,
+    notional: float | None = None
 ):
     vol = vol or span
     return cv(
@@ -700,7 +650,94 @@ def cv_osc(
         cap=cap,
         rebal=rebal,
         scale=scale,
+        notional=notional,
     )
+
+
+# --------------------------------------------------------------------------
+# New "typed namespace" form of Strategy — runs alongside the legacy Strategy
+# above during migration. Strategy is a graph Object (TriageUpstream namespace)
+# with typed IdRef slots for its data inputs (rx/px/gross/signal/scale/cap).
+# bt and perf are stored as IdRefs to the downstream backtest objects.
+#
+# Bind orchestration / param→object factories are deferred to a follow-up;
+# the new type can already be constructed and registered in a graph.
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class StrategyTyped(TriageUpstream, UseRootStorage):
+
+    parent: Project | Container | str
+
+    asset: AssetConcrete | AssetSynthetic
+
+    # typed input refs
+    rx:     IdRef | None = None
+    px:     IdRef | None = None
+    gross:  IdRef | None = None
+    signal: IdRef | None = None
+    scale:  IdRef | None = None
+    cap:    IdRef | None = None
+
+    params: StrategyParams = StrategyParams()
+    name: str | None = None
+
+    # downstream backtest / perf — also IdRefs once attached
+    bt:   IdRef | None = None
+    perf: IdRef | None = None
+
+    version: int = 0
+    type: Literal["StrategyTyped"] = "StrategyTyped"
+
+    @dataclass(frozen=True)
+    class Snap(TriageUpstream.Snap):
+        type: Literal["StrategyTypedSnap"] = "StrategyTypedSnap"
+
+    def upstream_paths(self) -> list[str]:
+        return [
+            r.id for r in (
+                self.rx, self.px, self.gross,
+                self.signal, self.scale, self.cap,
+            ) if r is not None
+        ]
+
+    def handler(self, event: Event, snap: Snap) -> Handler:
+        if isinstance(event, ValueUpdate):
+            return HandleUpdateLatestUpstream()
+        raise ValueError((self, event))
+
+
+@dataclass(frozen=True)
+class BasketTyped(TriageUpstream, UseRootStorage):
+    """A typed-namespace Basket: holds Refs to constituent Strategies (or
+    nested BasketTyped). TriageUpstream fires one ValueUpdate when every
+    member has first-published."""
+
+    parent: Project | Container | str
+
+    members: tuple[IdRef, ...] = ()
+
+    params: StrategyParams = StrategyParams()
+    name: str | None = None
+
+    bt:   IdRef | None = None
+    perf: IdRef | None = None
+
+    version: int = 0
+    type: Literal["BasketTyped"] = "BasketTyped"
+
+    @dataclass(frozen=True)
+    class Snap(TriageUpstream.Snap):
+        type: Literal["BasketTypedSnap"] = "BasketTypedSnap"
+
+    def upstream_paths(self) -> list[str]:
+        return [r.id for r in self.members]
+
+    def handler(self, event: Event, snap: Snap) -> Handler:
+        if isinstance(event, ValueUpdate):
+            return HandleUpdateLatestUpstream()
+        raise ValueError((self, event))
 
 
 __all__ = [
@@ -709,7 +746,9 @@ __all__ = [
     "TScale",
     "TCap",
     "Strategy",
+    "StrategyTyped",
     "Basket",
+    "BasketTyped",
     "StrategyParams",
     "Strategies",
     "new_container",

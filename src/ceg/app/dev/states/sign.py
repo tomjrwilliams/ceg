@@ -3,8 +3,10 @@ from __future__ import annotations
 from typing import (
     TYPE_CHECKING,
 )
+from pathlib import Path
 import argparse
 import datetime as dt
+from datetime import date
 from dataclasses import replace
 
 if TYPE_CHECKING:
@@ -14,6 +16,8 @@ else:
 
 from ...core import App, AppConfig, APPS
 from ....engine import *
+
+import ceg.apis.vis as vis
 
 from ceg.engine import *
 
@@ -105,88 +109,11 @@ from ceg.objs.dev import strat
 from functools import partial
 
 
-import json
-from pathlib import Path
 
-def next_config(app: Path, i: int | None = None):
-    if not app.exists():
-        app.mkdir(exist_ok=True, parents=True)
-    if i is None:
-        i = 0
-        config_fp = app / f"config_{i}.json"
-        while config_fp.exists():
-            i += 1
-            config_fp = app / f"config_{i}.json"
-    config_fp = app / f"config_{i}.json"
-    return i, config_fp
-
-def write_config(
-    config: dict,
-    app: Path,
-    i: int | None = None,
-):
-    i, config_fp = next_config(app, i=i)
-    with config_fp.open("w+") as f:
-        json.dump(config, f)
-
-def render_px(
-    df: pl.DataFrame,
-    app: Path,
-    t: str,
-    i: int | None = None,
-    **kwargs,
-):
-    i, config_fp = next_config(app, i)
-    df_fp = app / f"df_{i}.parquet"
-    df.write_parquet(df_fp)
-    config = {
-        "type": t,
-        "fp": str(df_fp),
-        **kwargs,
-    }
-    write_config(config, app, i = i)
-
-
-render_line = partial(render_px, t = "line")
-render_vline = partial(render_px, t = "vline")
-render_scatter = partial(render_px, t = "scatter")
-render_vscatter = partial(render_px, t = "vscatter")
-render_area = partial(render_px, t = "area")
-render_varea = partial(render_px, t = "varea")
-render_bar = partial(render_px, t = "bar")
-render_hbar = partial(render_px, t = "hbar")
-
-def plot_line(
-    collection: Collection,
-    acc: frozendict,
-    objs: tuple[list[str], list[Daily]],
-    cum: bool,
-    rx: bool = False,
-):
-    names, objs = objs
-    if not rx:
-        df = daily_pl_df(objs)
-    else:
-        df = daily_pl_df([
-            collection.get(f"{name}.rx()")
-            for name in names
-        ])
-    # date filter?
-
-    render_line(
-        df, 
-        acc["path"],
-        i=acc["i"],
-        cum=cum,
-    )
-
-    return acc.set("i", acc["i"]+1)
 
 ROOT = "states_sign"
 # NOTE: given root storage, ahs to be a single word (no -)
 
-def strat_container_cv(symbol: str):
-    return f"strats-cv-{symbol}"
 
 def build(
     args: argparse.Namespace
@@ -202,37 +129,239 @@ def build(
         i = 0,
     ))
 
-    symbols = [
-        "ETF-SPY",
-        "ETF-TLT",
+    univ_fp = Path(__file__).parent / "models" / f'{str(args.universe).rjust(3, "0")}.csv'
+    print(univ_fp)
+
+    univ = pl.read_csv(univ_fp).with_columns(
+        (pl.col(k) == "Y").fill_null(False)
+        for k in [
+            "rx_s",
+            "rx_y",
+            "rx_b",
+            "eco_s",
+        ]
+    )
+
+    symbols_rx_s = [
+        f"{ac}-{symbol}"
+        for ac, symbol in (
+            univ.filter(pl.col("rx_s"))
+            .select("ac", "symbol")
+            .iter_rows()
+        )
+    ]
+    symbols_rx_y = [
+        f"{ac}-{symbol}"
+        for ac, symbol in (
+            univ.filter(pl.col("rx_y"))
+            .select("ac", "symbol")
+            .iter_rows()
+        )
+    ]
+    symbols_rx_b = [
+        f"{ac}-{symbol}"
+        for ac, symbol in (
+            univ.filter(pl.col("rx_b"))
+            .select("ac", "symbol")
+            .iter_rows()
+        )
     ]
 
+    symbols = list({
+        **{s: None for s in symbols_rx_s},
+        **{s: None for s in symbols_rx_y},
+        **{s: None for s in symbols_rx_b},
+    }.keys())
+    
+
     config = config.with_configs(
-        # -- CV containers
-        cv_containers=(
-            universe(name=symbols)
-            .apply(strat.new_container, project=bound(PROJECT_CV))
-            .alias("name", strat_container_cv)
+        rx_containers=(
+            select(name=symbols)
+            .bind(strat.new_container, project=bound(PROJECT_CV))
+            .under("strats-cv-{name}")
+            .info("name")
         ),
-        # -- CV rx
-        cv_rx=(
-            universe(dict(symbol=symbols))
-            .zip(container=where(config="cv_containers"))
-            .apply(strat.bind_cv)
-            .alias("symbol", "cv-{symbol}")
-            # TODO: span, notional cap?
+        # NOTE rx used for state codes
+        rx=(
+            select(asset=symbols)
+            .zip(container=where(CONFIG="rx_containers"))
+            .bind(strat.cv, span=48, notional=10.)
+            .into("container")
+            .under("cv-{asset}")
+            .info("asset")
         ),
+        # NOTE: eco used for state codes
+        # eco = (
+
+        # ),
+        # NOTE: rx to research given states
+        # rx_y = (
+
+        # ),
+        # # NOTE: rx to take beta against, given states
+        # rx_b = (
+
+        # )
     )
+
+    # TODO: twisties so easy to minimise particular graphs when on phone
     
     config = config.with_configs(
-        # -- CV rx line
-        cv_rx_line=(
-            # select(objs=where(FUNC=strat.bind_cv).group()) # equiv
-            where(config="cv_rx")
-            .group()
-            .output(plot_line, cum=True, rx = True)
+        rx_s=(
+            select(
+                objs=where(lambda _, d: d.get("asset") in symbols_rx_s).group()
+            )
+            .apply(unpack_daily_df, unpack="rx")
+            .then(
+                vis.write_data,
+                name = "rx_s",
+                pipe = "ceg.apis.pl.filter_dates_between",
+                params = dict(
+                    d0=date,
+                    d1=date,
+                )
+            )
+            .apply(unpack_daily_col_names, unpack="rx")
+            .then(
+                vis.write_transform,
+                name="sign_code",
+                pipe="ceg.apis.states.sign_code_product",
+                data="data:rx_s",
+                params=dict(
+                    smoothed=bool,
+                    span=float,
+                    smooth=float,
+                    d0="param:rx_s.d0",
+                    d1="param:rx_s.d1",
+                ),
+                smoothed=False,
+                span=16,
+                smooth=4,
+            )
+            .apply(unpack_daily_col_names, unpack="rx")
+            .then(
+                vis.plot_transition_matrix,
+                name="sign_code_t",
+                data="data:sign_code"
+            )
+            .apply(unpack_daily_col_names, unpack="rx")
+            .then(
+                vis.plot_transition_corr,
+                name="sign_code_corr",
+                data="data:sign_code"
+            )
+            .apply(unpack_daily_col_names, unpack="rx")
+            .then(
+                vis.plot_transition_tree,
+                name="sign_code_tree",
+                data="data:sign_code"
+            )
+            # TODO: with conditional expectation
+        ),
+        rx_y = (
+            select(
+                objs=where(lambda _, d: d.get("asset") in symbols_rx_y).group()
+            )
+            .apply(unpack_daily_df, unpack="rx")
+            .then(
+                vis.write_data,
+                name = "rx_y",
+                pipe = "ceg.apis.pl.filter_dates_between",
+                params = dict(
+                    d0="param:rx_s.d0",
+                    d1="param:rx_s.d1",
+                )
+            )
+        ),
+        rx_b = (
+            select(
+                objs=where(lambda _, d: d.get("asset") in symbols_rx_b).group()
+            )
+            .apply(unpack_daily_df, unpack="rx")
+            .then(
+                vis.write_data,
+                name = "rx_b",
+                pipe = "ceg.apis.pl.filter_dates_between",
+                params = dict(
+                    d0="param:rx_s.d0",
+                    d1="param:rx_s.d1",
+                )
+            )
+        ),
+        rx_y_s_dist = (
+            select(
+                objs_s=where(lambda _, d: d.get("asset") in symbols_rx_s).group(),
+                objs_y=where(lambda _, d: d.get("asset") in symbols_rx_y).group(),
+                every=True,
+            )
+            .apply(
+                unpack_daily_col_names,
+                keys = ["objs_s", "objs_y"],
+                unpack="rx"
+            )
+            .then(
+                vis.plot_conditional_dist_w_fwd,
+                name="rx_y_cond",
+                # objs_s and objs_y from above (from s, derive state labels)
+                data_s="data:sign_code",
+                data_y="data:rx_y",
+                # fwd = int, # default to none ie. 1 day
+                # TODO: boolean toggle group by asset vs bwd fwd
+            )
+
+        ),
+        rx_s_y_b = (
+            select(
+                objs_s=where(lambda _, d: d.get("asset") in symbols_rx_s).group(),
+                objs_y=where(lambda _, d: d.get("asset") in symbols_rx_y).group(),
+                objs_b=where(lambda _, d: d.get("asset") in symbols_rx_b).group(),
+                every=True,
+            )
+            .apply(
+                unpack_daily_col_names,
+                keys = ["objs_s", "objs_y", "objs_b"],
+                unpack="rx"
+            )
+            .then(
+                vis.plot_conditional_beta_w_vol,
+                name="rx_y_cond_beta",
+                # objs_s and objs_y from above (from s, derive state labels)
+                data_s="data:sign_code",
+                data_y="data:rx_y",
+                data_b="data:rx_b",
+                
+                # span = float,
+            )
+        ),
+        rx_y_s_hist = (
+            select(
+                objs_s=where(lambda _, d: d.get("asset") in symbols_rx_s).group(),
+                objs_y=where(lambda _, d: d.get("asset") in symbols_rx_y).group(),
+                every=True,
+            )
+            .apply(
+                unpack_daily_col_names,
+                keys = ["objs_s", "objs_y"],
+                unpack="rx"
+            )
+            .then(
+                vis.plot_state_codes_w_y,
+                name="state_codes_w_y",
+                # objs_s and objs_y from above (from s, derive state labels)
+                data_s="data:sign_code",
+                data_y="data:rx_y",
+                # TODO: discretisation cell length
+            )
         )
     )
+
+    # with the average rx, plot the median and iqr
+
+    # for the betas, vol, could plot dist grouped by each state period
+    # rx likewise? (if can plot two dist lines on one bar)
+
+    # toggle for rx to be arith average, vs compound in state period, and decompound
+    # ie. grouped by same signal
 
     return acc, config
 
@@ -240,6 +369,7 @@ def build(
 APPS[ROOT] = (
     App(ROOT + "-p", build)
     .with_args(
-        path=dict(type=str)
+        path=dict(type=str),
+        universe=dict(type=int),
     )
 )

@@ -1,0 +1,189 @@
+Phase B done — 70 tests pass. Migration summary:
+
+  Deleted from aggs.py:
+  - DailyAggregate, DailyAggregateDeriv, HandleNewDailyAggregate, get_agg_dfs. Handler subclasses
+  (HSum/HProd/HGross/HDot/DDRegime/MetricsEWM/MetricsGrid/WeightsRank) now inherit from HandleNewDailyComposition.
+  
+  Added to composition.py:
+  - get_composition_dfs — resolves refs to one joined df.
+  - HandleNewDailyComposition — handler base with full handle() logic; subclasses override agg_dfs(first, last, *dfs) only.
+
+  Migrated call sites:
+  - strat/baskets/agg.py — DailyAggregate.new(...) → DailyComposition.new(...) (×2). DailyAggregateDeriv.new(...) →
+  DailyOutput.new(...) (all occurrences).
+  - strat/domain.py — parser unions now reference DailyComposition + DailyOutput.
+
+
+  Migrated call sites:
+  - strat/baskets/agg.py — DailyAggregate.new(...) → DailyComposition.new(...) (×2). DailyAggregateDeriv.new(...) →
+  DailyOutput.new(...) (all occurrences).
+  - strat/domain.py — parser unions now reference DailyComposition + DailyOutput.
+
+  Left as legacy (uses DailyCombination machinery, untouched):
+  - bt.py — DailyBtXvar/Weights inherit from DailyCombination; HandleNewDailyBt* from HandleNewDailyCombination; uses
+  Container.comb indexing.
+  - combs.py — DailyCombination, DailyCombinationDeriv, HandleNewDailyCombination retained for bt.py. The dead get_agg_dfs call
+  inside get_comb_dfs now raise NotImplementedError with a TODO.
+  - app/_dev/p20*.py — per your instruction.
+
+  Next steps in the design doc are 5–7 (Namespace generalisation, auto-id, Graph absorbs Collection). Want me to proceed with
+  step 5 (Namespace base — collapses Project/Container and shifts storage routing onto the parent chain), or pause for review of
+   Phase B first?
+
+✻ Worked for 17m 12s
+
+❯ sure, please proceed! before you do, please review the strategy and backtesting logic in objs/dev/pfo/d and objs/dev/strat.   
+  the strat contained a container data structure to which we accumulated objects: please confirm these can (later) now just be  
+  more nested objects. the backtesting utils in pfo, please read through and suggest how we can rationalise that into the plan  
+
+  Searched for 3 patterns, read 11 files, listed 1 directory (ctrl+o to expand)
+
+● Bash(uv run pytest tests/ --no-header -q --tb=no 2>&1 | tail -5)
+  ⎿  tests/test_refs.py::test_memberref_inside_object_field_roundtrips PASSED
+
+     =========================== short test summary info ============================
+     … +2 lines (ctrl+o to expand)
+
+● Review of strat + pfo/d
+
+  Strat — yes, Container can become nested typed objects
+
+  The pattern in strat/params.py:
+  
+  # Strategy.bind_spec(univ):
+  spec = Combination(key=...)
+  spec, univ = spec.with_objects(univ, rx=asset.rx())     # univ.objects += rx;  spec.refs["rx"] = "obj_N"
+  spec, univ = spec.with_objects(univ, px=asset.px())     # …
+  spec, univ = spec.with_objects(univ, gross=asset.gross())
+  # signal/scale/cap added similarly via params.bind(...)
+  univ, spec = univ.with_comb(spec)                       # univ.comb += spec
+  # Then: DailyBtUvar.new(univ, spec)                     # bt → univ + comb_index
+
+  That whole flow is "give the strategy a typed bag of named refs to its data objects". The Combination.refs: {"rx": "obj_3", 
+  "px": "obj_5", …} is a poor man's typed-fields-on-an-object. Confirmed: in the post-step-5 model this collapses to:
+
+  @dataclass(frozen=True)
+  class Strategy(Object):
+      parent: Basket | Strategies | str
+      asset:  AssetConcrete | AssetSynthetic
+      rx:     Ref
+      px:     Ref
+      gross:  Ref
+      signal: Ref | None = None
+      scale:  Ref | None = None
+      cap:    Ref | None = None
+      params: StrategyParams = ...
+
+  Each Strategy is its own namespace (slot fields hold Refs). Adding the rx/px/gross/signal/scale objects to the graph happens
+  through graph.with_nested(strategy, "rx", ...) etc. The Strategies container stays only as Basket-like parent — its members: 
+  tuple[Ref, ...] holds Strategy refs. Combination and univ.comb/univ.agg/univ.params interning go away.
+  
+  Strategies.rxs: frozendict[TAsset, int] (the per-asset index map) is just a reverse lookup — replace with frozendict[TAsset, 
+  IdRef] or drop entirely once strategies are first-class members.
+
+  Backtest — five concrete moves
+
+  The bt logic in pfo/d/bt.py follows three families:
+  
+  ┌──────────────────────────────────────────────────────────────┬──────────────────────────────────────────────────────────┐
+  │                            Today                             │                         Becomes                          │
+  ├──────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ Backtest(Combination)                                        │ delete — Strategy itself is the spec                     │
+  ├──────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ DailyBtUvar(DailyCombination) args=(comb_idx,)               │ DailyBtUvar(...) parent: Strategy — reads                │
+  │                                                              │ strategy.rx/px/... directly                              │
+  ├──────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ DailyBtMvar(DailyCombination) args=tuple(comb_indices)       │ DailyBtMvar(...) parent: Basket where Basket.members are │
+  │                                                              │  Strategies; iterates members                            │
+  ├──────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ DailyBtWeights(DailyCombination)                             │ same as Mvar — parent is a Basket; reads members'        │
+  │                                                              │ positions                                                │
+  ├──────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ HandleNewDailyBtUvar.handle() calls comb.params.bind, walks  │ calls Graph.get(strategy.rx, Daily) etc. — no more       │
+  │ coll.objects[ref.i]                                          │ "obj_3"-string decoding                                  │
+  ├──────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+  │                                                              │ already Output-flavoured after Phase B — relabel as      │
+  │ DailyBtRx/Px/Gross/Pos/Weight(DailyCombinationDeriv)         │ DailyOutput subclasses with parent: DailyBtUvar |        │
+  │                                                              │ DailyBtMvar | ...                                        │
+  ├──────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+  │                                                              │ become methods on Strategy (Strategy.price_types() →     │
+  │ rx_price_types(univ, comb), rx_price_symbols(univ, comb)     │ walks self.rx) — already exist as methods on             │
+  │                                                              │ AssetSynthetic; just consolidate                         │
+  └──────────────────────────────────────────────────────────────┴──────────────────────────────────────────────────────────┘
+
+  Outcome: bt.py shrinks substantially. The whole "extract refs from Combination, look up in Container, follow the
+  string-encoded references" layer goes away. DailyBtUvar.handle becomes "fetch strategy's typed refs, build dfs via
+  daily_pl_df, run combine_backtest_dfs."
+  
+  Plan amendments
+
+  Adding to the design doc:
+  
+  1. Step 5 unblocks bt.py migration — Namespace + with_nested is the prerequisite for Strategy-as-namespace.
+  2. Step 6 (auto-id) then gives Strategy/Basket clean ids derived from their slot positions in the parent Basket/Strategies.
+  3. A new step 4.5, sitting between current 4 and 5: "Migrate DailyBt* family off DailyCombination once Strategy-as-namespace
+  lands." This is what currently blocks dropping DailyCombination/Container.comb. Without it, the legacy combs path stays as
+  dead weight.
+  4. DailyPfolio / DailyPfolioRx / DailyPfolioNotional are second-order — they parent on DailyBtUvar | DailyBtMvar. No
+  structural change needed; they ride along once their parent classes update.
+
+  What's stable vs what changes
+
+  Stable across the migration:
+  - combine_backtest_dfs in core.py — pure df math, no graph types.
+  - DailyBtPartition / DailyBtMutation in perf.py — pure perf metadata.
+  - weights_rank_df / dd_regime_df and other apis.calcs.* — pure functions.
+
+  Changes:
+  - Backtest, all DailyBt* types, their .new() factories, their handlers, the rx_price_* helpers.
+
+  ---
+  OK, proceeding with step 5 — Namespace base that absorbs Project/Container, with with_nested(parent, field, child) as the
+  primitive and storage routing via parent-chain lookup. Will write tests first, then implementation.
+
+Step 5 main deliverable in place — Graph.with_nested(parent, field, child, ...) with type-introspected slot shape. 84 tests
+  pass.
+
+  Summary:
+
+  - Graph.with_nested in engine/objects.py — accepts any Object with tuple[Ref, ...] or frozendict[str, Ref]-typed fields.
+  Auto-derives child id as parent.id + "-" + field + "-" + (index|key). Returns (Graph, IdRef).
+  - _slot_shape(cls, field) helper — type introspection via get_type_hints + get_origin, handles
+  tuple/list/dict/frozendict/Mapping.
+  - 14 new tests in tests/test_with_nested.py covering positional append, dict keying, multi-slot independence, field/slot
+  id-distinguishing, MemberRef resolution back through slots, error paths.
+
+  Deferred from step 5 design doc (lower-value, larger blast radius):
+  - Explicit Namespace base class unifying Project/Container — cosmetic; nothing in code today distinguishes them beyond fields
+  they already have.
+  - Storage routing via parent-chain (replace id.split("-", 1)[0] in UseRootStorage) — works correctly today via the convention
+  that every id's first segment is the project name. Worth doing as part of the bt migration when we touch this anyway.
+
+  Step 7 additive surface done — 103 tests pass.
+
+  Added to Graph:
+  - aliases: frozendict[str, Ref] (already present), tags: frozendict[str, frozenset[str]], info: frozendict[str, frozendict] —
+  all session-local, not persisted.
+  - with_obj(obj, *, alias=None, tag=(), info=None) — alias/tag/info kwargs threaded into the new session maps.
+  - with_alias(ref, name), with_tag(ref, name), with_info(ref, dict) — post-creation mutation.
+  - get_alias(name, t=None) — typed alias lookup.
+  - where(*predicates, paths=None, type=None, tag=None, alias=None) — generator yielding matching Objects. Lambda predicates,
+  type/tuple-of-types, session tag(s), alias name(s), and paths={"tags.symbol": "SPY"} for dot-walked field equality. Filters
+  compose (intersect).
+
+  Helpers:
+  - _attr_path(obj, "a.b.c") — module-level dot-walker.
+  - _apply_session_meta, _apply_tags — internal helpers used by both with_obj and the explicit with_* methods.
+  
+  Not yet done (full step 7 finish):
+  - Collection/Bound/Bind/Apply/Select/unpack_bound/init_bind still in engine/collections.py. Framework callers
+  (objs/dev/calc/d/h/core.py's init_bind and objs/dev/strat/params.py's Bound/Collection/unpack_bound) and app code still depend
+   on them.
+  - Migrating those is a separate, larger move (touches the unpack-fields/info-template DSL).
+
+
+
+NOTE: select / where etc. can just have a .pipe(map, into = ObjectsList).bind(graph)
+ObjectList having a bind method, into just pipes into that type as the result ofth e map call
+
+NOTE: probably want a notion of param identified keys within container objects as well, eg. for lists of params that might be redundant, can refer by auto gen, as well as int or key depending on the container's field type

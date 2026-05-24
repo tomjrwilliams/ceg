@@ -8,7 +8,6 @@ from typing import (
     Literal,
     Protocol,
     Callable,
-    TypeAlias,
     overload,
     cast,
     final,
@@ -30,96 +29,79 @@ import polars as pl
 
 from ....engine import *
 
-DAILY_GAUSSIAN = "DailyGaussian"
-
-class Interface(BaseInterface):
-
-    @dataclass(frozen=True)
-    class Args(BaseInterface.Args):
-        parent: Project | str | None
-        start: dt.date
-        end: dt.date
-        mu: float = 0.
-        sd: float = 1.
-        walk: bool = False
-        suffix: str = ""
-        # NOTE: suffix for dismabiguation
-
-
-    @dataclass(frozen=True)
-    class Params(Args):
-        uid: str | None = None
-        xid: int | str | None = None
-
-    @dataclass(frozen=True)
-    class Object(
-        BaseInterface.Object,
-        Args,
-        UseRootDataFrameStorage,
-        DependsGraphSync, 
-        Daily,
-    ):
-
-        @dataclass(frozen=True)
-        class Snap(Daily.Snap):
-            type: Literal["DailyGaussian"] = DAILY_GAUSSIAN
-        
-        def handler(self, event: Event, snap: Snap) -> Handler:
-            if isinstance(event, GraphSync):
-                return Interface.Handler()
-            # elif isinstance(event, ValueUpdate):
-            raise ValueError((self, event))
-        
-    @dataclass(frozen=True)
-    class Handler(
-        HandleNewValueFromPl,
-        HandleNewDailyFromDf,
-    ):
-        def handle(
-            self,
-            event: ObjectNew | GraphSync,
-            snap: DailyGaussian.Snap,
-            obj: DailyGaussian,
-        ):
-            n = (obj.end - obj.start).days
-            v = np.random.normal(obj.mu, obj.sd, (n+1,))
-            if obj.walk:
-                v = np.cumsum(v)
-
-            df = pl.DataFrame({
-                obj.id: v
-            }).with_columns(pl.date_range(obj.start, obj.end).alias("date"))
-
-            v = self.set_value_from_df(
-                obj,
-                df,
-                obj.id,
-                t=self.key_value_type(obj),
-            )
-
-            new_snap = snap.with_dates(first=obj.start, last=obj.end)
-
-            # NOTE: if we only issue event on snap change
-            # we update the graph sync values, but dont re issue event
-
-            # if (
-            #     new_snap.first != snap.first
-            #     and new_snap.last != snap.last
-            # ):
-            return ValueUpdate.from_snap(
-                self.update_snap_from_df(new_snap, df),
-                into=frozendict(),
-            )
 
 @dataclass(frozen=True)
-class DailyGaussian(Interface.Object):
+class DailyGaussian(
+    Daily,
+    DependsParent,
+    HasDataFrameValue
+):
+    # TODO: or daily rand and paramtrise dist into params?
     
-    version: int = 0
-    type: Literal["DailyGaussian"] = DAILY_GAUSSIAN
+    @dataclass(frozen=True)
+    class Params(Daily.Params):
+        mu: float = 0.
+        sd: float = 1.
+        cum: bool = False
 
-new = init_new(Interface.Params, DailyGaussian)
-bind = init_bind(new, DailyGaussian)
+    parent: str | Date
+    params: Params
 
-Type: TypeAlias = DailyGaussian
+    def self(self) -> DailyGaussian:
+        return self
+    
+    def get_parent(self) -> Date:
+        return get_parent(self)
 
-__all__ = ["Interface", "Type", "new", "bind"]
+    def encode_type(self, params: DailyGaussian.Params):
+        return "gaussian-d"
+
+    def encode_params(self, params: DailyGaussian.Params):
+        return "-".join(map(str, [
+            params.mu,
+            params.sd
+        ]))
+
+    def handle(self, event: Event, snap: Snap):
+        
+        params = self.params
+
+        event = assert_is(event, ValueUpdate)
+        snap = assert_is(snap, DailyGaussian.Snap)
+
+        first, last = (
+            assert_is(snap.first, dt.date),
+            assert_is(snap.last, dt.date),
+        )
+
+        n = (last - first).days
+        v = np.random.normal(params.mu, params.sd, (n+1,))
+
+        if params.cum:
+            v = np.cumsum(v)
+
+        df = pl.DataFrame({
+            self.id: v
+        }).with_columns(pl.date_range(first, last).alias("date"))
+
+        _ = self.set_value_from_df(
+            df,
+            self.id,
+        )
+        return ValueUpdate.if_snap_changed(
+            snap,
+            snap.update_from_df(df),
+        )
+
+
+daily_gaussian = new(
+    DailyGaussian,
+    DailyGaussian.Params,
+)
+
+#  ------------------
+
+__all__ = [
+    "DailyGaussian",
+    "daily_gaussian"
+]

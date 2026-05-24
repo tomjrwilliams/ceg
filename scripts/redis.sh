@@ -1,0 +1,1 @@
+redis-server --dir ./ --port 7777

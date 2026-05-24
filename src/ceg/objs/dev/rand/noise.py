@@ -32,92 +32,64 @@ from ....engine import *
 from .gaussian import Type as DailyGaussian
 
 @dataclass(frozen=True)
-class DailyNoise(UseRootDataFrameStorage, DependsParentValue, Daily):
-
-    parent: DailyGaussian | str | None
-    mu: float = 0.
-    sd: float = 1.
-    suffix: str = ""
-
-    version: int = 0
-    type: Literal["DailyNoise"] = "DailyNoise"
-
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyNoise"] = "DailyNoise"
-
-    @classmethod
-    def new(
-        cls, 
-        parent: Project,
-        mu: float = 0., 
-        sd: float = 1.,
-        suffix: str = ""
-    ):
-        # TODO: suffix into id?
-        return cls(
-            id=cls.build_id(parent, "noise", mu, sd,suffix),
-            parent=parent,
-            suffix=suffix,
-            mu=mu,
-            sd=sd,
-        )
-
-
-    def handler(self, event: Event, snap: Snap) -> Handler:
-        if isinstance(event, ValueUpdate):
-            return HandleNewDailyNoise()
-        # elif isinstance(event, ValueUpdate):
-        raise ValueError((self, event))
-
-
-@dataclass(frozen=True)
-class HandleNewDailyNoise(
-    HandleNewDailyFromDailyParentPl,
-    HandleNewDailyFromDf,
+class DailyNoise(
+    Daily,
+    DependsParent,
+    HasDataFrameValue
 ):
-    def handle(
-        self,
-        event: ObjectNew | GraphSync,
-        snap: DailyNoise.Snap,
-        obj: DailyNoise,
-    ):
-        parent = context.get().get(obj.parent, DailyGaussian)
-        df = daily_pl_df(
-            parent,
-            alias="v"
+    @dataclass(frozen=True)
+    class Params(Daily.Params):
+        mu: float = 0.
+        sd: float = 1.
+
+    parent: str | Daily
+    params: Params
+
+    def self(self) -> DailyNoise:
+        return self
+    
+    def get_parent(self) -> Daily:
+        return get_parent(self)
+
+    def encode_type(self, params: DailyNoise.Params):
+        return "noise"
+
+    def encode_params(self, params: DailyNoise.Params):
+        return "-".join(map(str, [
+            params.mu,
+            params.sd
+        ]))
+
+    def handle(self, event: Event, snap: Snap):
+
+        event = assert_is(event, ValueUpdate)
+        snap = assert_is(snap, DailyNoise.Snap)
+
+        parent = self.get_parent()
+        df = parent.get_df(alias=VALUE)
+
+        v = np.random.normal(
+            loc=self.params.mu, scale=self.params.sd, size=(len(df),)
         )
-        v = np.random.normal(loc=obj.mu, scale=obj.sd, size=(len(df),))
         # s = pl.Series("noise", v)
 
         try:
             df = df.select(
                 "date",
-                pl.col("v").add(v).alias(obj.id)
+                pl.col(VALUE).add(v).alias(self.id)
             )
         except Exception as e:
             raise ValueError(df) from e
 
-        v = self.set_value_from_df(
-            obj,
+        _ = self.set_value_from_df(
             df,
-            obj.id,
-            t=self.key_value_type(obj),
+            VALUE,
         )
-        new_snap = self.update_snap_from_parent(
-            snap, obj, parent=parent,
-        )
-
-        # if (
-        #     new_snap.first != snap.first
-        #     and new_snap.last != snap.last
-        # ):
-        return ValueUpdate.from_snap(
-            self.update_snap_from_df(new_snap, df),
-            into=frozendict(),
+        return ValueUpdate.if_snap_changed(
+            snap,
+            snap.update_from_df(df),
         )
 
-        # return frozendict().set(obj.id, (new_snap, []))
-    
+daily_noise = new(DailyNoise, DailyNoise.Params)
 
 __all__ = ["DailyNoise"]

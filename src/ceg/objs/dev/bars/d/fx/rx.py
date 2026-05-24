@@ -34,118 +34,47 @@ from ......engine import *
 
 from ..ident import *
 
-from .px import FxDailyPx, DependsFxDailyPxParent
+from .px import FxDailyPx
 
 #  ------------------
 
 
 @dataclass(frozen=True)
 class FxDailyRx(
-    DependsFxDailyPxParent,
-    BarDaily,
+    Daily,
+    DependsParent,
+    HasDataFrameValue
 ):
-    """
-    >>> ord = FxDailyPx.new(
-    ...     symbol="EURUSD",
-    ...     field="close",
-    ...     adjust="raw",
-    ...     source="frd"
-    ... )
-    >>> obj = FxDailyRx.new(ord, adjust="abs")
-    >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.id).tail(8)
-    shape: (8,)
-    Series: 'test-fx-d-EURUSD-close-raw-frd-rx' [f64]
-    [
-        -0.00358
-        null
-        null
-        -0.00112
-        -0.00101
-        -0.00374
-        0.00478
-        0.00272
-    ]
-    """
+    
+    @dataclass(frozen=True)
+    class Params(Daily.Params):
+        pass
 
     parent: FxDailyPx | str
+    params: Params
 
-    adjust: str
+    def self(self) -> FxDailyRx:
+        return self
+    
+    def get_parent(self) -> FxDailyPx:
+        return get_parent(self)
 
-    version: int = 0
-    type: Literal["FxDailyRx"] = "FxDailyRx"
+    def encode_type(self, params: FxDailyRx.Params) -> str:
+        return "rx"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["FxDailyRxSnap"] = "FxDailyRxSnap"
+    def encode_params(self, params: FxDailyRx.Params) -> str:
+        return ""
 
-    @classmethod
-    def new(
-        cls,
-        parent: FxDailyPx | Project | None = None,
-        symbol: str | None = None,
-        ident: int | str | None = None,
-        field: str | None = None,
-        adjust: str = "abs",
-        source: str | None = None,
-        fx: str | None = None,
-    ):
-        if parent is None or isinstance(parent, Project):
-            assert isinstance(symbol, str), symbol
-            if ident is not None:
-                assert isinstance(ident, int), ident
-            parent = FxDailyPx.new(
-                symbol=symbol,
-                ident=ident,
-                field=field,
-                adjust="raw",
-                source=source,
-                fx=fx,
-                parent=parent,
-            )
-        assert adjust in RX_ADJUSTMENTS, adjust
-        # assert ident is not None, parent
-        return cls(
-            id=parent.extend_id("rx"),
-            parent=parent,
-            adjust=adjust,
-        )
-
-    def handler(self, event: Event, snap: Snap) -> Handler:
+    def handle(self, event: Event, snap: Snap):
+        snap = assert_is(snap, FxDailyRx.Snap)
         if isinstance(event, ValueAppend):
-            return HandleUpdateFxDailyRx()
-        elif isinstance(event, ValueUpdate):
-            assert self.get_parent().id == event.obj, (
-                self,
-                event,
-            )
-            return HandleNewFxDailyRx()
-        raise ValueError((self, event))
+            raise NotImplementedError(self)
+        
+        event = assert_is(event, ValueUpdate)
 
+        fx = self.get_parent()
 
-@dataclass(frozen=True)
-class HandleUpdateFxDailyRx(Handler):
-    def handle(
-        self,
-        event: ObjectChange,
-        obj: FxDailyRx,
-    ):
-        # TODO:
-        # check latest update, if today, skip
-        # check new data available
-        # if after snap.last, Wget and append
-        return
-
-
-@dataclass(frozen=True)
-class HandleNewFxDailyRx(HandleNewDailyFromDailyParentPl):
-    def calc_df(
-        self,
-        df: pl.DataFrame,
-        event: ObjectChange,
-        obj: FxDailyRx,
-    ) -> pl.DataFrame:
-        symbol = obj.get_parent().tags.symbol
+        symbol = fx.params.symbol
 
         if "USD" not in symbol:
             raise ValueError(self)
@@ -167,42 +96,28 @@ class HandleNewFxDailyRx(HandleNewDailyFromDailyParentPl):
 
         e = n_fgn.forward_fill().pct_change()
 
-        df = df.with_columns(
+        df = fx.get_df().with_columns(
             pl.when(pl.col(VALUE).is_null())
             .then(None)
             .otherwise(e)
             .alias(VALUE)
         )
 
-        return df
-
-
-# TODO: class HandleObjectChange:
-# if chunk, rechunk
-# if backend type / loc change, copy
-# else, throw
-
-#  ------------------
-
-
-@dataclass(frozen=True)
-class HasFxDailyGrandParent(Object):
-    parent: FxDailyPx | FxDailyRx | str
-
-    def get_parent(self) -> FxDailyPx | FxDailyRx:
-        return context.get().get(
-            self.parent, FxDailyPx | FxDailyRx
+        _ = self.set_value_from_df(
+            df,
+            VALUE,
+        )
+        return ValueUpdate.if_snap_changed(
+            snap,
+            snap.update_from_df(df),
         )
 
+fx_daily_rx = new(FxDailyRx, FxDailyRx.Params)
 
 #  ------------------
 
-# TODO: if __name__ == __main__:
-# run domain by name
 
 __all__ = [
     "FxDailyRx",
-    "HandleUpdateFxDailyRx",
-    "HandleNewFxDailyRx",
-    "HasFxDailyGrandParent",
+    "fx_daily_rx",
 ]

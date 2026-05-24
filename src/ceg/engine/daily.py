@@ -41,61 +41,90 @@ from .storage import *
 
 #  ------------------
 
-# @dataclass(frozen=True)
-# class DailyTags:
-#     pass
-
-
-@dataclass(frozen=True)
-class DailyParams:
-    pass
-
 
 @dataclass(frozen=True)
 class Daily(Object):
-    parent: Object | str
-    # tags: DailyTags
-    # params: DailyParams
-
-    # version: int = 0
-    # type: Literal["DailyM"] = "DailyM"
-    # NOTE: to change
 
     @dataclass(frozen=True)
-    class Snap(Snap):
+    class Snap(Object.Snap):
         first: dt.date | None = None  # most recently added
         last: dt.date | None = None
 
         def with_dates(self, first: dt.date, last: dt.date):
             return replace(self, first=first, last=last)
+        
+        def update_from_df(self, df: pl.DataFrame):
+            d_min, d_max = df.pipe(
+                apis.pl.select_items,
+                (
+                    pl.col("date").min(),
+                    pl.col("date").max(),
+                ),
+                t=dt.date,
+            )
+            return replace(
+                self,
+                first=d_min,
+                last=d_max,
+            )
 
-    @overload
-    def get_snap(
+    @dataclass(frozen=True)
+    class Params(Object.Params):
+        pass
+
+    parent: Object | str
+    params: Params
+
+    def new_snap(self) -> Daily.Snap:
+        return Daily.Snap(self.id)
+    
+    def get_df(
         self,
-        t: None = None,
-    ) -> Daily.Snap: ...
-
-    @overload
-    def get_snap(
-        self,
-        t: Type[TDailySnap],
-    ) -> TDailySnap: ...
-
-    def get_snap(
-        self,
-        t: Type[Daily.Snap] | None = None,
-    ) -> Daily.Snap:
-        s = self._get_snap()
-        if s is None:
-            s = type(self).Snap.new(self.id)
-        if t is None:
-            t = Daily.Snap
-        assert isinstance(s, t), (s, t)
-        return s
+        alias: str | None = None,
+        scale: float = 1,
+        method: str | None = None,
+        with_objs: list[Daily] | None = None,
+    ):
+        if with_objs is not None:
+            return daily_pl_df(
+                [self] + with_objs,
+                alias=alias,
+                scale=scale,
+                method=method,
+            )
+        return daily_pl_df(
+            self,
+            alias=alias,
+            scale=scale,
+            method=method,
+        )
 
 
-TDailySnap = TypeVar("TDailySnap", bound=Daily.Snap)
+@dataclass(frozen=True)
+class Date(DependsGraphSync, Daily):
 
+    def self(self) -> Date:
+        return self
+    
+    def encode_type(self, params: Daily.Params):
+        return ""
+    
+    def encode_params(self, params: Daily.Params):
+        return ""
+
+    def handle(self, event: Event, snap: Snap):
+        snap = apis.assert_is(snap, Daily.Snap)
+        if not isinstance(event, GraphSync):
+            return
+        today = dt.date.today()
+        if snap.last is None or today > snap.last:
+            return ValueUpdate.if_snap_changed(
+                snap,
+                replace(snap, last=today)
+            )
+        return
+
+today = new(Date, Date.Params)
 
 @dataclass(frozen=True)
 class DailyChunked(
@@ -132,20 +161,20 @@ def daily_pl_value(
     scale: float = 1.0,
     expr: pl.Expr | None = None,
 ) -> pl.DataFrame | ValuePlSeries:
-    snap = obj.get_snap(t=Daily.Snap)
+    snap = get_snap(obj)
     assert snap is not None, obj
     assert snap.first is not None, (obj, snap)
     assert snap.last is not None, (obj, snap)
-    v = obj.value_key_val().get(
-        obj.id,
-        # t=(ValuePlSeries, ValuePlDataFrame)
-    )
-    # if t == "series":
-    #     v = obj.value_key_val().get(obj.id, t=ValuePlSeries)
-    # elif t == "df":
-    #     v = obj.value_key_val().get(obj.id, t=ValuePlDataFrame)
-    # else:
-    #     raise ValueError(obj, t)
+    # v = obj.value_key_val().get(
+    #     obj.id,
+    #     t=(ValuePlSeries, ValuePlDataFrame)
+    # )
+    if t == "series":
+        v = obj.value_key_val().get(obj.id, t=ValuePlSeries)
+    elif t == "df":
+        v = obj.value_key_val().get(obj.id, t=ValuePlDataFrame)
+    else:
+        raise ValueError(obj, t)
     assert v is not None, obj
     alias = alias or obj.id
     if expr is None:
@@ -184,34 +213,34 @@ def daily_pl_value(
 def daily_pl_values(
     t: Literal["df"],
     *inds: Daily | int | tuple[int, ...] | str,
+    agg: str | None = None,
     scale: float = 1.0,
     alias: str = "res",
-    agg: str | None = None,
     objs: tuple[Object | str, ...] | None = None,
 ) -> pl.DataFrame: ...
 
 
-@overload
-def daily_pl_values(
-    t: Literal["series"],
-    *inds: Daily | int | tuple[int, ...] | str,
-    scale: float = 1.0,
-    alias: str = "res",
-    agg: None = None,
-    objs: tuple[Object | str, ...] | None = None,
-) -> list[ValuePlSeries]: ...
-
 
 @overload
 def daily_pl_values(
     t: Literal["series"],
     *inds: Daily | int | tuple[int, ...] | str,
+    agg: str,
     scale: float = 1.0,
     alias: str = "res",
-    agg: str = "",
     objs: tuple[Object | str, ...] | None = None,
 ) -> ValuePlSeries: ...
 
+
+@overload
+def daily_pl_values(
+    t: Literal["series"],
+    *inds: Daily | int | tuple[int, ...] | str,
+    agg: None = None,
+    scale: float = 1.0,
+    alias: str = "res",
+    objs: tuple[Object | str, ...] | None = None,
+) -> list[ValuePlSeries]: ...
 
 def daily_pl_values(
     t: Literal["df"] | Literal["series"],
@@ -367,7 +396,6 @@ def daily_pl_series(
 
 
 __all__ = [
-    "DailyParams",
     "Daily",
     "DailyChunked",
     "daily_pl_df",
@@ -375,4 +403,6 @@ __all__ = [
     "daily_pl_series",
     "daily_pl_value",
     "daily_pl_values",
+    "Date",
+    "date",
 ]

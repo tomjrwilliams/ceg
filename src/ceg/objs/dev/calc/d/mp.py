@@ -38,61 +38,61 @@ from .....engine import *
 from .m import *
 
 
-@dataclass(frozen=True)
-class DailyMPParams(DailyMParams):
-    pwindow: int | None = None
+# @dataclass(frozen=True)
+# class DailyMPParams(DailyMParams):
+#     pwindow: int | None = None
 
-    def build_id(
-        self,
-        cls: Type[DailyM],
-        window: int | None = None,
-        pwindow: int | None = None,
-    ):
-        window = self.window
-        pwindow = self.pwindow
-        if window is None:
-            params = "ex"
-        else:
-            params = str(window)
-        if pwindow is None:
-            params += "-ex"
-        else:
-            params += f"-{str(pwindow)}"
-        return f"{cls.SUFFIX}-" + params
-
-
-@dataclass(frozen=True)
-class DailyMP(DailyM):
-    params: DailyMPParams
-
-    @classmethod
-    def new(
-        cls,
-        parent: Daily,
-        window: int | None = None,
-        pwindow: int | None = None,
-        project: Project | None = None,
-    ):
-        params = DailyMPParams(
-            window=window,
-            pwindow=pwindow,
-        )
-        assert cls.SUFFIX != "M", cls
-        id=parent.extend_id(params.build_id(cls))
-        if project is not None:
-            id=project.extend_id(path)
-        return cls(
-            id=id,
-            parent=parent,
-            params=params,
-            project=project,
-        )
+#     def build_id(
+#         self,
+#         cls: Type[DailyM],
+#         window: int | None = None,
+#         pwindow: int | None = None,
+#     ):
+#         window = self.window
+#         pwindow = self.pwindow
+#         if window is None:
+#             params = "ex"
+#         else:
+#             params = str(window)
+#         if pwindow is None:
+#             params += "-ex"
+#         else:
+#             params += f"-{str(pwindow)}"
+#         return f"{cls.SUFFIX}-" + params
 
 
-__all__ = [
-    "DailyMPParams",
-    "DailyMP",
-]
+# @dataclass(frozen=True)
+# class DailyMP(DailyM):
+#     params: DailyMPParams
+
+#     @classmethod
+#     def new(
+#         cls,
+#         parent: Daily,
+#         window: int | None = None,
+#         pwindow: int | None = None,
+#         project: Project | None = None,
+#     ):
+#         params = DailyMPParams(
+#             window=window,
+#             pwindow=pwindow,
+#         )
+#         assert cls.SUFFIX != "M", cls
+#         id=parent.extend_id(params.build_id(cls))
+#         if project is not None:
+#             id=project.extend_id(path)
+#         return cls(
+#             id=id,
+#             parent=parent,
+#             params=params,
+#             project=project,
+#         )
+
+
+# __all__ = [
+#     "DailyMPParams",
+#     "DailyMP",
+# ]
 # backward freq of hitting em max, min
 
 # or above a, med, etc.

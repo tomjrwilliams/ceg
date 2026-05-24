@@ -212,8 +212,15 @@ def get_comb_dfs(combs: tuple[int, ...], coll: Container):
 
                 # TODO: assert singular df handler method
 
-                _dfs, _d0, _d1 = get_agg_dfs((ref.i,), container)
-                df_ = h.agg_dfs(_d0, _d1, *_dfs)
+                # TODO: get_agg_dfs removed in DailyComposition migration; this
+                # legacy path (DailyCombination over Combination.refs of "agg_*")
+                # is not used by current framework callers. Re-implement against
+                # DailyComposition refs if/when this path is reintroduced.
+                raise NotImplementedError(
+                    "Combination.refs with 'agg_*' ref encoding is not supported"
+                    " after the DailyComposition migration."
+                )
+                df_ = h.agg_dfs(_d0, _d1, *_dfs)  # unreachable
 
                 df = assert_is(df_, pl.DataFrame)
                 if VALUE in df.schema:
@@ -234,13 +241,8 @@ def get_comb_dfs(combs: tuple[int, ...], coll: Container):
 
 
 @dataclass(frozen=True)
-class DailyCombinationDeriv(
-    DailyChunked,
-):
+class DailyCombinationDeriv(Output, DailyChunked):
     parent: DailyCombination | str
-
-    index: int | None = None
-    key: str | None = None
 
     version: int = 0
     type: Literal["DailyCombinationDeriv"] = (
@@ -258,30 +260,7 @@ class DailyCombinationDeriv(
             self.parent, DailyCombination
         )
 
-    @classmethod
-    def new(
-        cls,
-        parent: DailyCombination,
-        index: int | None = None,
-        key: str | None = None,
-    ):
-        key = key or field_default(cls, "key", str)
-        assert index is not None or key is not None, (
-            index,
-            key,
-            cls,
-        )
-        id=None if index is None else str(index)
-        id=key if id is None else f"{key}-{id}"
-        return cls(
-            parent=parent,
-            id=parent.extend_id(assert_is(id)),
-            index=index,
-            key=key,
-        )
-
-    def depends(self) -> list[Dependency]:
-        return []
+    # new() and depends() inherited from Output
 
 
 @dataclass(frozen=True)

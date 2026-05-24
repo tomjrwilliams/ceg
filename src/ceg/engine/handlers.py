@@ -151,31 +151,6 @@ class HandleNewValueFromParentPl(
     pass
 
 
-@dataclass(frozen=True)
-class HandleNewDailyFromDf(Handler):
-    def update_snap_from_df(
-        self,
-        snap: Daily.Snap,
-        df: pl.DataFrame,
-        d_min: dt.date | None = None,
-        d_max: dt.date | None = None,
-    ):
-
-        if d_min is None or d_max is None:
-            d_min, d_max = df.pipe(
-                apis.pl.select_items,
-                (
-                    pl.col("date").min(),
-                    pl.col("date").max(),
-                ),
-                t=dt.date,
-            )
-
-        return replace(
-            snap,
-            first=d_min,
-            last=d_max,
-        )
 
 
 @dataclass(frozen=True)

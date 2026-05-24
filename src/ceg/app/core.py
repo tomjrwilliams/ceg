@@ -59,12 +59,12 @@ class App:
 class AppConfig:
     graph: Type[Graph]
     projects: tuple[str, ...]
-    configs: t.frozen.dict[str, Apply | Bind |Outputs] = frozendict()
+    configs: t.frozen.dict[str, Bind |Apply] = frozendict()
     
-    def with_configs(self, **configs: Apply | Bind | Outputs):
+    def with_configs(self, **configs: Bind | Apply):
         res = self.configs
         for k, v in configs.items():
-            if not isinstance(v, (Apply, Bind, Outputs)):
+            if not isinstance(v, (Bind, Apply)):
                 raise ValueError(v, k)
             res = res.set(k, v)
         return replace(self, configs = res)
@@ -117,17 +117,17 @@ class AppConfig:
             ] + list(self.projects))
 
             for k, config in self.configs.items():
-                if not isinstance(config, (Outputs)):
+                if not isinstance(config, (Apply)):
                     try:
-                        c = config(c)
+                        c = config(c, config=k)
                     except:
                         raise ValueError(c, self.configs)
 
             context.get().sync()
 
             for k, config in self.configs.items():
-                if isinstance(config, Outputs):
-                    res = config(c, res)
+                if isinstance(config, Apply):
+                    res = config(c, res, config=k)
 
 APPS: dict[str, App] = {
 

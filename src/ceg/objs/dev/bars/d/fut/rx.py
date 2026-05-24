@@ -35,8 +35,6 @@ from ......engine import *
 from ..ident import *
 from .ord import (
     FutDailyOrdinal,
-    DependsFutDailyOrdinalParent,
-    BarDaily,
 )
 
 #  ------------------
@@ -44,119 +42,49 @@ from .ord import (
 
 @dataclass(frozen=True)
 class FutDailyRx(
-    DependsFutDailyOrdinalParent,
-    BarDaily,
+    Daily,
+    DependsParent,
+    HasDataFrameValue
 ):
-    """
-    >>> ord = FutDailyOrdinal.new(
-    ...     symbol="ES",
-    ...     ident = 1,
-    ...     field="close",
-    ...     adjust="pct",
-    ...     source="frd"
-    ... )
-    >>> obj = FutDailyRx.new(ord)
-    >>> Graph().with_obj(obj).sync()
-    >>> obj.value_key_val().get(obj.id).tail(8)
-    shape: (8,)
-    Series: 'test-fut-d-ES-1-close-pct-frd-rx' [f64]
-    [
-        0.000963
-        null
-        null
-        0.017007
-        0.001891
-        -0.011499
-        -0.003516
-        -0.020255
-    ]
-    """
+    
+    @dataclass(frozen=True)
+    class Params(Daily.Params):
+        pass
 
     parent: FutDailyOrdinal | str
-    # TODO: or contract
+    params: Params
 
-    version: int = 0
-    type: Literal["FutDailyRx"] = "FutDailyRx"
+    def self(self) -> FutDailyRx:
+        return self
+    
+    def get_parent(self) -> FutDailyOrdinal:
+        return get_parent(self)
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["FutDailyRxSnap"] = "FutDailyRxSnap"
+    def encode_type(self, params: FutDailyRx.Params) -> str:
+        return "rx"
 
-    @classmethod
-    def new(
-        cls,
-        parent: FutDailyOrdinal | Project | None = None,
-        symbol: str | None = None,
-        ident: int | str | None = None,
-        field: str | None = None,
-        adjust: str | None = None,
-        source: str | None = None,
-        fx: str | None = None,
-    ):
-        if parent is None or isinstance(parent, Project):
-            assert isinstance(symbol, str), symbol
-            if ident is not None:
-                assert isinstance(ident, int), ident
-            parent = FutDailyOrdinal.new(
-                symbol=symbol,
-                ident=ident,
-                field=field,
-                adjust=adjust,
-                source=source,
-                fx=fx,
-                parent=parent,
-            )
-        # assert ident is not None, parent
-        return cls(
-            id=parent.extend_id("rx"),
-            parent=parent,
-        )
+    def encode_params(self, params: FutDailyRx.Params) -> str:
+        return ""
 
-    def handler(self, event: Event, snap: Snap) -> Handler:
+    def handle(self, event: Event, snap: Snap):
+        snap = assert_is(snap, FutDailyRx.Snap)
         if isinstance(event, ValueAppend):
-            return HandleUpdateFutDailyRx()
-        elif isinstance(event, ValueUpdate):
-            assert self.get_parent().id == event.obj, (
-                self,
-                event,
-            )
-            return HandleNewFutDailyRx()
-        raise ValueError((self, event))
-
-
-@dataclass(frozen=True)
-class HandleUpdateFutDailyRx(Handler):
-    def handle(
-        self,
-        event: ObjectChange,
-        obj: FutDailyRx,
-    ):
-        # TODO:
-        # check latest update, if today, skip
-        # check new data available
-        # if after snap.last, Wget and append
-        return
-
-
-@dataclass(frozen=True)
-class HandleNewFutDailyRx(HandleNewDailyFromDailyParentPl):
-    def calc_df(
-        self,
-        df: pl.DataFrame,
-        event: ObjectChange,
-        obj: FutDailyRx,
-    ) -> pl.DataFrame:
-
-        parent = obj.get_parent()
-
+            raise NotImplementedError(self)
+        event = assert_is(event, ValueUpdate)
+        fut = self.get_parent()
+        assert fut.id == event.obj, (
+            self,
+            event,
+        )
+        df = fut.get_df()
         e = (
             pl.col(VALUE).forward_fill().pct_change()
-            if parent.tags.adjust == "pct"
+            if fut.params.adjust == "pct"
             else pl.col(VALUE).forward_fill().diff()
-            if parent.tags.adjust == "abs"
+            if fut.params.adjust == "abs"
             else None
         )
-        assert e is not None, parent.tags.adjust
+        assert e is not None, fut.params.adjust
 
         df = df.with_columns(
             pl.when(pl.col(VALUE).is_null())
@@ -165,35 +93,21 @@ class HandleNewFutDailyRx(HandleNewDailyFromDailyParentPl):
             .alias(VALUE)
         )
 
-        return df
-
-
-# TODO: class HandleObjectChange:
-# if chunk, rechunk
-# if backend type / loc change, copy
-# else, throw
-
-#  ------------------
-
-
-@dataclass(frozen=True)
-class HasFutDailyGrandParent(Object):
-    parent: FutDailyOrdinal | FutDailyRx | str
-
-    def get_parent(self) -> FutDailyOrdinal | FutDailyRx:
-        return context.get().get(
-            self.parent, FutDailyOrdinal | FutDailyRx
+        _ = self.set_value_from_df(
+            df,
+            VALUE,
+        )
+        return ValueUpdate.if_snap_changed(
+            snap,
+            snap.update_from_df(df),
         )
 
+fut_daily_rx = new(FutDailyRx, FutDailyRx.Params)
 
 #  ------------------
 
-# TODO: if __name__ == __main__:
-# run domain by name
 
 __all__ = [
     "FutDailyRx",
-    "HandleUpdateFutDailyRx",
-    "HandleNewFutDailyRx",
-    "HasFutDailyGrandParent",
+    "fut_daily_rx",
 ]

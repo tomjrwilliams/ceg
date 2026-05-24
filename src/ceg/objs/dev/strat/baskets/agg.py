@@ -187,11 +187,14 @@ def rank_baskets_dot(
             if top > len(v_strats):
                 continue
 
-            weights = DailyAggregate.new(
-                univ,
-                agg="weights_rank",
-                aggs=i_agg,
-                **w_params,
+            weights = DailyComposition.new(
+                parent=univ,
+                method="weights_rank",
+                refs=tuple(
+                    IdRef(obj_path(univ.objects[i]))
+                    for i in i_agg.objs
+                ),
+                params=frozendict(w_params),
             )
             context.get().with_obj(weights, force=True)
             # res[(
@@ -207,7 +210,7 @@ def rank_baskets_dot(
                 if k not in weight_objs:
                     weight_objs[k] = []
                 vws = [
-                    DailyAggregateDeriv.new(
+                    DailyOutput.new(
                         weights, index=i, key=k
                     )
                     for i in range(len(strat_inds))
@@ -416,11 +419,14 @@ def rank_baskets(
             )
             mvar_key = f"{name}-{weight_key}"
 
-            weights = DailyAggregate.new(
-                univ,
-                agg="weights_rank",
-                aggs=i_agg,
-                **w_params,
+            weights = DailyComposition.new(
+                parent=univ,
+                method="weights_rank",
+                refs=tuple(
+                    IdRef(obj_path(univ.objects[i]))
+                    for i in i_agg.objs
+                ),
+                params=frozendict(w_params),
             )
             context.get().with_obj(weights, force=True)
             # res[(
@@ -436,7 +442,7 @@ def rank_baskets(
                 if k not in weight_objs:
                     weight_objs[k] = []
                 vws = [
-                    DailyAggregateDeriv.new(
+                    DailyOutput.new(
                         weights, index=i, key=k
                     )
                     for i in range(len(inds))

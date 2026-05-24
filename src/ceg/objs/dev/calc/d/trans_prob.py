@@ -156,7 +156,6 @@ class TransitionProbSignal(Interface.Object):
     type: Literal["TransitionProbSignal"] = NAME
 
 new = init_new(Interface.Params, TransitionProbSignal)
-bind = init_bind(new, TransitionProbSignal)
 
 Type: TypeAlias = TransitionProbSignal
 

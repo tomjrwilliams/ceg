@@ -72,8 +72,8 @@ class KeyValStore(ABC, Generic[ID, KeyI, ValI]):
         self,
         key: KeyI,
         val: ValI,
-        chunk: int | None = None,
         i: ID | None = None,
+        chunk: int | None = None,
     ) -> ID: ...
 
 
@@ -333,6 +333,7 @@ class MemoryKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
         key: KeyI,
         val: ValI,
         i: ID | None = None,
+        chunk: int | None = None,
     ) -> ID:
         i = self.identify(key)
         if i is None:
@@ -355,17 +356,17 @@ class ExampleKeyVal(KeyVal[int, str, int, str, float]):
     def encode_val_type(self, t: Type[float]) -> Type[int]:
         return int
 
-    def encode_key(self, k: str) -> str:
-        return k.upper()
+    def encode_key(self, key: str) -> str:
+        return key.upper()
 
-    def encode_val(self, k: str, v: float) -> int:
-        return int(v)
+    def encode_val(self, key: str, val: float) -> int:
+        return int(val)
 
-    def decode_key(self, k: str) -> str:
-        return k.lower()
+    def decode_key(self, key: str) -> str:
+        return key.lower()
 
-    def decode_val(self, k: str, v: int) -> float:
-        return float(v)
+    def decode_val(self, key: str, val: int) -> float:
+        return float(val)
 
 
 @dataclass(frozen=True)
@@ -378,28 +379,28 @@ class KeyValStrKeyIO(KeyVal[ID, str, ValI, str, ValO]):
     def encode_key_type(self, t: Type[str]) -> Type[str]:
         return t
 
-    def encode_key(self, k: str) -> str:
-        return k
+    def encode_key(self, key: str) -> str:
+        return key
 
-    def decode_key(self, k: str) -> str:
-        return k
+    def decode_key(self, key: str) -> str:
+        return key
 
 
 @dataclass(frozen=True)
 class KeyValBytesValI(KeyVal[ID, KeyI, bytes, KeyO, ValO]):
     """KeyValBytesValI[ID, KeyI, KeyO, ValO]"""
 
-    type_key_i: Type[str]
+    # type_key_i: Type[str]
     type_val_i: Type[bytes]
 
-    def encode_key_type(self, t: Type[str]) -> Type[str]:
-        return t
+    # def encode_key_type(self, t: Type[str]) -> Type[str]:
+    #     return t
 
-    def encode_key(self, k: str) -> str:
-        return k
+    # def encode_key(self, key: str) -> str:
+    #     return key
 
-    def decode_key(self, k: str) -> str:
-        return k
+    # def decode_key(self, key: str) -> str:
+    #     return key
 
 
 @dataclass(frozen=True)
@@ -416,11 +417,11 @@ class KeyValStrKeyIOBytesValI(
     def encode_key_type(self, t: Type[str]) -> Type[str]:
         return t
 
-    def encode_key(self, k: str) -> str:
-        return k
+    def encode_key(self, key: str) -> str:
+        return key
 
-    def decode_key(self, k: str) -> str:
-        return k
+    def decode_key(self, key: str) -> str:
+        return key
 
 
 @final

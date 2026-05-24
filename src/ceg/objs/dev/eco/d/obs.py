@@ -35,20 +35,6 @@ from .....engine import *
 #  ------------------
 
 
-@dataclass(frozen=True)
-class EcoDailyTags:
-    symbol: str
-    source: str
-    units: str
-    frequency: str
-    seasonal: str
-
-    asof: str | None = None
-    lag: dt.timedelta | None = None
-
-    transform: str | None = None
-
-
 def apply_transform(
     df: pl.DataFrame,
     transform: str | None = None,
@@ -82,8 +68,9 @@ def apply_transform(
 
 @dataclass(frozen=True)
 class EcoDailyObservation(
-    DependsGraphSync,
-    DailyChunked,
+    Daily,
+    DependsParent,
+    HasDataFrameValue
 ):
     """
     >>> obj = EcoDailyObservation.new(
@@ -132,50 +119,33 @@ class EcoDailyObservation(
         75.8847
     ]
     """
-
-    parent: Project | str | None
-
-    tags: EcoDailyTags
-
-    version: int = 0
-    type: Literal["EcoDailyObservation"] = (
-        "EcoDailyObservation"
-    )
-
     @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["EcoDailyObservationSnap"] = (
-            "EcoDailyObservationSnap"
-        )
+    class Params(Daily.Params):
+        symbol: str
+        source: str
+        units: str
+        frequency: str
+        seasonal: str
 
-    @classmethod
-    def new(
-        cls,
-        symbol: str,
-        units: str | None = None,
-        frequency: str | None = None,
-        seasonal: str | None = None,
-        source: str | None = None,
-        asof: str | None = None,
-        lag: dt.timedelta | None = None,
-        transform: str | None = None,
-        parent: Project | str | None = None,
-    ):
-        s_lag: str | None = None
+        asof: str | None = None
+        lag: dt.timedelta | None = None
 
-        if ":" in symbol:
-            symbol, *asof_lag = symbol.split(":")
-            for s in asof_lag:
-                if s == "INDEX" or s == "IDX":
-                    transform = "index"
-                elif lag is None and s[0] == "L":
-                    s_lag = s
-                    lag = apis.cal.parse_lag(s_lag[1:])
-                elif asof is None and s[0] != "L":
-                    asof = s
+        transform: str | None = None
 
-        if units is None:
-            if source == "fred":
+        @classmethod
+        def new(
+            cls,
+            symbol: str,
+            source: str,
+            units: str | None = None,
+            frequency: str | None = None,
+            seasonal: str | None = None,
+            asof: str | None = None,
+            lag: dt.timedelta | None = None,
+            transform: str | None = None,
+        ):
+            assert source == "fred", source
+            if units is None:
                 s = apis.data.fred.load_spec(
                     symbol,
                     os.environ.get(
@@ -185,27 +155,12 @@ class EcoDailyObservation(
                 units = s.units
                 frequency = s.frequency
                 seasonal = s.seasonal_adjustment
-            else:
-                raise ValueError((symbol, source))
-        assert frequency is not None, symbol
-        assert seasonal is not None, seasonal
-        assert source is not None, source
-        ident = f"{symbol}-{source}"
-        if asof is not None:
-            ident = f"{ident}-{asof}"
-        if s_lag is not None:
-            ident = f"{ident}-{s_lag}"
-        if transform is not None:
-            ident = f"{ident}-{transform}"
-        return cls(
-            id=cls.build_id(
-                parent,
-                "eco-d-obs",
-                ident,
-                strict=False,
-            ),
-            parent=parent,
-            tags=EcoDailyTags(
+            units, frequency, seasonal = (
+                assert_is(units, str),
+                assert_is(frequency, str),
+                assert_is(seasonal, str)
+            )
+            return cls(
                 symbol=symbol,
                 source=source,
                 units=units,
@@ -214,44 +169,46 @@ class EcoDailyObservation(
                 asof=asof,
                 lag=lag,
                 transform=transform,
-            ),
-        )
+            )
 
-    # resampling etc.?
+    parent: str | Date
+    params: Params
 
-    def handler(self, event: Event, snap: Snap) -> Handler:
-        if isinstance(event, ObjectChange):
-            assert self.id == event.obj, (self, event)
-            return HandleNewEcoDailyObservation()
-        raise ValueError((self, event))
+    def self(self) -> EcoDailyObservation:
+        return self
+    
+    def get_parent(self) -> Date:
+        return get_parent(self)
 
+    def encode_type(self, params: EcoDailyObservation.Params):
+        return "fut-d-ord"
 
-@dataclass(frozen=True)
-class HandleUpdateEcoDailyObservation(Handler):
-    def handle(
-        self,
-        event: ObjectChange,
-        obj: EcoDailyObservation,
-    ):
-        # TODO:
-        # check latest update, if today, skip
-        # check new data available
-        # if after snap.last, get and append
-        return
+    def encode_params(self, params: EcoDailyObservation.Params):
+        tags = []
+        if params.asof is not None:
+            tags.append(params.asof)
+        if params.lag is not None:
+            tags.append(f"{params.lag}-{encode_timedelta(params.lag)}")
+        if params.transform is not None:
+            tags.append(params.transform)
+        return "-".join(map(str, [
+            params.symbol,
+            params.source,
+            # params.units,
+            # params.frequency,
+            # params.seasonal,
+            # TODO: and fx if given
+        ] + tags))
 
+    def handle(self, event: Event, snap: Snap):
 
-@dataclass(frozen=True)
-class HandleNewEcoDailyObservation(
-    HandleNewValueFromPl,
-    HandleNewDailyFromDf,
-):
-    def handle(
-        self,
-        event: ObjectChange,
-        snap: EcoDailyObservation.Snap,
-        obj: EcoDailyObservation,
-    ):
-        tags = obj.tags
+        # TODO: possibly later on, deal with obj storage def changes?
+        # TODO: and data appends versus full regen
+
+        event = assert_is(event, ValueUpdate)
+        snap = assert_is(snap, Daily.Snap)
+
+        tags = self.params
 
         if tags.source == "fred":
             df = apis.data.fred.load_time_series(
@@ -267,7 +224,7 @@ class HandleNewEcoDailyObservation(
                 # .forward_fill()
             )
         else:
-            raise ValueError(obj)
+            raise ValueError(self)
 
         if tags.transform is not None:
             df = df.pipe(
@@ -277,50 +234,22 @@ class HandleNewEcoDailyObservation(
                 v=tags.symbol,
             )
 
-        v = self.set_value_from_df(
-            obj,
+        _ = self.set_value_from_df(
             df,
             tags.symbol,
-            t=self.key_value_type(obj),
+        )
+        return ValueUpdate.if_snap_changed(
+            snap,
+            snap.update_from_df(df),
         )
 
-        new_snap = self.update_snap_from_df(snap, df)
-        if (
-            new_snap.first != snap.first
-            and new_snap.last != snap.last
-        ):
-            return ValueUpdate.from_snap(
-                self.update_snap_from_df(snap, df),
-                into=frozendict(),
-            )
-        return frozendict().set(obj.id, (snap, []))
 
-
-# TODO: class HandleObjectChange:
-# if chunk, rechunk
-# if backend type / loc change, copy
-# else, throw
-
-#  ------------------
-
-
-@dataclass(frozen=True)
-class DependsEcoDailyObservationParent(DependsParentValue):
-    parent: EcoDailyObservation | str
-
-    def get_parent(self) -> EcoDailyObservation:
-        return context.get().get(
-            self.parent, EcoDailyObservation
-        )
+eco_daily_observation = new(EcoDailyObservation, EcoDailyObservation.Params.new)
 
 
 #  ------------------
 
 __all__ = [
     "EcoDailyObservation",
-    "HandleUpdateEcoDailyObservation",
-    "HandleNewEcoDailyObservation",
-    "DependsEcoDailyObservationParent",
+    "eco_daily_observation",
 ]
-# TODO: if __name__ == __main__:
-# run domain by name

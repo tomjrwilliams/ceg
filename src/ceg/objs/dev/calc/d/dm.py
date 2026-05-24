@@ -43,22 +43,8 @@ class DailyDM(DailyM):
     pass
 
 
-#  ------------------
-
-
 @dataclass(frozen=True)
-class HandleNewDailyDM(
-    HandleNewValueFromPl,
-    HandleNewDailyFromDailyParent,
-):
-    pass
-
-
-#  ------------------
-
-
-@dataclass(frozen=True)
-class DailyDMA(DailyDM):
+class DailyDMA(DailyDM, DailyMA):
     """
     >>> ord = FutDailyOrdinal.new(
     ...     symbol="ES",
@@ -84,57 +70,57 @@ class DailyDMA(DailyDM):
     ]
     """
 
-    version: int = 0
-    type: Literal["DailyDMA"] = "DailyDMA"
-
     SUFFIX: ClassVar[str] = "dma"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDMASnap"] = "DailyDMASnap"
+    def self(self) -> DailyDMA:
+        return self
+    
+    def encode_type(self, params: DailyDMA.Params):
+        return self.SUFFIX
 
-    def handler_object_new(self) -> HandleNewDailyDMA:
-        return HandleNewDailyDMA()
+    def encode_params(self, params: DailyDMA.Params):
+        return params.encode_m()
 
-
-@dataclass(frozen=True)
-class HandleNewDailyDMA(
-    HandleNewDailyDM,
-    HandleNewDailyMA,
-):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+daily_dma = new(DailyDMA, DailyDMA.Params)
 
 @dataclass(frozen=True)
-class HandleNewDailyDKurt(
-    HandleNewDailyDM,
-    HandleNewDailyKurt,
-):
+class DailyDKurt(DailyDM, DailyKurt):
+
+    SUFFIX: ClassVar[str] = "dkurt"
+
+    def self(self) -> DailyDKurt:
+        return self
+    
+    def encode_type(self, params: DailyDKurt.Params):
+        return self.SUFFIX
+
+    def encode_params(self, params: DailyDKurt.Params):
+        return params.encode_m()
+
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+daily_dkurt = new(DailyDKurt, DailyDKurt.Params)
 
 @dataclass(frozen=True)
-class DailyDMax(DailyDM):
+class DailyDMax(DailyDM, DailyMax):
     """
     >>> ord = FutDailyOrdinal.new(
     ...     symbol="ES",
@@ -160,39 +146,32 @@ class DailyDMax(DailyDM):
     ]
     """
 
-    version: int = 0
-    type: Literal["DailyDMax"] = "DailyDMax"
-
     SUFFIX: ClassVar[str] = "dmax"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDMaxSnap"] = "DailyDMaxSnap"
+    def self(self) -> DailyDMax:
+        return self
+    
+    def encode_type(self, params: DailyDMax.Params):
+        return self.SUFFIX
 
-    def handler_object_new(self) -> HandleNewDailyDMax:
-        return HandleNewDailyDMax()
+    def encode_params(self, params: DailyDMax.Params):
+        return params.encode_m()
 
 
-@dataclass(frozen=True)
-class HandleNewDailyDMax(
-    HandleNewDailyDM,
-    HandleNewDailyMax,
-):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+daily_dmax = new(DailyDMax, DailyDMax.Params)
 
 @dataclass(frozen=True)
-class DailyDMed(DailyDM):
+class DailyDMed(DailyDM, DailyMed):
     """
     >>> ord = FutDailyOrdinal.new(
     ...     symbol="ES",
@@ -221,36 +200,29 @@ class DailyDMed(DailyDM):
     version: int = 0
     type: Literal["DailyDMed"] = "DailyDMed"
 
-    SUFFIX: ClassVar[str] = "dmed"
+    def self(self) -> DailyDMed:
+        return self
+    
+    def encode_type(self, params: DailyDMed.Params):
+        return self.SUFFIX
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDMedSnap"] = "DailyDMedSnap"
+    def encode_params(self, params: DailyDMed.Params):
+        return params.encode_m()
 
-    def handler_object_new(self) -> HandleNewDailyDMed:
-        return HandleNewDailyDMed()
-
-
-@dataclass(frozen=True)
-class HandleNewDailyDMed(
-    HandleNewDailyDM,
-    HandleNewDailyMed,
-):
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+daily_dmed = new(DailyDMed, DailyDMed.Params)
 
 @dataclass(frozen=True)
-class DailyDMid(DailyDM):
+class DailyDMid(DailyDM, DailyMid):
     """
     >>> ord = FutDailyOrdinal.new(
     ...     symbol="ES",
@@ -275,61 +247,28 @@ class DailyDMid(DailyDM):
         -101.75
     ]
     """
-
-    params: DailyMidParams
-
-    version: int = 0
-    type: Literal["DailyDMid"] = "DailyDMid"
-
     SUFFIX: ClassVar[str] = "dmid"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDMidSnap"] = "DailyDMidSnap"
+    # TODO: encode params
 
-    def handler_object_new(self) -> HandleNewDailyDMid:
-        return HandleNewDailyDMid()
+    def self(self) -> DailyDMid:
+        return self
+    
+    def encode_type(self, params: DailyDMid.Params):
+        return self.SUFFIX
 
-    @classmethod
-    def new(
-        cls,
-        parent: Daily,
-        window: int | None = None,
-        width: float | None = None,
-        project: Project | None = None,
-    ):
-        params = DailyMidParams(
-            window=window,
-            width=width,
-        )
-        assert cls.SUFFIX != "M", cls
-        id=parent.extend_id(params.build_id(cls))
-        if project is not None:
-            id=project.extend_id(path)
-        return cls(
-            id=id,
-            parent=parent,
-            params=params,
-            project=project,
-        )
+    def encode_params(self, params: DailyDMid.Params):
+        return params.encode_m()
 
-
-@dataclass(frozen=True)
-class HandleNewDailyDMid(
-    HandleNewDailyDM,
-    HandleNewDailyMid,
-):
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyMid,
+        event: ValueUpdate,
     ) -> pl.DataFrame:
         df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
-            obj,
         )
         e = pl.col("OLD") - pl.col(VALUE)
         return df.with_columns(
@@ -339,9 +278,10 @@ class HandleNewDailyDMid(
             .alias(VALUE)
         )
 
+daily_dmid = new(DailyDMid, DailyDMid.Params)
 
 @dataclass(frozen=True)
-class DailyDMin(DailyDM):
+class DailyDMin(DailyDM, DailyMin):
     """
     >>> ord = FutDailyOrdinal.new(
     ...     symbol="ES",
@@ -367,53 +307,51 @@ class DailyDMin(DailyDM):
     ]
     """
 
-    version: int = 0
-    type: Literal["DailyDMin"] = "DailyDMin"
-
     SUFFIX: ClassVar[str] = "dmin"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDMinSnap"] = "DailyDMinSnap"
+    def self(self) -> DailyDMin:
+        return self
+    
+    def encode_type(self, params: DailyDMin.Params):
+        return self.SUFFIX
 
-    def handler_object_new(self) -> HandleNewDailyDMin:
-        return HandleNewDailyDMin()
-
-
-@dataclass(frozen=True)
-class HandleNewDailyDMin(
-    HandleNewDailyDM,
-    HandleNewDailyMin,
-):
+    def encode_params(self, params: DailyDMin.Params):
+        return params.encode_m()
+    
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+daily_dmin = new(DailyDMin, DailyDMin.Params)
 
 @dataclass(frozen=True)
-class HandleNewDailyDPLast(
-    HandleNewDailyDM,
-    HandleNewDailyPLast,
-):
+class DailyDPLast(DailyDM, DailyPLast):
+
+    SUFFIX: ClassVar[str] = "dplast"
+
+    def self(self) -> DailyDPLast:
+        return self
+    
+    def encode_type(self, params: DailyDPLast.Params):
+        return self.SUFFIX
+
+    def encode_params(self, params: DailyDPLast.Params):
+        return params.encode_m()
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyM,
+        event: ValueUpdate,
     ) -> pl.DataFrame:
         df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
-            obj,
         )
         e = pl.col("OLD") - pl.col(VALUE)
         return df.with_columns(
@@ -423,9 +361,10 @@ class HandleNewDailyDPLast(
             .alias(VALUE)
         )
 
+daily_dplast = new(DailyDPLast, DailyDPLast.Params)
 
 @dataclass(frozen=True)
-class DailyDQile(DailyDM):
+class DailyDQile(DailyDM, DailyQile):
     """
     >>> ord = FutDailyOrdinal.new(
     ...     symbol="ES",
@@ -451,114 +390,103 @@ class DailyDQile(DailyDM):
     ]
     """
 
-    params: DailyQileParams
-
-    version: int = 0
-    type: Literal["DailyDQile"] = "DailyDQile"
-
     SUFFIX: ClassVar[str] = "dqile"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDQileSnap"] = "DailyDQileSnap"
 
-    def handler_object_new(self) -> HandleNewDailyDQile:
-        return HandleNewDailyDQile()
+    def self(self) -> DailyQile:
+        return self
+    
+    def encode_type(self, params: DailyQile.Params):
+        return self.SUFFIX
 
-    @classmethod
-    def new(
-        cls,
-        parent: Daily,
-        window: int | None = None,
-        quantile: float | None = None,
-        project: Project | None = None,
-    ):
-        params = DailyQileParams(
-            window=window,
-            quantile=quantile,
-        )
-        assert cls.SUFFIX != "M", cls
-        id=parent.extend_id(params.build_id(cls))
-        if project is not None:
-            id=project.extend_id(path)
-        return cls(
-            id=id,
-            parent=parent,
-            params=params,
-            project=project,
-        )
-
-
-@dataclass(frozen=True)
-class HandleNewDailyDQile(
-    HandleNewDailyDM,
-    HandleNewDailyQile,
-):
+    def encode_params(self, params: DailyQile.Params):
+        return params.encode_m()
+    
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyQile,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
-
+    
+daily_dqile = new(DailyDQile, DailyDQile.Params)
 
 @dataclass(frozen=True)
-class HandleNewDailyDRank(
-    HandleNewDailyDM,
-    HandleNewDailyRank,
-):
+class DailyDRank(DailyDM, DailyRank):
+
+    SUFFIX: ClassVar[str] = "drank"
+
+    def self(self) -> DailyDRank:
+        return self
+    
+    def encode_type(self, params: DailyDRank.Params):
+        return self.SUFFIX
+
+    def encode_params(self, params: DailyDRank.Params):
+        return params.encode_m()
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+daily_drank = new(DailyDRank, DailyDRank.Params)
 
 @dataclass(frozen=True)
-class HandleNewDailyDRms(
-    HandleNewDailyDM,
-    HandleNewDailyRms,
-):
+class DailyDRms(DailyDM, DailyRms):
+
+    SUFFIX: ClassVar[str] = "drms"
+
+    def self(self) -> DailyDRms:
+        return self
+    
+    def encode_type(self, params: DailyDRms.Params):
+        return self.SUFFIX
+
+    def encode_params(self, params: DailyDRms.Params):
+        return params.encode_m()
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+daily_drms = new(DailyDRms, DailyDRms.Params)
 
 @dataclass(frozen=True)
-class HandleNewDailyDRng(
-    HandleNewDailyDM,
-    HandleNewDailyRng,
-):
+class DailyDRng(DailyDM, DailyRng):
+
+    SUFFIX: ClassVar[str] = "drng"
+
+    def self(self) -> DailyDRng:
+        return self
+    
+    def encode_type(self, params: DailyDRng.Params):
+        return self.SUFFIX
+
+    def encode_params(self, params: DailyDRng.Params):
+        return params.encode_m()
+    
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyRng,
+        event: ValueUpdate,
     ) -> pl.DataFrame:
         df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
-            obj,
         )
         e = pl.col("OLD") - pl.col(VALUE)
         return df.with_columns(
@@ -568,85 +496,116 @@ class HandleNewDailyDRng(
             .alias(VALUE)
         )
 
+daily_drng = new(DailyDRng, DailyDRng.Params)
 
 @dataclass(frozen=True)
-class HandleNewDailyDSDev(
-    HandleNewDailyDM,
-    HandleNewDailySDev,
-):
+class DailyDSDev(DailyDM, DailySDev):
+
+    SUFFIX: ClassVar[str] = "dsdev"
+
+    def self(self) -> DailyDSDev:
+        return self
+    
+    def encode_type(self, params: DailyDSDev.Params):
+        return self.SUFFIX
+
+    def encode_params(self, params: DailyDSDev.Params):
+        return params.encode_m()
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+daily_dsdev = new(DailyDSDev, DailyDSDev.Params)
 
 @dataclass(frozen=True)
-class HandleNewDailyDSkew(
-    HandleNewDailyDM,
-    HandleNewDailySkew,
-):
+class DailyDSkew(DailyDM, DailySkew):
+
+    SUFFIX: ClassVar[str] = "dskew"
+
+    def self(self) -> DailyDSkew:
+        return self
+    
+    def encode_type(self, params: DailyDSkew.Params):
+        return self.SUFFIX
+
+    def encode_params(self, params: DailyDSkew.Params):
+        return params.encode_m()
+    
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+daily_dskew = new(DailyDSkew, DailyDSkew.Params)
 
 @dataclass(frozen=True)
-class HandleNewDailyDVar(
-    HandleNewDailyDM,
-    HandleNewDailyVar,
-):
+class DailyDVar(DailyDM, DailyVar):
+
+    SUFFIX: ClassVar[str] = "dvar"
+
+    def self(self) -> DailyDVar:
+        return self
+    
+    def encode_type(self, params: DailyDVar.Params):
+        return self.SUFFIX
+
+    def encode_params(self, params: DailyDVar.Params):
+        return params.encode_m()
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+
+daily_dvar = new(DailyDVar, DailyDVar.Params)
 
 #  ------------------
 
 __all__ = [
     # "DailyDMParams",
     "DailyDM",
-    "HandleNewDailyDM",
-    "HandleNewDailyDMA",
     "DailyDMA",
-    "HandleNewDailyDKurt",
-    "HandleNewDailyDMax",
+    "daily_dma",
     "DailyDMax",
-    "HandleNewDailyDMed",
+    "daily_dmax",
     "DailyDMed",
-    "HandleNewDailyDMid",
+    "daily_dmed",
     "DailyDMid",
-    "HandleNewDailyDMin",
+    "daily_dmid",
     "DailyDMin",
-    "HandleNewDailyDPLast",
-    "HandleNewDailyDQile",
+    "daily_dmin",
     "DailyDQile",
-    "HandleNewDailyDRank",
-    "HandleNewDailyDRms",
-    "HandleNewDailyDRng",
-    "HandleNewDailyDSDev",
-    "HandleNewDailyDSkew",
-    "HandleNewDailyDVar",
+    "daily_dqile",
+    "daily_drank",
+    "DailyDRank",
+    "daily_dskew",
+    "DailyDSkew",
+    "daily_drms",
+    "DailyDRms",
+    "daily_drng",
+    "DailyDRng",
+    "daily_dsdev",
+    "DailyDSDev",
+    "daily_dvar",
+    "DailyDVar",
+    "daily_dplast",
+    "DailyDPLast",
+    "daily_dkurt",
+    "DailyDKurt",
 ]

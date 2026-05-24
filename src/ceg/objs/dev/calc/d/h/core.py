@@ -147,6 +147,7 @@ AGGREGATES = {
     "sum": aggregate_sum,
     "rank": aggregate_rank,
     "quantize": aggregate_quantize,
+    # "sign_code": sign_code,  # TODO: lives in app/dev/states/sign_strat.py — layering inversion to import here
     "transition_prob": aggregate_transition_probs,
 }
 
@@ -163,7 +164,6 @@ class DailyHSum(Interface.Object):
         type: Literal["DailyHSum"] = "DailyHSum"
 
 sum = init_new(Interface.Params, DailyHSum)
-bind_sum = init_bind(sum, DailyHSum)
 Sum: TypeAlias = DailyHSum
 
 @dataclass(frozen=True)
@@ -179,7 +179,6 @@ class DailyHProd(Interface.Object):
         type: Literal["DailyHProd"] = "DailyHProd"
 
 prod = init_new(Interface.Params, DailyHProd)
-bind_prod = init_bind(prod, DailyHProd)
 Prod: TypeAlias = DailyHProd
 
 @dataclass(frozen=True)
@@ -195,7 +194,6 @@ class DailyHRank(Interface.Object):
         type: Literal["DailyHRank"] = "DailyHRank"
 
 rank = init_new(Interface.Params, DailyHRank)
-bind_rank = init_bind(rank, DailyHRank)
 Rank: TypeAlias = DailyHRank
 
 @dataclass(frozen=True)
@@ -211,7 +209,6 @@ class DailyHQuantize(Interface.Object):
         type: Literal["DailyHQuantize"] = "DailyHQuantize"
 
 quantize = init_new(Interface.Params, DailyHQuantize)
-bind_quantize = init_bind(quantize, DailyHQuantize)
 Quantize: TypeAlias = DailyHQuantize
 
 @dataclass(frozen=True)
@@ -227,21 +224,16 @@ class DailyHTransitionProb(Interface.Object):
         type: Literal["DailyHTransitionProb"] = "DailyHTransitionProb"
 
 transition_prob = init_new(Interface.Params, DailyHTransitionProb)
-bind_transition_prob = init_bind(transition_prob, DailyHTransitionProb)
 TransitionProb: TypeAlias = DailyHTransitionProb
 
 __all__ = [
     "Interface",
     "Sum",
     "sum",
-    "bind_sum",
     "Prod",
     "prod",
-    "bind_prod",
     "Rank",
     "rank",
-    "bind_rank",
     "TransitionProb",
-    "bind_transition_prob",
-    "transition_prob"
+    "transition_prob",
 ]

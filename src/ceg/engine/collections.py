@@ -10,6 +10,7 @@ from typing import (
     Protocol,
     Callable,
     Concatenate,
+    Generator,
     overload,
     cast,
     final,
@@ -41,7 +42,7 @@ from .snaps import *
 from .values import *
 from .depends import *
 from .objects import *
-
+from .daily import *
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,7 @@ class Collection:
     name: str | None = None
 
     objects: t.frozen.dict[str, Object] = frozendict()
+    aliases: t.frozen.dict[str, str] = frozendict()
     tags: t.frozen.dict[str, frozenset[str]] = frozendict()
     info: t.frozen.dict[str, frozendict] = frozendict()
 
@@ -150,7 +152,11 @@ class Collection:
         if not isinstance(key, str):
             raise ValueError(key)
         objects = self.objects
+        aliases=self.aliases
         objects = objects.set(key, obj)
+        if isinstance(obj, Object):
+            # TODO: composites like Strategy can also be bound
+            aliases = aliases.set(obj.id, key)
         tags = self.tags
         if isinstance(tag, str):
             tag = (tag,)
@@ -163,6 +169,7 @@ class Collection:
         return replace(
             self,
             objects=objects,
+            aliases=aliases,
             tags=tags,
             info=self.info.set(key, info)
         )
@@ -298,6 +305,9 @@ def bound(uid: str):
 def unpack_bound(
     v, k: str, bound: Bound, coll: Collection, force: bool = False,
 ):
+    if isinstance(v, Aliased):
+        return v.obj
+    
     orig = v
     if v is None:
         return v
@@ -423,62 +433,9 @@ class Bound:
 
 from dataclasses import fields
 
-def init_bind(
-    func: Callable[P, O],
-    t: Type[O],
-) -> Callable[
-    Concatenate[
-        str
-        | tuple[str, str | tuple[str, ...]]
-        | tuple[str, frozendict]
-        | tuple[str, str | tuple[str, ...] | frozendict], 
-        P
-    ],
-    Bound
-]:
-    def new(
-        bind: (
-            str
-            | tuple[str, str | tuple[str, ...]]
-            | tuple[str, frozendict]
-            | tuple[str, str | tuple[str, ...] | frozendict]
-        ),
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ) -> Bound:
-        if isinstance(bind, str):
-            name = bind
-            info = frozendict()
-            tag = ()
-        elif isinstance(bind, tuple):
-            if len(bind) == 2:
-                name, tag_or_info = bind
-                if isinstance(tag_or_info, frozendict):
-                    info = tag_or_info
-                    tag = ()
-                elif isinstance(tag_or_info, (str, tuple)):
-                    tag = tag_or_info
-                    info = frozendict()
-                else:
-                    raise ValueError(bind)
-            elif len(bind) == 3:
-                name, tag, info = bind
-            else:
-                raise ValueError(bind)
-        else:
-            raise ValueError(bind)
-        t_fields = fields(t)
-
-        for i, (f, arg) in enumerate(zip(t_fields[1:], args)):
-            kwargs[f.name] = arg
-        return Bound(
-            func,
-            name,
-            params = frozendict(kwargs),
-            tag=tag,
-            info=info,
-        )
-    return new
+# init_bind removed — was a factory for Bound-returning binders used only by
+# now-deleted bind_sum / bind_prod / etc. helpers. Bound itself stays for
+# legacy callers in engine/collections.py.
 
 def bind_params(
     parent: str | Object | Bound,
@@ -490,102 +447,45 @@ def bind_params(
         parent = bound(parent)
     return frozendict(dict(parent=parent, **kwargs))
 
+
 @dataclass(frozen=True)
-class Universe:
-    params: tuple[t.frozen.dict, ...] = ()
+class Select:
 
-    def add(self, **params):
-        return replace(self, params = self.params + (frozendict(params),))
+    def generate(self, collection: Collection) -> Generator[dict]: ...
     
-    def generate(self, collection: Collection):
-        return self.params
+    def bind(
+        self,
+        func: Callable,
+        **kwargs
+    ):
+        return Bind(self, func, frozendict(kwargs))
     
-    def zip(self):
-        # TODO: zip with eg. a predicate?
-        return self
-
-
-def unpack_universe_params(ps: tuple[frozendict | dict]):
-    p, *ps = ps
-    if not len(ps):
-        res = tuple([
-            frozendict({
-                k: v for k, v in zip(p.keys(), vs)
-            })
-            for vs in zip(*p.values())
+    def apply(
+        self,
+        func: Callable,
+        **kwargs
+    ):
+        return Apply(self, (Output(func, frozendict(kwargs)),))
+    
+    def product(
+        self,
+        *others: Select,
+        **named_others: Select,
+    ):
+        others = others + tuple([
+            replace(other, name=name) for name, other in named_others.items()
         ])
-        return res
-    return tuple(map(frozendict, (p,) + ps))
+        return SelectProduct.new(self, *others)
 
-def universe(
-    *params: frozendict | dict,
-    **product: list,
-) -> Universe:
-    if len(params):
-        params = unpack_universe_params(params)
-    if len(params) and len(product):
-        product_params = tuple([
-            frozendict({
-                k: v
-                for k, v in zip(product.keys(), vs)
-            })
-            for vs in itertools.product(
-                *product.values()
-            )
+    def zip(
+        self,
+        *others: Select,
+        **named_others: Select,
+    ):
+        others = others + tuple([
+            replace(other, name=name) for name, other in named_others.items()
         ])
-        return Universe(tuple([
-            p | product_p
-            for p, product_p
-            in itertools.product(params, product_params)
-        ]))
-    elif len(params):
-        return Universe(params)
-    elif len(product):
-        return Universe(tuple([
-            frozendict({
-                k: v
-                for k, v in zip(product.keys(), vs)
-            })
-            for vs in itertools.product(
-                *product.values()
-            )
-        ]))
-    else:
-        raise ValueError((params, product))
-
-
-@dataclass(frozen=True)
-class Filter:
-    func: Callable[[Object, frozendict], bool] | None = None
-
-    def __call__(self, obj: Object, info: frozendict) -> bool:
-        if self.func is None:
-            raise ValueError("Either pass a func or implement __call__.")
-        return self.func(obj, info)
-
-
-@dataclass(frozen=True)
-class Predicate:
-    filters: tuple[Filter, ...]
-    values: t.frozen.dict = frozendict()
-
-    name: str = ""
-
-    group_by: tuple[str, ...] | None = None
-
-    def apply(self):
-        # TODO: remove bind as a class?
-        # apply turns this into select
-        # zip i guess needs to acc peers?
-        # select is therefore .product() with others to get select
-        return
-    
-    def product(self):
-        # returns a sleect, with this, and peers
-        return
-
-    def zip(self):
-        return self
+        return SelectZip.new(self, *others)
 
     def group(self, *args: str):
         return replace(self, group_by=args)
@@ -594,7 +494,182 @@ class Predicate:
     def alias(self, alias: str):
         return replace(self, name=alias)
 
+@dataclass(frozen=True)
+class SelectLiteral(Select):
+    params: tuple[t.frozen.dict, ...] = ()
+
+    def add(self, **params):
+        return replace(self, params = self.params + (frozendict(params),))
+    
     def generate(self, collection: Collection):
+        # TODO: apply group by
+        return self.params
+
+def zip_every_kwargs(d: dict[str, list], z: dict[str, list]):
+    z_it = zip(*z.values())
+    return tuple([
+        frozendict({
+            **{
+                k: v for k, v in zip(z.keys(), vs[0])
+            },
+            **{
+                k: v for k, v in zip(d.keys(), vs[1:])
+            }
+        })
+        for vs in itertools.product(z_it, *d.values())
+    ])
+
+def merge_kwargs(*ds: dict):
+    acc = {}
+    for d in ds:
+        assert not any([
+            k in acc for k in d.keys()
+        ]), (ds)
+        acc = acc | d
+    return acc
+def every_kwargs(d: dict[str, list]):
+    return tuple([
+        frozendict({
+            k: v for k, v in zip(d.keys(), vs)
+        })
+        for vs in itertools.product(*d.values())
+    ])
+
+def zip_kwargs(d: dict[str, list]):
+    return tuple([
+        frozendict({
+            k: v for k, v in zip(d.keys(), vs)
+        })
+        for vs in zip(*d.values())
+    ])
+
+
+def select(
+    *s: Select,
+    every: dict[str, list] | bool | None = None,
+    zip: dict[str, list] | bool | None = None,
+    **where: Filter | dict | frozendict | list | Any | Select,
+) -> SelectLiteral:
+    if len(s):
+        assert len(s) == 1, s
+        # TODO: zip / every
+        return s[0]
+
+    b_every = isinstance(every, bool) and every
+    b_zip = isinstance(zip, bool) and zip
+
+    if b_every and b_zip:
+        raise ValueError(every, zip)
+
+    filters = {}
+
+    for k, w in where.items():
+        if isinstance(w, list):
+            if zip is None:
+                zip = {}
+            zip[k] = w
+        elif isinstance(w, Select):
+            if not b_every and not b_zip:
+                assert len(where) == 1, where
+                # TODO: zip / ever
+                return w.alias(k)
+            else:
+                filters[k] = w.alias(k)
+        else:
+            filters[k] = w
+
+    if len(filters) and b_every:
+        select = SelectProduct(tuple([
+            f if isinstance(f, Select) else
+            SelectWhere(
+                () if not isinstance(f, Filter)
+                else (f,),
+                frozendict() if isinstance(f, Filter)
+                else frozendict(f),
+            ).alias(k)
+            for k, f in filters.items()
+        ]))
+        if zip is not None:
+            raise ValueError(filters, zip)
+        return select
+    elif len(filters) and b_zip:
+        select = SelectZip(tuple([
+            f if isinstance(f, Select) else
+            SelectWhere(
+                () if not isinstance(f, Filter)
+                else (f,),
+                frozendict() if isinstance(f, Filter)
+                else frozendict(f),
+            ).alias(k)
+            for k, f in filters.items()
+        ]))
+        if every is not None:
+            raise ValueError(filters, every)
+        return select
+    elif len(filters):
+        select = SelectWhere(
+            tuple([f for f in filters.values() if isinstance(f, Filter)]),
+            values=frozendict({
+                k: v for k, v in filters.items()
+                if not isinstance(v, Filter)
+                and not isinstance(v, dict)
+            })
+        )
+        if any([isinstance(v, dict) for v in filters.values()]):
+            raise ValueError(filters)
+        if zip is not None or every is not None:
+            raise ValueError(every, zip, where)
+        return select
+
+    if isinstance(every, bool) and every:
+        if zip is None:
+            raise ValueError(zip, every)
+        every = zip
+        zip = None
+
+    if zip is not None and every is not None:
+        return SelectLiteral(zip_every_kwargs(every, zip))
+    elif zip is not None:
+        return SelectLiteral(zip_kwargs(zip))
+    elif every is not None:
+        return SelectLiteral(every_kwargs(every))
+    else:
+        pass
+    
+    raise ValueError(every, zip, where)
+
+@dataclass(frozen=True)
+class Filter:
+    func: Callable[[Object, frozendict], bool] | None = None
+
+    def __call__(self, obj: Object, info: frozendict) -> bool:
+        if self.func is None:
+            raise ValueError("Either pass a func or implement __call__.")
+        try:
+            return self.func(obj, info)
+        except Exception as e:
+            raise ValueError(obj, info)
+
+
+@dataclass(frozen=True)
+class Aliased:
+    name: str # in universe
+    obj: Object | Any
+
+
+@dataclass(frozen=True)
+class SelectWhere(Select):
+    filters: tuple[Filter, ...]
+    values: t.frozen.dict = frozendict()
+
+    name: str = ""
+
+    group_by: tuple[str, ...] | None = None
+
+    def generate(self, collection: Collection):
+        if self.name == "":
+            raise ValueError(self)
+        
         if not len(self.filters) and not len(self.values):
             raise ValueError(self)
         
@@ -604,12 +679,15 @@ class Predicate:
         )
         if self.group_by is None:
             return [
-                (self.name, k, obj)
+                {self.name: Aliased(k, obj)}
                 for k, obj in objs.items()
             ]
         elif not len(self.group_by):
             return [
-                (self.name, list(objs.keys()), list(objs.values()))
+                {self.name: [
+                    Aliased(k, obj)
+                    for k, obj in objs.items()
+                ]}
             ]
         
         res = defaultdict(list)
@@ -621,148 +699,231 @@ class Predicate:
             res[vs].append((k, obj))
 
         return [
-            (self.name,) + tuple(map(list, zip(*k_objs)))
-            for k_objs in res.values()
+            {self.name: [
+                Aliased(k, obj) for k, obj in k_objs
+            ]}
+            for _, k_objs in res.items()
         ]
         
+
+
+@dataclass(frozen=True)
+class SelectProduct(Select):
+    members: tuple[SelectLiteral | SelectWhere | SelectZip, ...]
+
+    @classmethod
+    def new(cls, *others: Select):
+        acc = []
+        for s in others:
+            if isinstance(s, SelectProduct):
+                acc.extend(s.members)
+            else:
+                acc.append(s)
+        return cls(tuple(acc))
+    
+    def generate(self, coll: Collection):
+        for kws in itertools.product(*[
+            m.generate(coll) for m in self.members
+        ]):
+            yield merge_kwargs(*kws)
+
+
+@dataclass(frozen=True)
+class SelectZip(Select):
+    members: tuple[SelectLiteral | SelectWhere | SelectZip, ...]
+
+    def generate(self, coll: Collection):
+        for kws in zip(*[
+            m.generate(coll) for m in self.members
+        ]):
+            yield merge_kwargs(*kws)
+        
+
+    @classmethod
+    def new(cls, *others: Select):
+        acc = []
+        for s in others:
+            if isinstance(s, SelectZip):
+                acc.extend(s.members)
+            elif isinstance(s, SelectProduct):
+                # TODO for now, not allowed?
+                raise ValueError(others)
+            else:
+                acc.append(s)
+        return cls(tuple(acc))
+
 def filter(func: Callable[[Object, frozendict], bool]):
     return Filter(func)
 
 def where(
     *filters: Filter | Callable[[Object, frozendict], bool],
     **values: Any,
-) -> Predicate:
-    return Predicate(tuple([
+) -> SelectWhere:
+    return SelectWhere(tuple([
         f if isinstance(f, Filter) else Filter(f)
         for f in filters
     ]), frozendict(values))
 
-@dataclass(frozen=True)
-class Select:
-    universes: tuple[Universe, ...]
-    predicates: t.frozen.dict[str, Predicate]
-
-    def generate(self, collection: Collection):
-        for args in itertools.product(*[
-            univ.generate(collection)
-            for univ in self.universes
-        ] + [
-            predicate.generate(collection)
-            for predicate in self.predicates.values()
-        ]):
-            yield args
-
-    def apply(
-        self,
-        function: Callable,
-        **params,
-    ):
-        return Apply(self, function, frozendict(params))
-    def bind(
-        self,
-        function: Callable,
-        alias: Callable | None = None,
-        **params,
-    ):
-        return Bind(self, function, frozendict(params), name=alias)
-    
-    def output(
-        self,
-        function: Callable,
-        **params,
-    ):
-        return Outputs(self, (
-            Output(function, frozendict(params)),)
-        )
-
-def select(*universes: Universe, **predicates: Predicate):
-    return Select(universes, frozendict({
-        k: predicate.alias(k) for k, predicate in predicates.items()
-    }))
 
 
 @dataclass(frozen=True)
 class Bind:
-    # TODO: remove
     select: Select
     func: Callable
     params: t.frozen.dict
 
-    name: Callable | None = None
+    # TODO: config / apply name?
 
-    info: t.frozen.dict | None = None
+    name: Callable | str | None = None
 
+    unpack_fields: tuple[str, ...] = ()
+    arg_order: tuple[str, ...] = ()
+
+    mutates_fields: tuple[str, ...] = ()
+    bind_fields: tuple[str, ...] = ()
+
+    into_fields: tuple[str, ...] = ()
+
+    # NOTE: this is what we alias the results into the colleciton under
+    def under(self, name: Callable | str):
+        return replace(self, name=name)
+    
+    def unpack(self, *fields: str):
+        return replace(self, unpack_fields=fields)
+    
+    def args(self, *args: str):
+        return replace(self, arg_order=args)
+    
+    def mutates(self, *mutates: str):
+        return replace(self, mutates_fields=mutates)
+    
+    def info(self, *bind: str):
+        return replace(self, bind_fields=bind)
+    
+    def into(self, *bind: str):
+        assert len(self.mutates_fields) == 0, self
+        return replace(self, into_fields=bind).mutates(bind[0])
+
+    def unpack_aliased(self, v):
+        if isinstance(v, Aliased):
+            return v.obj
+        elif isinstance(v, list):
+            return [self.unpack_aliased(vv) for vv in v]
+        elif isinstance(v, tuple):
+            return tuple([self.unpack_aliased(vv) for vv in v])
+        # TODO dicts?
+        else:
+            return v
+
+    def unpack_bound_kw(
+        self,
+        kw: dict,
+        collection: Collection,
+    ):
+        params = {
+            k: self.unpack_aliased(
+                unpack_bound(v, k, self, collection, force=True)
+                if k in self.unpack_fields
+                else v if not isinstance(v, str)
+                else unpack_bound(v, k, self, collection)
+            )
+            for k, v in kw.items()
+        }
+
+        args = self.arg_order
+        if "parent" in params:
+            args = ("parent,") + args
+
+        return tuple([
+            params[a] for a in args
+        ]), {
+            k: v for k, v in params.items() if k not in args
+        }
+    
     # TODO: list of fields to bind on info
 
-    def alias(self, name: Callable):
-        return replace(self, name=name)
+    
+    def alias_object(self, kw: dict):
+        if isinstance(self.name, str):
+            return self.name.format(**kw)
+        return self.name(**kw)
 
-    def __call__(self, collection: Collection):
+    def __call__(self, collection: Collection, config: str):
+        n = 0
         for args in self.select.generate(collection):
-            kw = combine_args(self.params, args)
-            params = bind_params(**kw)
+            kw = merge_kwargs(args, self.params)
+
+            args, kw = self.unpack_bound_kw(kw, collection)
+
+            if len(self.into_fields):
+                into = tuple([
+                    kw.pop(k) for k in self.into_fields
+                ])
+                into, *into_kw = into
+                into_kw = dict(zip(
+                    self.into_fields[1:], into_kw
+                ))
+            else:
+                into = None
+
             if self.name is None:
                 raise ValueError(self)
-            try:
-                name = self.name(kw)
-                bound = Bound(
-                    self.func, 
-                    name=name,
-                    params=params
-                ).with_info(
-                    FUNC=self.func.__name__,
-                    # name?
-                    **kw,
-                    **(
-                        {} if self.info is None else self.info
-                    )
-                )
-                collection = bound.bind(collection)
-            except Exception as e:
-                raise ValueError(kw, params) from e
-        return collection
-
-
-@dataclass(frozen=True)
-class Apply:
-    select: Select
-    func: Callable
-    params: t.frozen.dict
-
-    name: Callable | None = None
-
-    # TODO: list of fields to bind on info
-
-    # TODO: optionally take a string first arg (ro seconr, then first is alwaus fcallable)
-    # then the func is applied to kw[arg0]
-    # NOTE: this is what we alias the results into the colleciton under
-    def alias(self, name: Callable):
-        return replace(self, name=name)
-
-    def __call__(self, collection: Collection):
-        for args in self.select.generate(collection):
-            kw = combine_args(self.params, args)
-
-            # TODO: add config name for info, added on __call__ by run.py
-
-            # TODO: borrow ref resolution from bound
-
-            # if self.name is None:
-            #     raise ValueError(self)
-            # name = self.name(kw)
+            
             try:
                 res = self.func(**kw)
             except Exception as e:
                 raise ValueError(kw) from e
+            
+            if into is not None:
+                try:
+                    res = res.bind(into, t=type(into), **into_kw)
+                except Exception as e:
+                    raise ValueError(into, res) from e
+            
+            if len(self.mutates_fields):
+                *mutates, res = res
+                # eg. if mutate container on object create, etc.
+                for mut in mutates:
+                    collection = replace(
+                        collection,
+                        objects=collection.objects.set(
+                            collection.aliases[mut.id], mut
+                        )
+                    )
+
             # TODO: nested info - via dot path?
-            if isinstance(res, Bound):
-                collection = res.with_info(
-                    FUNC=self.func,
-                    **kw,
-                    # TODO: add config name to info for selection
-                ).bind(collection)
-            else:
-                raise ValueError(self, res)
+            # if isinstance(res, Object):
+
+            alias = self.alias_object(kw)
+
+            collection = collection.with_obj(
+                res,
+                alias,
+                info = frozendict({
+                    "FUNC": self.func,
+                    "CONFIG": config,
+                    **(
+                        # kw
+                        # if not len(self.bind_fields)
+                        {
+                            k: v for k, v in kw.items()
+                            if k in self.bind_fields
+                        }
+                    )
+                })
+            )
+
+            # elif isinstance(res, Bound):
+            #     collection = res.with_info(
+            #         # TODO: add config name to info for selection
+            #     ).bind(collection)
+            # else:
+            #     raise ValueError(self, res, type(res))
+            
+            n += 1
+        
+        if n == 0:
+            raise ValueError(self)
         return collection
             
 
@@ -790,24 +951,47 @@ class Output:
     func: Callable
     params: t.frozen.dict
 
+    then: tuple[Output, ...] = ()
+
+    def with_then(self, output: Output):
+        return replace(self, then=self.then + (output,))
+
     def __call__(
         self,
         collection: Collection,
-        args: tuple[
-            frozendict
-            | tuple[str, str, Object]
-            | tuple[str, list[str], list[object]]
-        ],
+        args: dict,
+        #   tuple[
+        #     frozendict
+        #     | tuple[str, str, Object]
+        #     | tuple[str, list[str], list[object]]
+        # ],
         acc: frozendict,
+        config: str,
     ):
-        kw = combine_args(self.params, args)
-        acc = self.func(collection, acc, **kw)
-        # TODO: res eg. just writes to app
+        kw = merge_kwargs(args, self.params)
+        pipe = (self,) + self.then
+
+        for i, o in enumerate(pipe):
+            if i == 0 and i == len(pipe) - 1:
+                acc = o.func(collection, acc, **kw)
+            elif i == 0:
+                res = o.func(collection, **kw)
+            elif i == len(pipe) - 1:
+                if isinstance(res, dict):
+                    acc = o.func(acc, **res, **o.params)
+                else:
+                    acc = o.func(res, acc, **o.params)
+            else:
+                if isinstance(res, dict):
+                    res = o.func(**res, **o.params)
+                else:
+                    res = o.func(res, **o.params)
+                
         return acc
 
 
 @dataclass(frozen=True)
-class Outputs:
+class Apply:
     select: Select
     outputs: tuple[Output, ...] = ()
 
@@ -815,32 +999,102 @@ class Outputs:
         self,
         collection: Collection, 
         acc: frozendict,
+        config: str,
     ):
+        n = 0
         for args in self.select.generate(collection):
             for output in self.outputs:
-                acc = output(collection, args, acc)
+                acc = output(collection, args, acc, config=config)
+            n += 1
+        
+        if n == 0:
+            raise ValueError(self)
         return acc
 
-    def output(self, output: str, **params):
+    def apply(self, output: Callable, **params):
         return replace(self, outputs = self.outputs + (Output(
             output,
             frozendict(params)
         ),))
     
+    def then(self, output: Callable, **params):
+        return replace(self, outputs = (
+            tuple(self.outputs[:-1])
+            + (self.outputs[-1].with_then(Output(output, frozendict(params))),)
+        ))
+    
+def unpack_daily_df(
+    
+    collection: Collection,
+
+    objs: list[Aliased],
+
+    unpack: str | None = None,
+
+    # TODO: other_objs in kwargs, then expect keys  argument
+):
+    if unpack is None:
+        df = daily_pl_df([
+            al.obj for al in objs
+        ]).rename({
+            al.obj.id: al.name for al in objs
+        })
+    else:
+        objs_unpacked = [
+            collection.get(f"{al.name}.{unpack}()")
+            for al in objs
+        ]
+        df = daily_pl_df(objs_unpacked).rename({
+            obj.id: f"{al.name}.{unpack}" for al, obj in zip(
+                objs,
+                objs_unpacked
+            )
+        })
+    return df
+    
+def unpack_daily_col_names(
+    collection: Collection,
+    objs: list[Aliased] | None = None,
+
+    unpack: str | None = None,
+    keys: list[str] | None = None,
+
+    **named_objs: list[Aliased],
+):
+    if keys is not None:
+        return {
+            k: [
+                (
+                    al.name
+                    if unpack is None 
+                    else f"{al.name}.{unpack}"
+                )
+                for al in named_objs[k]
+            ]
+            for k in keys
+        }
+    
+    return [
+        (
+            al.name
+            if unpack is None 
+            else f"{al.name}.{unpack}"
+        )
+        for al in objs
+    ]
 __all__ = [
     "Collection",
     "Bound",
     "bound",
-    "init_bind",
     "bind_params",
     "unpack_bound",
-    "universe",
     "where",
     "select",
     "Filter",
-    "Output",
-    "Outputs",
+    "Apply",
     "Select",
     "Bind",
-    "Apply",
+    "Aliased",
+    "unpack_daily_df",
+    "unpack_daily_col_names",
 ]

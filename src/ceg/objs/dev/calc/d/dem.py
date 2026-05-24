@@ -37,6 +37,8 @@ from .....engine import *
 
 from .em import *
 
+#  ------------------
+
 
 @dataclass(frozen=True)
 class DailyDEM(DailyEM):
@@ -47,18 +49,7 @@ class DailyDEM(DailyEM):
 
 
 @dataclass(frozen=True)
-class HandleNewDailyDEM(
-    HandleNewValueFromPl,
-    HandleNewDailyFromDailyParent,
-):
-    pass
-
-
-#  ------------------
-
-
-@dataclass(frozen=True)
-class DailyDEMA(DailyDEM):
+class DailyDEMA(DailyDEM, DailyEMA):
     """
     >>> ord = FutDailyOrdinal.new(
     ...     symbol="ES",
@@ -84,38 +75,32 @@ class DailyDEMA(DailyDEM):
     ]
     """
 
-    version: int = 0
-    type: Literal["DailyDEMA"] = "DailyDEMA"
 
     SUFFIX: ClassVar[str] = "dema"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDEMASnap"] = "DailyDEMASnap"
+    def self(self) -> DailyDEMA:
+        return self
 
-    def handler_object_new(self) -> HandleNewDailyDEMA:
-        return HandleNewDailyDEMA()
+    def encode_type(self, params: DailyDEMA.Params):
+        return self.SUFFIX
 
-
-@dataclass(frozen=True)
-class HandleNewDailyDEMA(
-    HandleNewDailyDEM, HandleNewDailyEMA
-):
+    def encode_params(self, params: DailyDEMA.Params):
+        return params.encode_ewm()
+    
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyEM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+daily_dema = new(DailyDEMA, DailyDEMA.Params)
 
 @dataclass(frozen=True)
-class DailyDEMax(DailyDEM):
+class DailyDEMax(DailyDEM, DailyEMax):
     """
     >>> ord = FutDailyOrdinal.new(
     ...     symbol="ES",
@@ -141,35 +126,27 @@ class DailyDEMax(DailyDEM):
     ]
     """
 
-    version: int = 0
-    type: Literal["DailyDEMax"] = "DailyDEMax"
-
     SUFFIX: ClassVar[str] = "demax"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDEMaxSnap"] = "DailyDEMaxSnap"
+    def self(self) -> DailyDEMax:
+        return self
 
-    def handler_object_new(self) -> HandleNewDailyDEMax:
-        return HandleNewDailyDEMax()
+    def encode_type(self, params: DailyDEMax.Params):
+        return self.SUFFIX
 
-
-@dataclass(frozen=True)
-class HandleNewDailyDEMax(
-    HandleNewDailyDEM, HandleNewDailyEMax
-):
+    def encode_params(self, params: DailyDEMax.Params):
+        return params.encode_ewm()
+    
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyEM,
+        event: ValueUpdate,
     ) -> pl.DataFrame:
 
         df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
-            obj,
         )
         e = pl.col("OLD") - pl.col(VALUE)
         return df.with_columns(
@@ -179,9 +156,10 @@ class HandleNewDailyDEMax(
             .alias(VALUE)
         )
 
+daily_demax = new(DailyDEMax, DailyDEMax.Params)
 
 @dataclass(frozen=True)
-class DailyDEMid(DailyDEM):
+class DailyDEMid(DailyDEM, DailyEMid):
     """
     >>> ord = FutDailyOrdinal.new(
     ...     symbol="ES",
@@ -206,36 +184,27 @@ class DailyDEMid(DailyDEM):
         -45.756
     ]
     """
-
-    version: int = 0
-    type: Literal["DailyDEMid"] = "DailyDEMid"
-
     SUFFIX: ClassVar[str] = "demid"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDEMidSnap"] = "DailyDEMidSnap"
+    def self(self) -> DailyDEMid:
+        return self
 
-    def handler_object_new(self) -> HandleNewDailyDEMid:
-        return HandleNewDailyDEMid()
+    def encode_type(self, params: DailyDEMid.Params):
+        return self.SUFFIX
 
-
-@dataclass(frozen=True)
-class HandleNewDailyDEMid(
-    HandleNewDailyDEM, HandleNewDailyEMid
-):
+    def encode_params(self, params: DailyDEMid.Params):
+        return params.encode_ewm()
+    
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyEM,
+        event: ValueUpdate,
     ) -> pl.DataFrame:
 
         df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
-            obj,
         )
         e = pl.col("OLD") - pl.col(VALUE)
         return df.with_columns(
@@ -245,9 +214,10 @@ class HandleNewDailyDEMid(
             .alias(VALUE)
         )
 
+daily_demid = new(DailyDEMid, DailyDEMid.Params)
 
 @dataclass(frozen=True)
-class DailyDEMin(DailyDEM):
+class DailyDEMin(DailyDEM, DailyEMin):
     """
     >>> ord = FutDailyOrdinal.new(
     ...     symbol="ES",
@@ -273,34 +243,26 @@ class DailyDEMin(DailyDEM):
     ]
     """
 
-    version: int = 0
-    type: Literal["DailyDEMin"] = "DailyDEMin"
-
     SUFFIX: ClassVar[str] = "demin"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDEMinSnap"] = "DailyDEMinSnap"
+    def self(self) -> DailyDEMin:
+        return self
 
-    def handler_object_new(self) -> HandleNewDailyDEMin:
-        return HandleNewDailyDEMin()
+    def encode_type(self, params: DailyDEMin.Params):
+        return self.SUFFIX
 
-
-@dataclass(frozen=True)
-class HandleNewDailyDEMin(
-    HandleNewDailyDEM, HandleNewDailyEMin
-):
+    def encode_params(self, params: DailyDEMin.Params):
+        return params.encode_ewm()
+    
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyEM,
+        event: ValueUpdate,
     ) -> pl.DataFrame:
         df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
-            obj,
         )
         e = pl.col("OLD") - pl.col(VALUE)
         return df.with_columns(
@@ -310,40 +272,33 @@ class HandleNewDailyDEMin(
             .alias(VALUE)
         )
 
+daily_demin = new(DailyDEMin, DailyDEMin.Params)
 
 @dataclass(frozen=True)
-class DailyDEPLast(DailyDEM):
-    version: int = 0
-    type: Literal["DailyDEPLast"] = "DailyDEPLast"
+class DailyDEPLast(DailyDEM, DailyEPLast):
 
     SUFFIX: ClassVar[str] = "deplast"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDEPLastSnap"] = (
-            "DailyDEPLastSnap"
-        )
+    def self(self) -> DailyDEPLast:
+        return self
 
-    def handler_object_new(self) -> HandleNewDailyDEPLast:
-        return HandleNewDailyDEPLast()
+    def encode_type(self, params: DailyDEPLast.Params):
+        return self.SUFFIX
 
+    def encode_params(self, params: DailyDEPLast.Params):
+        return params.encode_ewm()
+    
 
-@dataclass(frozen=True)
-class HandleNewDailyDEPLast(
-    HandleNewDailyDEM, HandleNewDailyEPLast
-):
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyEM,
+        event: ValueUpdate,
     ) -> pl.DataFrame:
 
         df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
-            obj,
         )
         e = pl.col("OLD") - pl.col(VALUE)
         return df.with_columns(
@@ -353,70 +308,58 @@ class HandleNewDailyDEPLast(
             .alias(VALUE)
         )
 
+daily_deplast = new(DailyDEPLast, DailyDEPLast.Params)
 
 @dataclass(frozen=True)
-class DailyDERms(DailyDEM):
-    version: int = 0
-    type: Literal["DailyDERms"] = "DailyDERms"
-
+class DailyDERms(DailyDEM, DailyERms):
     SUFFIX: ClassVar[str] = "derms"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDERmsSnap"] = "DailyDERmsSnap"
+    def self(self) -> DailyDERms:
+        return self
 
-    def handler_object_new(self) -> HandleNewDailyDERms:
-        return HandleNewDailyDERms()
+    def encode_type(self, params: DailyDERms.Params):
+        return self.SUFFIX
 
-
-@dataclass(frozen=True)
-class HandleNewDailyDERms(
-    HandleNewDailyDEM, HandleNewDailyERms
-):
+    def encode_params(self, params: DailyDERms.Params):
+        return params.encode_ewm()
+    
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyEM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+daily_derms = new(DailyDERms, DailyDERms.Params)
 
 @dataclass(frozen=True)
-class DailyDERng(DailyDEM):
-    version: int = 0
-    type: Literal["DailyDERng"] = "DailyDERng"
+class DailyDERng(DailyDEM, DailyERng):
 
     SUFFIX: ClassVar[str] = "derng"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDERngSnap"] = "DailyDERngSnap"
 
-    def handler_object_new(self) -> HandleNewDailyDERng:
-        return HandleNewDailyDERng()
+    def self(self) -> DailyDERng:
+        return self
 
+    def encode_type(self, params: DailyDERng.Params):
+        return self.SUFFIX
 
-@dataclass(frozen=True)
-class HandleNewDailyDERng(
-    HandleNewDailyDEM, HandleNewDailyERng
-):
+    def encode_params(self, params: DailyDERng.Params):
+        return params.encode_ewm()
+    
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyEM,
+        event: ValueUpdate,
     ) -> pl.DataFrame:
 
         df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
-            obj,
         )
         e = pl.col("OLD") - pl.col(VALUE)
         return df.with_columns(
@@ -426,9 +369,10 @@ class HandleNewDailyDERng(
             .alias(VALUE)
         )
 
+daily_derng = new(DailyDERng, DailyDERng.Params)
 
 @dataclass(frozen=True)
-class DailyDEHwm(DailyDEM):
+class DailyDEHwm(DailyDEM, DailyEHwm):
     """
     >>> ord = FutDailyOrdinal.new(
     ...     symbol="ES",
@@ -454,35 +398,28 @@ class DailyDEHwm(DailyDEM):
     ]
     """
 
-    version: int = 0
-    type: Literal["DailyDEHwm"] = "DailyDEHwm"
-
     SUFFIX: ClassVar[str] = "dehwm"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDEHwmSnap"] = "DailyDEHwmSnap"
 
-    def handler_object_new(self) -> HandleNewDailyDEHwm:
-        return HandleNewDailyDEHwm()
+    def self(self) -> DailyDEHwm:
+        return self
 
+    def encode_type(self, params: DailyDEHwm.Params):
+        return self.SUFFIX
 
-@dataclass(frozen=True)
-class HandleNewDailyDEHwm(
-    HandleNewDailyDEM, HandleNewDailyEHwm
-):
+    def encode_params(self, params: DailyDEHwm.Params):
+        return params.encode_ewm()
+    
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyEM,
+        event: ValueUpdate,
     ) -> pl.DataFrame:
 
         df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
-            obj,
         )
         e = pl.col("OLD") - pl.col(VALUE)
         return df.with_columns(
@@ -492,9 +429,10 @@ class HandleNewDailyDEHwm(
             .alias(VALUE)
         )
 
+daily_dehwm = new(DailyDEHwm, DailyDEHwm.Params)
 
 @dataclass(frozen=True)
-class DailyDELwm(DailyDEM):
+class DailyDELwm(DailyDEM, DailyELwm):
     """
     >>> ord = FutDailyOrdinal.new(
     ...     symbol="ES",
@@ -520,35 +458,27 @@ class DailyDELwm(DailyDEM):
     ]
     """
 
-    version: int = 0
-    type: Literal["DailyDELwm"] = "DailyDELwm"
-
     SUFFIX: ClassVar[str] = "delwm"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDELwmSnap"] = "DailyDELwmSnap"
+    def self(self) -> DailyDELwm:
+        return self
 
-    def handler_object_new(self) -> HandleNewDailyDELwm:
-        return HandleNewDailyDELwm()
+    def encode_type(self, params: DailyDELwm.Params):
+        return self.SUFFIX
 
-
-@dataclass(frozen=True)
-class HandleNewDailyDELwm(
-    HandleNewDailyDEM, HandleNewDailyELwm
-):
+    def encode_params(self, params: DailyDELwm.Params):
+        return params.encode_ewm()
+    
     def calc_df(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyEM,
+        event: ValueUpdate,
     ) -> pl.DataFrame:
 
         df = df.with_columns(pl.col(VALUE).alias("OLD"))
         df = self._calc_df(
             df,
             event,
-            obj,
         )
         e = pl.col("OLD") - pl.col(VALUE)
         return df.with_columns(
@@ -558,95 +488,83 @@ class HandleNewDailyDELwm(
             .alias(VALUE)
         )
 
+daily_delwm = new(DailyDELwm, DailyDELwm.Params)
 
 @dataclass(frozen=True)
-class DailyDESDev(DailyDEM):
-    version: int = 0
-    type: Literal["DailyDESDev"] = "DailyDESDev"
+class DailyDESDev(DailyDEM, DailyESDev):
 
     SUFFIX: ClassVar[str] = "desdev"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDESDevSnap"] = "DailyDESDevSnap"
 
-    def handler_object_new(self) -> HandleNewDailyDESDev:
-        return HandleNewDailyDESDev()
+    def self(self) -> DailyDESDev:
+        return self
 
+    def encode_type(self, params: DailyDESDev.Params):
+        return self.SUFFIX
 
-@dataclass(frozen=True)
-class HandleNewDailyDESDev(
-    HandleNewDailyDEM, HandleNewDailyESDev
-):
+    def encode_params(self, params: DailyDESDev.Params):
+        return params.encode_ewm()
+    
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyEM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+daily_desdev = new(DailyDESDev, DailyDESDev.Params)
 
 @dataclass(frozen=True)
-class DailyDEVar(DailyDEM):
-    version: int = 0
-    type: Literal["DailyDEVar"] = "DailyDEVar"
-
+class DailyDEVar(DailyDEM, DailyEVar):
     SUFFIX: ClassVar[str] = "devar"
 
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyDEVarSnap"] = "DailyDEVarSnap"
+    def self(self) -> DailyDEVar:
+        return self
 
-    def handler_object_new(self) -> HandleNewDailyDEVar:
-        return HandleNewDailyDEVar()
+    def encode_type(self, params: DailyDEVar.Params):
+        return self.SUFFIX
 
-
-@dataclass(frozen=True)
-class HandleNewDailyDEVar(
-    HandleNewDailyDEM, HandleNewDailyEVar
-):
+    def encode_params(self, params: DailyDEVar.Params):
+        return params.encode_ewm()
+    
     def calc_expr(
         self,
         df: pl.DataFrame,
-        event: ObjectChange,
-        obj: DailyEM,
+        event: ValueUpdate,
     ) -> pl.Expr:
         return pl.col(VALUE) - self._calc_expr(
             df,
             event,
-            obj,
         )
 
+daily_devar = new(DailyDEVar, DailyDEVar.Params)
 
 __all__ = [
     # "DailyDEMParams",
     "DailyDEM",
-    "HandleNewDailyDEM",
-    "HandleNewDailyDEMA",
     "DailyDEMA",
-    "HandleNewDailyDEMax",
+    "daily_dema",
     "DailyDEMax",
-    "HandleNewDailyDEMid",
+    "daily_demax",
     "DailyDEMid",
-    "HandleNewDailyDEMin",
+    "daily_demid",
     "DailyDEMin",
-    "HandleNewDailyDEPLast",
+    "daily_demin",
     "DailyDEPLast",
-    "HandleNewDailyDERms",
+    "daily_dplast",
     "DailyDERms",
-    "HandleNewDailyDERng",
+    "daily_erms",
     "DailyDERng",
-    "HandleNewDailyDEHwm",
+    "daily_erng",
     "DailyDEHwm",
-    "HandleNewDailyDELwm",
+    "daily_dehwm",
     "DailyDELwm",
-    "HandleNewDailyDESDev",
+    "daily_delwm",
     "DailyDESDev",
-    "HandleNewDailyDEVar",
+    "daily_desdev",
     "DailyDEVar",
+    "daily_devar",
 ]

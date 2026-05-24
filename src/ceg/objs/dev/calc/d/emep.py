@@ -38,78 +38,78 @@ from .....engine import *
 from .em import *
 
 
-@dataclass(frozen=True)
-class DailyEMEPParams(DailyEMParams):
-    pspan: float | None = None
-    palpha: float | None = None
+# @dataclass(frozen=True)
+# class DailyEMEPParams(DailyEMParams):
+#     pspan: float | None = None
+#     palpha: float | None = None
 
-    def build_id(
-        self,
-        cls: Type[DailyEM],
-    ):
-        span = self.span
-        alpha = self.alpha
-        palpha = self.palpha
-        pspan = self.pspan
-        i = apis.t.only_index_not_none(
-            span, alpha, strict=True
-        )
-        if i == 0:
-            assert span is not None, span
-            assert span >= 1, span
-            params = f"{span}"
-        elif i == 1:
-            assert alpha is not None, alpha
-            assert 0 < alpha < 1, alpha
-            params = f"{alpha}"
-        else:
-            raise ValueError((span, alpha))
-        params = f"{cls.SUFFIX}-" + params
-        if palpha is not None:
-            params += f"-{palpha}"
-        elif pspan is not None:
-            params += f"-{pspan}"
-        else:
-            raise ValueError(cls)
-        return params
-
-
-@dataclass(frozen=True)
-class DailyEMEP(DailyEM):
-    params: DailyEMEPParams
-
-    @classmethod
-    def new(
-        cls,
-        parent: Daily,
-        span: float | None = None,
-        alpha: float | None = None,
-        palpha: float | None = None,
-        pspan: float | None = None,
-        project: Project | None = None,
-    ):
-        params = DailyEMEPParams(
-            span=span,
-            alpha=alpha,
-            palpha=palpha,
-            pspan=pspan,
-        )
-        assert cls.SUFFIX != "M", cls
-        id=parent.extend_id(params.build_id(cls))
-        if project is not None:
-            id=project.extend_id(path)
-        return cls(
-            id=id,
-            parent=parent,
-            params=params,
-            project=project,
-        )
+#     def build_id(
+#         self,
+#         cls: Type[DailyEM],
+#     ):
+#         span = self.span
+#         alpha = self.alpha
+#         palpha = self.palpha
+#         pspan = self.pspan
+#         i = apis.t.only_index_not_none(
+#             span, alpha, strict=True
+#         )
+#         if i == 0:
+#             assert span is not None, span
+#             assert span >= 1, span
+#             params = f"{span}"
+#         elif i == 1:
+#             assert alpha is not None, alpha
+#             assert 0 < alpha < 1, alpha
+#             params = f"{alpha}"
+#         else:
+#             raise ValueError((span, alpha))
+#         params = f"{cls.SUFFIX}-" + params
+#         if palpha is not None:
+#             params += f"-{palpha}"
+#         elif pspan is not None:
+#             params += f"-{pspan}"
+#         else:
+#             raise ValueError(cls)
+#         return params
 
 
-__all__ = [
-    "DailyEMEPParams",
-    "DailyEMEP",
-]
+# @dataclass(frozen=True)
+# class DailyEMEP(DailyEM):
+#     params: DailyEMEPParams
+
+#     @classmethod
+#     def new(
+#         cls,
+#         parent: Daily,
+#         span: float | None = None,
+#         alpha: float | None = None,
+#         palpha: float | None = None,
+#         pspan: float | None = None,
+#         project: Project | None = None,
+#     ):
+#         params = DailyEMEPParams(
+#             span=span,
+#             alpha=alpha,
+#             palpha=palpha,
+#             pspan=pspan,
+#         )
+#         assert cls.SUFFIX != "M", cls
+#         id=parent.extend_id(params.build_id(cls))
+#         if project is not None:
+#             id=project.extend_id(path)
+#         return cls(
+#             id=id,
+#             parent=parent,
+#             params=params,
+#             project=project,
+#         )
+
+
+# __all__ = [
+#     "DailyEMEPParams",
+#     "DailyEMEP",
+# ]
 # backward freq of hitting em max, min
 
 # or above a, med, etc.

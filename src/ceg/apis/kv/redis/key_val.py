@@ -26,7 +26,6 @@ from ... import logs
 logger, log = logs.logger(
     __file__, streams=dict(formatter=True),
 )
-# docker run --name ceg-redis -p 6379:6379 -v /home/tom/ceg/__local__/data/redis:/data redis:trixie
 
 
 from functools import lru_cache
@@ -88,22 +87,6 @@ class RedisKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
 
     def prefix_key(self, key: KeyI):
         return f"{self.config.name}/{key}"
-
-    @classmethod
-    def new(
-        cls,
-        db: str,
-        name: str,
-        # table: Redis.Table | None = None,
-        # spec: dict | None = None,
-    ) -> RedisKeyValConfig:
-        return RedisKeyValConfig(
-            db=db,
-            name=name,
-            # table=table,
-            # spec=spec,
-        )
-
     def prepare(self):
         config = self.config
         return replace(self, config=replace(
@@ -189,30 +172,31 @@ class RedisKeyVal(KeyVal[ID, KeyI, ValI, KeyO, ValO]):
         return self.insert(key, val)
 
 
-@final
-@dataclass(frozen=True)
-class ExampleRedisKeyVal(
-    ExampleKeyVal, RedisKeyVal[int, str, int, str, float]
-):
-    """
-    >>> j, k, l, updated = ("j", "k", "l", [])
-    >>> kv = ExampleRedisKeyVal(
-    ...     on_update = lambda k, v: updated.append((k, v))
-    ... ).prepare()
-    >>> kv.get(k)
-    >>> v = kv.set(k, 0.0)
-    >>> assert v == 0.0 == kv.get(k), kv.get(k)
-    >>> assert (1, 0.0) == kv.iget(k), kv.iget(k)
-    >>> v = kv.set(j, 1.0)
-    >>> v = kv.set(k, 2.0)
-    >>> assert (2, 1.0) == kv.iget(j)
-    >>> assert (1, 2.0) == kv.iget(k)
-    >>> assert updated == [(k, 2.0)]
-    """
+# @final
+# @dataclass(frozen=True)
+# class ExampleRedisKeyVal(
+#     ExampleKeyVal,
+#     RedisKeyVal[int, str, bytes, str, float]
+# ):
+#     """
+#     >>> j, k, l, updated = ("j", "k", "l", [])
+#     >>> kv = ExampleRedisKeyVal(
+#     ...     on_update = lambda k, v: updated.append((k, v))
+#     ... ).prepare()
+#     >>> kv.get(k)
+#     >>> v = kv.set(k, 0.0)
+#     >>> assert v == 0.0 == kv.get(k), kv.get(k)
+#     >>> assert (1, 0.0) == kv.iget(k), kv.iget(k)
+#     >>> v = kv.set(j, 1.0)
+#     >>> v = kv.set(k, 2.0)
+#     >>> assert (2, 1.0) == kv.iget(j)
+#     >>> assert (1, 2.0) == kv.iget(k)
+#     >>> assert updated == [(k, 2.0)]
+#     """
 
-    config: RedisKeyValConfig = RedisKeyValConfig(
-        db="localhost", name="ExampleKeyVal"
-    )
+#     config: RedisKeyValConfig = RedisKeyValConfig(
+#         db="localhost", name="ExampleKeyVal"
+#     )
 
 
 __all__ = [

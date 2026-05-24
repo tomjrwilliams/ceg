@@ -197,7 +197,7 @@ class DailyBtUvar(DailyBtXvar):
             return DailyBtPx.new(self, key=key)
         elif key == "gross":
             return DailyBtGross.new(self, key=key)
-        return DailyCombinationDeriv.new(self, index, key)
+        return DailyCombinationDeriv.new(self, key=key, index=index)
 
     # def explorer_df(self):
 
@@ -296,7 +296,7 @@ class DailyBtMvar(DailyBtXvar):
             return DailyBtGross.new(
                 self, index=index, key=key
             )
-        return DailyCombinationDeriv.new(self, index, key)
+        return DailyCombinationDeriv.new(self, key=key, index=index)
 
     # def explorer_df(self):
 
@@ -879,6 +879,134 @@ class DailyBtWeight(
 
 
 #  ------------------
+# New typed bt types — parented directly on StrategyTyped / BasketTyped.
+# No DailyCombination / Container.comb / args[idx] indirection.
+# Handlers read refs directly off the parent's typed slot fields.
+# Legacy DailyBtUvar / DailyBtMvar / DailyBtWeights stay above for now.
+#  ------------------
+
+
+@dataclass(frozen=True)
+class DailyBtUvarTyped(DailyChunked, DependsParentValue):
+    """Univariate backtest parented on a StrategyTyped namespace.
+
+    Depends on the strategy's ValueUpdate (which fires once all its data
+    slots have first-published, via TriageUpstream). The handler reads
+    strategy.rx / px / gross / signal / scale / cap directly.
+    """
+
+    # parent type kept loose at the bt level; concrete typing happens at the
+    # call site / get_parent.
+    parent: "Object | str"
+
+    version: int = 0
+    type: Literal["DailyBtUvarTyped"] = "DailyBtUvarTyped"
+
+    @dataclass(frozen=True)
+    class Snap(Daily.Snap):
+        type: Literal["DailyBtUvarTypedSnap"] = "DailyBtUvarTypedSnap"
+
+    @classmethod
+    def new(cls, parent):
+        return cls(id=parent.extend_id("bt-uv"), parent=parent)
+
+    def get_parent(self):
+        # StrategyTyped resolved at call time to avoid circular imports
+        from ...strat.params import StrategyTyped
+        return context.get().get(self.parent, StrategyTyped)
+
+    def handler(self, event: Event, snap: Snap) -> Handler:
+        if isinstance(event, ValueUpdate):
+            return HandleNewDailyBtUvarTyped()
+        raise ValueError((self, event))
+
+    def rx(self):    return DailyBtRx.new(self, key="rx")
+    def px(self):    return DailyBtPx.new(self, key="px")
+    def gross(self): return DailyBtGross.new(self, key="gross")
+    def pos(self):   return DailyBtPos.new(self, key="pos")
+
+
+@dataclass(frozen=True)
+class HandleNewDailyBtUvarTyped(Handler):
+    """Univariate backtest handler.
+
+    Reads the parent StrategyTyped's typed slot Refs, fetches each Daily
+    series, runs combine_backtest_dfs and writes the bt's value plus
+    fan-out children (DailyBtRx/Px/Gross/Pos).
+
+    Body deferred — needs framework data pipeline; this stub keeps the
+    construction/dispatch contract validated by tests.
+    """
+
+    def handle(
+        self,
+        event: ValueUpdate,
+        snap: "DailyBtUvarTyped.Snap",
+        obj: "DailyBtUvarTyped",
+    ):
+        raise NotImplementedError(
+            "DailyBtUvarTyped handler body deferred to follow-up; the "
+            "construction / depends() / dispatch shape is established."
+        )
+
+
+@dataclass(frozen=True)
+class DailyBtMvarTyped(DailyChunked, DependsParentValue):
+    """Multivariate backtest parented on a BasketTyped namespace.
+
+    Depends on the basket's ValueUpdate (which fires once every member
+    strategy has first-published). The handler iterates basket.members,
+    fetches each Strategy's rx/scale/etc., combines them.
+    """
+
+    parent: "Object | str"
+
+    version: int = 0
+    type: Literal["DailyBtMvarTyped"] = "DailyBtMvarTyped"
+
+    @dataclass(frozen=True)
+    class Snap(Daily.Snap):
+        type: Literal["DailyBtMvarTypedSnap"] = "DailyBtMvarTypedSnap"
+
+    @classmethod
+    def new(cls, parent):
+        return cls(id=parent.extend_id("bt-mv"), parent=parent)
+
+    def get_parent(self):
+        from ...strat.params import BasketTyped
+        return context.get().get(self.parent, BasketTyped)
+
+    def handler(self, event: Event, snap: Snap) -> Handler:
+        if isinstance(event, ValueUpdate):
+            return HandleNewDailyBtMvarTyped()
+        raise ValueError((self, event))
+
+    def rx(self, index: int | None = None):
+        return DailyBtRx.new(self, key="rx", index=index)
+
+    def px(self, index: int | None = None):
+        return DailyBtPx.new(self, key="px", index=index)
+
+    def gross(self, index: int | None = None):
+        return DailyBtGross.new(self, key="gross", index=index)
+
+    def pos(self, index: int | None = None):
+        return DailyBtPos.new(self, key="pos", index=index)
+
+
+@dataclass(frozen=True)
+class HandleNewDailyBtMvarTyped(Handler):
+    """Multivariate backtest handler. Body deferred (same as Uvar)."""
+
+    def handle(
+        self,
+        event: ValueUpdate,
+        snap: "DailyBtMvarTyped.Snap",
+        obj: "DailyBtMvarTyped",
+    ):
+        raise NotImplementedError(
+            "DailyBtMvarTyped handler body deferred to follow-up."
+        )
 
 
 __all__ = [
@@ -894,4 +1022,9 @@ __all__ = [
     "DailyBtWeight",
     "HandleNewDailyBtUvar",
     "HandleNewDailyBtMvar",
+    # New typed forms (alongside legacy)
+    "DailyBtUvarTyped",
+    "DailyBtMvarTyped",
+    "HandleNewDailyBtUvarTyped",
+    "HandleNewDailyBtMvarTyped",
 ]

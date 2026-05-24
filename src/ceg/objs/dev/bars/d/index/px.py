@@ -37,16 +37,6 @@ from ..ident import *
 #  ------------------
 
 
-@dataclass(frozen=True)
-class IndexDailyTags(BarDailyTags):
-    symbol: str
-    ident: None
-    field: str
-    adjust: str
-    source: str
-    idx: str | None = None  # ccy to convert to
-
-
 # VXTLT = tlt bond vol (from 2020 only)
 # GVZ = gold
 # EVZ eurocurrency
@@ -56,8 +46,9 @@ class IndexDailyTags(BarDailyTags):
 
 @dataclass(frozen=True)
 class IndexDailyPx(
-    DependsGraphSync,
-    BarDaily,
+    Daily,
+    DependsParent,
+    HasDataFrameValue
 ):
     """
     >>> obj = IndexDailyPx.new(
@@ -81,99 +72,44 @@ class IndexDailyPx(
         21.65
     ]
     """
-
-    parent: Project | str | None
-
-    tags: IndexDailyTags
-
-    version: int = 0
-    type: Literal["IndexDailyPx"] = "IndexDailyPx"
-
     @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["IndexDailyPxSnap"] = (
-            "IndexDailyPxSnap"
-        )
+    class Params(Daily.Params):
+        symbol: str
+        field: str
+        adjust: str
+        source: str
+        fx: str | None = None  # ccy to convert to
 
-    @classmethod
-    def new(
-        cls,
-        symbol: str,
-        ident: int | str | None = None,
-        field: str | None = None,
-        adjust: str = "raw",
-        source: str | None = None,
-        fx: str | None = None,
-        parent: Project | str | None = None,
-    ):
-        (
-            ident,
-            symbol,
-            idx,
-            field,
-            adjust,
-            source,
-            fx,
-        ) = cls.identifier(
-            symbol,
-            ident,
-            field,
-            adjust,
-            source,
-            fx=fx,
-            expect=INDEX,
-        )
-        assert adjust in IDX_ADJUSTMENTS, adjust
-        return cls(
-            id=cls.build_id(
-                parent,
-                "idx-d",
-                ident,
-                strict=False,
-            ),
-            parent=parent,
-            tags=IndexDailyTags(
-                symbol=symbol,
-                ident=idx,
-                field=field,
-                adjust=adjust,
-                fx=fx,
-                source=source,
-            ),
-        )
+    parent: str | Date
+    params: Params
 
-    def handler(self, event: Event, snap: Snap) -> Handler:
-        if isinstance(event, GraphSync):
-            return HandleNewIndexDailyPx()
-        raise ValueError((self, event))
+    def self(self) -> IndexDailyPx:
+        return self
+    
+    def get_parent(self) -> Date:
+        return get_parent(self)
 
+    def encode_type(self, params: IndexDailyPx.Params):
+        return "idx-d"
 
-@dataclass(frozen=True)
-class HandleUpdateIndexDailyPx(Handler):
-    def handle(
-        self,
-        event: ObjectChange,
-        obj: IndexDailyPx,
-    ):
-        # TODO:
-        # check latest update, if today, skip
-        # check new data available
-        # if after snap.last, get and append
-        return
+    def encode_params(self, params: IndexDailyPx.Params):
+        return "-".join(map(str, [
+            params.symbol,
+            params.field,
+            params.adjust,
+            params.source,
+            # TODO: and fx if given
+        ]))
 
+    def handle(self, event: Event, snap: Snap):
 
-@dataclass(frozen=True)
-class HandleNewIndexDailyPx(
-    HandleNewValueFromPl,
-    HandleNewDailyFromDf,
-):
-    def handle(
-        self,
-        event: ObjectChange,
-        snap: IndexDailyPx.Snap,
-        obj: IndexDailyPx,
-    ):
-        tags = obj.tags
+        # TODO: possibly later on, deal with obj storage def changes?
+        # TODO: and data appends versus full regen
+
+        event = assert_is(event, ValueUpdate)
+        snap = assert_is(snap, Daily.Snap)
+
+        tags = self.params
 
         if tags.source == "frd":
             df = apis.data.frd.read_file(
@@ -189,50 +125,22 @@ class HandleNewIndexDailyPx(
                 update=True,
             ).select("date", tags.field)
         else:
-            raise ValueError(obj)
+            raise ValueError(self)
 
-        v = self.set_value_from_df(
-            obj,
+        _ = self.set_value_from_df(
             df,
             tags.field,
-            t=self.key_value_type(obj),
+        )
+        return ValueUpdate.if_snap_changed(
+            snap,
+            snap.update_from_df(df),
         )
 
-        new_snap = self.update_snap_from_df(snap, df)
-        if (
-            new_snap.first != snap.first
-            and new_snap.last != snap.last
-        ):
-            return ValueUpdate.from_snap(
-                self.update_snap_from_df(snap, df),
-                into=frozendict(),
-            )
-        return frozendict().set(obj.id, (snap, []))
-
-
-# TODO: class HandleObjectChange:
-# if chunk, rechunk
-# if backend type / loc change, copy
-# else, throw
-
-#  ------------------
-
-
-@dataclass(frozen=True)
-class DependsIndexDailyPxParent(DependsParentValue):
-    parent: IndexDailyPx | str
-
-    def get_parent(self) -> IndexDailyPx:
-        return context.get().get(self.parent, IndexDailyPx)
-
+index_daily_px = new(IndexDailyPx, IndexDailyPx.Params)
 
 #  ------------------
 
 __all__ = [
     "IndexDailyPx",
-    "HandleUpdateIndexDailyPx",
-    "HandleNewIndexDailyPx",
-    "DependsIndexDailyPxParent",
+    "index_daily_px"
 ]
-# TODO: if __name__ == __main__:
-# run domain by name

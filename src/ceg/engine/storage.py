@@ -8,6 +8,7 @@ from typing import (
     Literal,
     Protocol,
     Callable,
+    Any,
     overload,
     cast,
     final,
@@ -26,6 +27,8 @@ from pydantic import (
 )
 
 from frozendict import frozendict
+
+import polars as pl
 
 from ..apis import t, kv, assert_is
 
@@ -46,6 +49,14 @@ DataFrame = "dataframe"
 
 Series = "Series"
 
+class HasSetFromDf(Protocol):
+    def set_from_df(
+        self,
+        df: pl.DataFrame,
+        k: str,
+        obj: str,
+        chunk: int | None = None,
+    ) -> Any: ...
 
 @functools.lru_cache(maxsize=16)
 def event_key_val(config: StorageConfig) -> EventKeyVal:
@@ -265,13 +276,26 @@ class UseRootStorage(Object):
             t=t,
         )
 
-
 @dataclass(frozen=True)
-class UseRootDataFrameStorage(UseRootStorage):
+class HasDataFrameValue(Object):
+
+    def set_value_from_df(
+        self,
+        df: pl.DataFrame,
+        col: str,
+        t: Type[HasSetFromDf] | None = None,
+    ):
+        key_val = self.value_key_val(t=t)
+        return key_val.set_from_df(
+            df,
+            col,
+            self.id,
+        )
+
     def value_key_val(
         self,
-        mode: str = "r",
         t=None,
+        mode: str = "r",
         # TODO: t overload?
     ):
         root = self.id.split("-", maxsplit=1)[0]
@@ -514,7 +538,7 @@ __all__ = [
     "SQLite",
     "UseRootStorage",
     "UseRootChunkedStorage",
-    "UseRootDataFrameStorage",
+    "HasDataFrameValue",
     "ROOT",
     "ROOT_DB",
 ]
