@@ -32,8 +32,6 @@ from ..... import apis
 from .....apis import assert_is, t, kv, logs
 from .....engine import *
 
-from ...agg import *
-
 from ...calc import *
 from .....apis.calcs.weights import pfo_weights_df
 
@@ -43,409 +41,6 @@ logger, log = logs.logger(
     __file__,
     streams=dict(formatter=True),
 )
-
-#  ------------------
-
-
-@dataclass(frozen=True)
-class Backtest(Combination):
-    @classmethod
-    def cast(cls, comb: Combination):
-        # assert index > -1?
-        return Backtest(
-            comb.refs,
-            comb.key,
-            comb.params,
-            comb.index,
-        )
-
-    def rx(self, coll: Container, t: Type[O] = Daily):
-        return self.get_obj("rx", coll, t)
-
-
-#  ------------------
-
-
-def rx_price_types(
-    univ: Container,
-    comb: Combination,
-):
-    from ...bars import FutDailyRx, EqDailyRx, FxDailyRx
-    from .pfo import DailyPfolioRx
-
-    rx_ref = Ref.decode(assert_is(comb.refs.get("rx"), str))
-    assert rx_ref.type == "obj", (comb, rx_ref)
-    rx = context.get().get(univ.objects[rx_ref.i], Daily)
-    if isinstance(
-        rx,
-        (
-            FutDailyRx,
-            EqDailyRx,
-            FxDailyRx,
-        ),
-    ):
-        return [type(rx)]
-    elif isinstance(rx, DailyBtRx):
-        return rx.get_parent().price_types()
-    elif isinstance(rx, DailyPfolioRx):
-        raise ValueError(rx)
-    else:
-        raise ValueError(rx)
-
-
-def rx_price_symbols(
-    univ: Container,
-    comb: Combination,
-):
-    from ...bars import FutDailyRx, EqDailyRx, FxDailyRx
-    from .pfo import DailyPfolioRx
-
-    rx_ref = Ref.decode(assert_is(comb.refs.get("rx"), str))
-    assert rx_ref.type == "obj", (comb, rx_ref)
-    rx = context.get().get(univ.objects[rx_ref.i], Daily)
-    if isinstance(
-        rx,
-        (
-            FutDailyRx,
-            EqDailyRx,
-            FxDailyRx,
-        ),
-    ):
-        px = rx.get_parent()
-        return [px.tags.symbol]
-    elif isinstance(rx, DailyBtRx):
-        return rx.get_parent().price_symbols()
-    elif isinstance(rx, DailyPfolioRx):
-        raise ValueError(rx)
-    else:
-        raise ValueError(rx)
-
-
-@dataclass(frozen=True)
-class DailyBtXvar(DailyCombination):
-    metric: str = "bt"  # TODO: or bt_cum?
-
-
-@dataclass(frozen=True)
-class DailyBtUvar(DailyBtXvar):
-    metric: str = "bt-uv"  # TODO: or bt_cum?
-
-    version: int = 0
-    type: Literal["DailyBtUvar"] = "DailyBtUvar"
-
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyBtUvarSnap"] = "DailyBtUvarSnap"
-
-    @classmethod
-    def new(
-        cls,
-        parent: Container,
-        comb: int | Combination,
-    ):
-        return cls.new_(parent, "bt-uv", comb)
-
-    def price_symbols(self):
-        container= self.get_parent()
-        try:
-            comb = coll.comb[self.args[0]]
-        except:
-            raise ValueError((coll, self))
-        return rx_price_symbols(coll, comb)
-
-    def price_types(self):
-        container= self.get_parent()
-        comb = coll.comb[self.args[0]]
-        return rx_price_types(coll, comb)
-
-    def handler_object_new(self) -> HandleNewDailyBtUvar:
-        return HandleNewDailyBtUvar()
-
-    def handler(self, event: Event, snap: Snap) -> Handler:
-        if isinstance(event, ValueUpdate):
-            return self.handler_object_new()
-        raise ValueError((self, event))
-
-    def params(self, coll: Container):
-        assert len(self.args) == 1, self
-        comb = coll.comb[self.args[0]]
-        return assert_is(comb, Backtest)
-
-    def rx(self):
-        return DailyBtRx.new(self)
-
-    def px(self):
-        return DailyBtPx.new(self)
-
-    def gross(self):
-        return DailyBtGross.new(self)
-
-    def pos(self):
-        return DailyBtPos.new(self)
-
-    def deriv(
-        self,
-        index: int | None = None,
-        key: str | None = None,
-    ):
-        assert index is None, self
-        if key == "pos":
-            return DailyBtPos.new(self, key=key)
-        elif key == "rx":
-            return DailyBtPos.new(self, key=key)
-        elif key == "px":
-            return DailyBtPx.new(self, key=key)
-        elif key == "gross":
-            return DailyBtGross.new(self, key=key)
-        return DailyCombinationDeriv.new(self, key=key, index=index)
-
-    # def explorer_df(self):
-
-    #     # TODO: return df with signal, scale, etc.
-
-    #     # all stacked, relevant group keys
-
-    #     return
-
-
-@dataclass(frozen=True)
-class DailyBtMvar(DailyBtXvar):
-    metric: str = "bt-mv"  # TODO: or bt_cum?
-
-    version: int = 0
-    type: Literal["DailyBtMvar"] = "DailyBtMvar"
-
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyBtMvarSnap"] = "DailyBtMvarSnap"
-
-    @classmethod
-    def new(
-        cls,
-        parent: Container,
-        comb: tuple[int | Combination, ...],
-    ):
-        return cls.new_(parent, "bt-mv", comb)
-
-    def price_symbols(self):
-        container= self.get_parent()
-        return list(
-            set().union(
-                *[
-                    rx_price_symbols(coll, coll.comb[i])
-                    for i in self.args[1:]
-                ]
-            )
-        )
-
-    def price_types(self):
-        container= self.get_parent()
-        return list(
-            set().union(
-                *[
-                    rx_price_types(coll, coll.comb[i])
-                    for i in self.args[1:]
-                ]
-            )
-        )
-
-    def handler_object_new(self) -> HandleNewDailyBtMvar:
-        return HandleNewDailyBtMvar()
-
-    def handler(self, event: Event, snap: Snap) -> Handler:
-        if isinstance(event, ValueUpdate):
-            # assert self.get_parent().id == event.obj, (self, event)
-            return self.handler_object_new()
-        raise ValueError((self, event))
-
-    def rx(self, index: int | None = None):
-        return DailyBtRx.new(self, index)
-
-    def px(self, index: int | None = None):
-        return DailyBtPx.new(self, index)
-
-    def gross(self, index: int | None = None):
-        return DailyBtGross.new(self, index)
-
-    def pos(self, index: int | None = None):
-        return DailyBtPos.new(self, index)
-
-    def params(self, coll: Container):
-        comb, *combs = [
-            assert_is(coll.comb[c], Backtest)
-            for c in self.args
-        ]
-        return comb, combs
-
-    def deriv(
-        self,
-        key: str | None = None,
-        index: int | None = None,
-    ):
-        if key == "pos":
-            return DailyBtPos.new(
-                self, index=index, key=key
-            )
-        elif key == "rx":
-            return DailyBtPos.new(
-                self, index=index, key=key
-            )
-        elif key == "px":
-            return DailyBtPx.new(self, index=index, key=key)
-        elif key == "gross":
-            return DailyBtGross.new(
-                self, index=index, key=key
-            )
-        return DailyCombinationDeriv.new(self, key=key, index=index)
-
-    # def explorer_df(self):
-
-    #     # TODO: return df with signal, scale, etc.
-
-    #     # all stacked, relevant group keys
-
-    #     return
-
-
-@dataclass(frozen=True)
-class DailyBtWeights(DailyCombination):
-    metric: str = "bt-w"
-
-    version: int = 0
-    type: Literal["DailyBtWeights"] = "DailyBtWeights"
-
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyBtWeightsSnap"] = (
-            "DailyBtWeightsSnap"
-        )
-
-    @classmethod
-    def new(
-        cls,
-        parent: Container,
-        comb: tuple[int | Combination, ...],
-    ):
-        return cls.new_(parent, "bt-w", comb)
-
-    def price_symbols(self):
-        container= self.get_parent()
-        return list(
-            set().union(
-                *[
-                    rx_price_symbols(coll, coll.comb[i])
-                    for i in self.args[1:]
-                ]
-            )
-        )
-
-    def price_types(self):
-        container= self.get_parent()
-        return list(
-            set().union(
-                *[
-                    rx_price_types(coll, coll.comb[i])
-                    for i in self.args[1:]
-                ]
-            )
-        )
-
-    def handler_object_new(self) -> HandleNewDailyBtWeights:
-        return HandleNewDailyBtWeights()
-
-    def handler(self, event: Event, snap: Snap) -> Handler:
-        if isinstance(event, ValueUpdate):
-            # assert self.get_parent().id == event.obj, (self, event)
-            return self.handler_object_new()
-        raise ValueError((self, event))
-
-    def weight(self, key: str, index: int):
-        return DailyBtWeight.new(self, index, key=key)
-
-    def params(self, coll: Container):
-        comb, *combs = [
-            assert_is(coll.comb[c], Backtest)
-            for c in self.args
-        ]
-        return comb, combs
-
-    # TODO: method ot unpack param iteration
-    # given index
-    # given we pass tuples etc. so only run once per metric run
-
-    def deriv(
-        self,
-        key: str | None = None,
-        index: int | None = None,
-    ):
-        return DailyBtWeight.new(self, index, key)
-
-    # def explorer_df(self):
-
-    #     # TODO: return df with signal, scale, etc.
-
-    #     # all stacked, relevant group keys
-
-    #     return
-
-
-#  ------------------
-
-
-@dataclass(frozen=True)
-class HandleNewDailyBtUvar(HandleNewDailyCombination):
-    # TODO: shifts: ...
-    unit: float = 1.0
-
-    def comb_dfs(
-        self,
-        first: dt.date,
-        last: dt.date,
-        dfs_params: tuple[
-            frozendict[str, pl.DataFrame],
-            frozendict[str, TParamValue],
-        ],
-    ) -> (
-        pl.DataFrame
-        | tuple[
-            pl.DataFrame, list[str | int | tuple[str, int]]
-        ]
-    ):
-        dfs, params = dfs_params
-        cap = params.get("cap", None)
-        cap = cap if cap is None else float(cap)
-        df = combine_backtest_dfs(
-            assert_is(dfs.get("rx", None)),
-            dfs.get("scale", None),
-            dfs.get("signal", None),
-            dfs.get("rebalance", None),
-            dfs.get("calendar", None),
-            dfs.get("weight", None),
-            dfs.get("cap", None),
-            dfs.get("fx", None),
-            assert_is(dfs.get("px", None)),
-            assert_is(dfs.get("gross", None)),
-            # **shifts
-            cap=cap,
-        )
-
-        df = df.pipe(
-            run_backtest,
-            signal=None
-            if "signal" not in dfs
-            else "signal",
-            rebal=None
-            if "rebalance" not in dfs
-            else "rebalance",
-            calendar=None
-            if "calendar" not in dfs
-            else "calendar",
-            fx=None if "fx" not in dfs else "fx",
-            cap=None if "cap" not in dfs else "cap",
-            unit=self.unit,
-        )
-
-        return df, ["rx", "px", "gross", "pos"]
 
 
 #  ------------------
@@ -488,94 +83,538 @@ def combine_mv_signal(
     return combine_mv_dfs(df_uv, df_mv, "signal")
 
 
-@dataclass(frozen=True)
-class HandleNewDailyBtMvar(HandleNewDailyCombination):
-    unit: float = 1.0
 
-    def comb_dfs(
-        self,
-        first: dt.date,
-        last: dt.date,
-        *dfs_params: tuple[
-            frozendict[str, pl.DataFrame],
-            frozendict[str, TParamValue],
-        ],
-    ) -> (
-        pl.DataFrame
-        | tuple[
-            pl.DataFrame, list[str | int | tuple[str, int]]
-        ]
+def rx_price_types(
+    rx: Daily
+):
+    from ...bars import FutDailyRx, EqDailyRx, FxDailyRx
+    
+    if isinstance(
+        rx,
+        (
+            FutDailyRx,
+            EqDailyRx,
+            FxDailyRx,
+        ),
     ):
+        return [type(rx)]
+    elif isinstance(rx, DailyBtRx):
+        return rx.get_parent().price_types()
+    # elif isinstance(rx, DailyPfolioRx):
+    #     raise ValueError(rx)
+    else:
+        raise ValueError(rx)
 
-        dfs_ps_mv, *dfs_ps_uvs = dfs_params
 
-        dfs_mv, ps_mv = dfs_ps_mv
+def rx_price_symbols(
+    rx: Daily
+):
+    from ...bars import FutDailyRx, EqDailyRx, FxDailyRx
 
-        mv_df_scale = dfs_mv.get("scale")
-        mv_df_signal = dfs_mv.get("signal")
-        mv_df_rebalance = dfs_mv.get("rebalance")
 
-        acc = []
+    if isinstance(
+        rx,
+        (
+            FutDailyRx,
+            EqDailyRx,
+            FxDailyRx,
+        ),
+    ):
+        px = rx.get_parent()
+        return [px.params.symbol]
+    elif isinstance(rx, DailyBtRx):
+        return rx.get_parent().price_symbols()
+    # elif isinstance(rx, DailyPfolioRx):
+    #     raise ValueError(rx)
+    else:
+        raise ValueError(rx)
 
-        for i, dfs_p_uv in enumerate(dfs_ps_uvs):
-            dfs_uv, p_uv = dfs_p_uv
-
-            df_rx = assert_is(dfs_uv.get("rx", None))
-
-            df_scale = dfs_uv.get("scale", None)
-            df_scale = combine_mv_scale(
-                df_scale, mv_df_scale
+def recurse_bt_pos(
+    bt_pos: DailyBtPos,
+    obj_rx: Daily,
+    key: str | None = None,
+    parent: str | None = None,
+    acc: pl.DataFrame | None = None,
+):
+    df_pos = daily_pl_values(
+        "df",
+        bt_pos,
+        alias=VALUE,
+    )
+    if acc is not None:
+        acc = acc.join(
+            df_pos,
+            on="date",
+            how="full",
+            coalesce=True,
+        ).with_columns(
+            pl.col(VALUE)
+            .mul(
+                1
+                if parent is None
+                else pl.col(parent)
+                .fill_nan(None)
+                .fill_null(1)
             )
+            .alias(VALUE)
+        )
+    else:
+        acc = df_pos
 
-            df_signal = dfs_uv.get("signal", None)
-            df_signal = combine_mv_signal(
-                df_signal, mv_df_signal
-            )
+    if key is not None:
+        
+        key = f"{key}={obj_rx.id}"
 
-            df_rebalance = dfs_uv.get("rebalance", None)
-            df_rebalance = mv_df_rebalance or df_rebalance
-
-            if df_scale is None:
-                df_scale = df_rx.select(
-                    "date", pl.lit(1.0).alias("scale")
+        if acc is None:
+            return df_pos.rename({VALUE: key})
+        return acc.with_columns(
+            pl.col(VALUE)
+            .add(
+                (
+                    0
+                    if key not in acc.columns
+                    else pl.col(key)
+                    .fill_nan(None)
+                    .fill_null(0)
                 )
+            )
+            .alias(key)
+        ).drop(VALUE)
 
-            cap = p_uv.get("cap", None)
+    acc = acc.rename({VALUE: bt_pos.id})
 
-            df = combine_backtest_dfs(
-                df_rx,
-                assert_is(df_scale),
-                df_signal,
-                df_rebalance,
-                dfs_uv.get("calendar", None),
-                dfs_uv.get("weight", None),
-                dfs_uv.get("cap", None),
-                dfs_uv.get("fx", None),
-                dfs_uv.get("px", None),
-                dfs_uv.get("gross", None),
-                cap=(cap if cap is None else float(cap)),
-                # **shifts
+
+    bt_parent = get_parent(obj_rx)
+    assert isinstance(
+        bt_parent,
+        (DailyStrategy, DailyBasket)
+    ), obj_rx
+
+    return acc_bt_pos(
+        bt_parent,
+        parent=bt_pos.id,
+        acc=acc,
+    ).drop(bt_pos.id)
+
+
+def acc_bt_pos_uvar(
+    bt: DailyStrategy,
+    parent: str | None = None,
+    acc: pl.DataFrame | None = None,
+):
+    bt_pos = assert_is(bt.bt_pos)
+    
+    return recurse_bt_pos(
+        bt_pos, assert_is(bt.rx), key = bt.params.key, parent=parent, acc=acc
+    )
+
+
+def acc_bt_pos_mvar(
+    bt: DailyBasket,
+    parent: str | None = None,
+    acc: pl.DataFrame | None = None,
+):
+    for i, bt_pos in enumerate(
+        assert_is(bt.bt_pos)[1],
+    ):
+        uv = assert_is(bt.assets)[i]
+        acc = recurse_bt_pos(
+            bt_pos,
+            assert_is(uv.rx), 
+            key = uv.params.key,
+            parent=parent,
+            acc=acc
+        )
+
+    assert isinstance(acc, pl.DataFrame), bt
+    return acc
+
+
+def acc_bt_pos(
+    bt: DailyStrategy | DailyBasket,
+    parent: str | None = None,
+    acc: pl.DataFrame | None = None,
+) -> pl.DataFrame:
+    if isinstance(bt, DailyStrategy):
+        return acc_bt_pos_uvar(bt, parent, acc)
+    elif isinstance(bt, DailyBasket):
+        return acc_bt_pos_mvar(bt, parent, acc)
+    else:
+        raise ValueError(bt)
+
+
+@dataclass(frozen=True)
+class DailyPfolioSeries:
+    key: str
+    rx_id: str
+    asset: t.pl.DataFrame  # rx
+    rx: t.pl.DataFrame  # scaled
+    pos: t.pl.DataFrame
+
+
+@dataclass(frozen=True)
+class DailyPfolioData:
+    bt: DailyStrategy | DailyBasket
+    start: dt.date
+    end: dt.date
+    series: list[DailyPfolioSeries]
+
+# TODO: eventually need to be able to pass daily_pfolio.rx[k]
+# as an asset, so below will need to handle both paths
+
+def pfolio_keys(bt: DailyStrategy | DailyBasket):
+    if isinstance(bt, DailyStrategy):
+        if bt.params.key is not None:
+            return set([bt.params.key])
+        assert isinstance(bt.rx, (
+            DailyStrategy, DailyBasket
+        ))
+        return pfolio_keys(bt.rx)
+    keys = set()
+    for uv in assert_is(bt.assets):
+        keys = keys | pfolio_keys(uv)
+    return keys
+
+def get_daily_pfolio_data(
+    bt: DailyStrategy | DailyBasket
+):
+
+    df_pos = acc_bt_pos(bt).sort(by="date")
+
+    (first, last) = df_pos.pipe(
+        apis.pl.select_min_max, "date", dt.date
+    )
+    df_pos = pl.select(
+        pl.date_range(first, last).alias("date")
+    ).join(df_pos, on="date", how="left", coalesce=True)
+
+    res = []
+
+    for k_rx in df_pos.columns:
+        if k_rx == "date":
+            continue
+
+        df_pos = df_pos.with_columns(
+            pl.col(k_rx).alias("pos")
+        )
+
+        # log(get_pfo_data=k_rx)
+
+        k, rx_path = k_rx.split("=")
+        obj_rx = context.get().get(rx_path, Daily)
+
+        df_asset = daily_pl_df(obj_rx, alias="rx")
+
+        df_rx = df_asset.join(
+            df_pos.select("date", "pos"),
+            on="date",
+            how="full",
+            coalesce=True,
+        ).sort(by="date")
+
+        v_pos, v_pos_null = apis.pl.to_numpy_with_null(
+            df_rx.get_column("pos")
+        )
+        v_rx, v_rx_null = apis.pl.to_numpy_with_null(
+            df_rx.get_column("rx")
+        )
+
+        df_rx = df_rx.with_columns(
+            pl.Series(
+                apis.perf.backtest_rx_pos(
+                    v_rx,
+                    v_pos,
+                    v_rx_null,
+                    v_pos_null,
+                )
+            )
+            .alias("rx")
+            .fill_nan(None)
+        ).drop("pos")
+
+        # TODO: check sum!
+
+        res.append(
+            DailyPfolioSeries(
+                k,
+                rx_path,
+                # k_rx = {k}={rx_path}
+                t.pl.DataFrame.cast(df_asset),
+                t.pl.DataFrame.cast(df_rx),
+                t.pl.DataFrame.cast(df_pos),
+            )
+        )
+
+    return DailyPfolioData(bt, first, last, res)
+
+
+@dataclass(frozen=True)
+class DailyBtXvar(
+    TriageUpstreamDaily,
+    HasDataFrameValue
+):
+    @dataclass(frozen=True)
+    class Params(Daily.Params):
+        unit: float = 1.
+        cap: float | None = None
+        key: str | None = None
+
+        # TODO: shifts
+        
+        def encode(self):
+            tags: list = [self.unit]
+            if self.cap is not None:
+                tags.append(self.cap)
+            # TODO: shifts
+            return "-".join(map(str, tags))
+
+    parent: str | Object
+    params: Params
+    
+    def get_field_df(self, k: str):
+        obj: Daily | None = getattr(self, k)
+        return None if obj is None else obj.get_df(k)
+    
+
+
+@dataclass(frozen=True)
+class DailyStrategy(DailyBtXvar):
+
+    # TODO: rx = asset
+    rx: Daily | None = None
+    px: Daily | None = None
+    signal: Daily | None = None
+    scale: Daily | None = None
+    cap: Daily | None = None
+    rebalance: Daily | None = None
+    calendar: Daily | None = None
+    fx: Daily | None = None
+    gross: Daily | None = None
+
+    # results
+
+    bt_rx: DailyBtRx | None = None
+    bt_px: DailyBtPx | None = None
+    bt_pos: DailyBtPos | None = None
+    bt_gross: DailyBtGross | None = None
+
+    pfo: DailyPfolio | None = None
+    
+    def run_backtest(
+        self,
+        mv_df_scale: pl.DataFrame | None = None,
+        mv_df_signal: pl.DataFrame | None = None,
+        mv_df_rebalance: pl.DataFrame | None = None,
+        mv_scale: float | None = None,
+        mv_unit: float | None = None,
+    ):
+        df_rx=assert_is(self.rx).get_df("rx")
+
+        df_scale=self.get_field_df("scale")
+        df_signal=self.get_field_df("signal")
+        df_rebalance=self.get_field_df("rebalance")
+    
+        df_scale = combine_mv_scale(
+            df_scale, mv_df_scale
+        )
+
+        df_signal = combine_mv_signal(
+            df_signal, mv_df_signal
+        )
+
+        df_rebalance = mv_df_rebalance or df_rebalance
+
+        if df_scale is None and mv_scale is not None:
+            df_scale = df_rx.select(
+                "date", pl.lit(mv_scale).alias("scale")
             )
 
-            df = df.pipe(
-                run_backtest,
-                signal=None
-                if "signal" not in dfs_uv
-                else "signal",
-                rebal=None
-                if "rebalance" not in dfs_uv
-                else "rebalance",
-                calendar=None
-                if "calendar" not in dfs_uv
-                else "calendar",
-                fx=None if "fx" not in dfs_uv else "fx",
-                cap=None if "cap" not in dfs_uv else "cap",
-                unit=self.unit,
+        df = combine_backtest_dfs(
+            df_rx=df_rx,
+            df_scale=df_scale,
+            df_signal=df_signal,
+            df_rebalance=df_rebalance,
+            df_calendar=self.get_field_df("calendar"),
+            df_weight=None,
+            df_cap=self.get_field_df("cap"),
+            df_fx=self.get_field_df("fx"),
+            df_px=assert_is(self.px).get_df("px"),
+            df_gross=assert_is(self.gross).get_df("gross"),
+            cap=self.params.cap,
+            # **shifts from params
+        )
+
+        return df.pipe(
+            run_backtest,
+            signal=None
+            if df_signal is None
+            else "signal",
+            rebal=None
+            if df_rebalance is None
+            else "rebalance",
+            calendar=None
+            if self.calendar is None
+            else "calendar",
+            fx=None if self.fx is None else "fx",
+            cap=None if self.cap is None else "cap",
+            unit=self.params.unit * (
+                mv_unit or 1.
+            )
+        )
+    
+    def depends_fields(self):
+        return {
+            k: ("ValueUpdate",)
+            for k in [
+                "rx",
+                "px",
+                "signal",
+                "scale",
+                "cap",
+                "rebalance",
+                "calendar",
+                "fx",
+                "gross",
+            ]
+        }
+    
+    def self(self) -> DailyStrategy:
+        return self
+    
+    def get_parent(self) -> Object:
+        return get_parent(self)
+
+    def encode_type(self, params: DailyBtXvar.Params):
+        return "bt-uv"
+
+    def encode_params(self, params: DailyBtXvar.Params):
+        return params.encode()
+
+    def price_symbols(self):
+        return rx_price_symbols(self)
+
+    def price_types(self):
+        return rx_price_types(self)
+
+    def handle(self, event: Event, snap: Snap):
+        snap = assert_is(snap, self.Snap)
+        
+        res = self.run_backtest()
+        
+        updates = frozendict()
+
+        children: dict[str, (
+            DailyBtRx
+            | DailyBtPx
+            | DailyBtPos
+            | DailyBtGross
+        )] = {
+            "rx": assert_is(self.bt_rx),
+            "px": assert_is(self.bt_px),
+            "pos": assert_is(self.bt_pos),
+            "gross": assert_is(self.bt_gross),
+        }
+
+        for k, child in children.items():
+            child.set_value_from_df(res, k)
+            child_snap = get_snap(child)
+
+            updates = ValueUpdate.if_snap_changed(
+                child_snap,
+                child_snap.update_from_df(res),
+                into=updates,
             )
 
-            acc.append(df)
+        return ValueUpdate.if_snap_changed(
+            snap,
+            snap.update_from_df(res),
+            into=updates,
+        )
 
-        n = len(dfs_ps_uvs)
+# NOTE: either can keep their own id if already have one
+# or, get auto assigned as basket-i
+
+@dataclass(frozen=True)
+class DailyBasket(DailyBtXvar):
+
+    signal: Daily | None = None
+    scale: Daily | None = None
+    cap: Daily | None = None # unused
+    rebalance: Daily | None = None
+    calendar: Daily | None = None # unused
+    fx: Daily | None = None # unused
+    gross: Daily | None = None
+
+    assets: tuple[DailyStrategy, ...] | None = None
+
+    bt_rx: tuple[DailyBtRx, tuple[DailyBtRx, ...]] | None = None
+    bt_px: tuple[DailyBtPx, tuple[DailyBtPx, ...]] | None = None
+    bt_pos: tuple[DailyBtPos, tuple[DailyBtPos, ...]] | None = None
+    bt_gross: tuple[DailyBtGross, tuple[DailyBtGross, ...]] | None = None
+
+    pfo: DailyPfolio | None = None
+    
+    def depends_fields(self):
+        return {
+            k: ("ValueUpdate",)
+            for k in [
+                "assets",
+                "rx",
+                "px",
+                "signal",
+                "scale",
+                "cap",
+                "rebalance",
+                "calendar",
+                "fx",
+                "gross",
+            ]
+        }
+    
+    def self(self) -> DailyBasket:
+        return self
+    
+    def get_parent(self) -> Object:
+        return get_parent(self)
+
+    def encode_type(self, params: DailyBtXvar.Params):
+        return "bt-mv"
+
+    def encode_params(self, params: DailyBtXvar.Params):
+        return params.encode()
+
+    def price_symbols(self):
+        return rx_price_symbols(self)
+
+    def price_types(self):
+        return rx_price_types(self)
+    
+    def handle(self, event: Event, snap: Snap):
+        snap = assert_is(snap, self.Snap)
+
+        df_scale=self.get_field_df("scale")
+        df_signal=self.get_field_df("signal")
+        df_rebalance=self.get_field_df("rebalance")
+        df_calendar=self.get_field_df("calendar")
+        # df_weight=None
+        df_cap=self.get_field_df("cap")
+        df_fx=self.get_field_df("fx")
+
+        acc: list[pl.DataFrame] = []
+
+        for uv in assert_is(self.assets):
+
+            res = uv.run_backtest(
+                mv_df_scale=df_scale,
+                mv_df_signal=df_signal,
+                mv_df_rebalance=df_rebalance,
+                mv_scale=1.,
+                mv_unit=self.params.unit,
+            )
+
+            acc.append(res)
+
+        n = len(acc)
 
         res = (
             apis.pl.join_dfs(
@@ -646,385 +685,284 @@ class HandleNewDailyBtMvar(HandleNewDailyCombination):
             )
             .drop("mask", "px_mask", "gross_mask")
         )
+        
+        updates = frozendict()
 
-        k_is: list[str | int | tuple[str, int]] = (
-            ["rx", "px", "gross", "px"]
-            + [
-                (k, i)
-                for i in list(range(n))
-                for k in ["rx", "pos", "gross", "px"]
-            ]
-            + [0][1:]
-        )
+        children: dict[str, (
+            tuple[DailyBtRx, tuple[DailyBtRx, ...]]
+            | tuple[DailyBtPx, tuple[DailyBtPx, ...]]
+            | tuple[DailyBtGross, tuple[DailyBtGross, ...]]
+            | tuple[DailyBtPos, tuple[DailyBtPos, ...]]
+        )] = {
+            "rx": assert_is(self.bt_rx),
+            "px": assert_is(self.bt_px),
+            "pos": assert_is(self.bt_pos),
+            "gross": assert_is(self.bt_gross),
+        }
 
-        return res, k_is
+        for k, (child, child_uvs) in children.items():
+            assert len(child_uvs) == len(acc), self
+            
+            child.set_value_from_df(res, k)
+            child_snap = get_snap(child)
 
-
-@dataclass(frozen=True)
-class HandleNewDailyBtWeights(HandleNewDailyCombination):
-    unit: float = 1.0
-
-    def comb_dfs(
-        self,
-        first: dt.date,
-        last: dt.date,
-        *dfs_params: tuple[
-            frozendict[str, pl.DataFrame],
-            frozendict[str, TParamValue],
-        ],
-    ) -> (
-        pl.DataFrame
-        | tuple[
-            pl.DataFrame, list[str | int | tuple[str, int]]
-        ]
-    ):
-
-        dfs_ps_mv, *dfs_ps_uvs = dfs_params
-
-        dfs_mv, ps_mv = dfs_ps_mv
-
-        log("INFO")(ps=ps_mv)
-
-        mv_df_scale = dfs_mv.get("scale")
-        mv_df_signal = dfs_mv.get("signal")
-        mv_df_rebalance = dfs_mv.get("rebalance")
-
-        dfs = []
-        params = []
-
-        for i, dfs_p_uv in enumerate(dfs_ps_uvs):
-            dfs_uv, p_uv = dfs_p_uv
-
-            params.append(p_uv)
-
-            df_rx = assert_is(dfs_uv.get("rx", None))
-
-            df_scale = dfs_uv.get("scale", None)
-            df_scale = combine_mv_scale(
-                df_scale, mv_df_scale
+            updates = ValueUpdate.if_snap_changed(
+                child_snap,
+                child_snap.update_from_df(res),
+                into=updates,
             )
 
-            df_signal = dfs_uv.get("signal", None)
-            df_signal = combine_mv_signal(
-                df_signal, mv_df_signal
-            )
-
-            df_rebalance = dfs_uv.get("rebalance", None)
-            df_rebalance = mv_df_rebalance or df_rebalance
-
-            if df_scale is None:
-                df_scale = df_rx.select(
-                    "date", pl.lit(1.0).alias("scale")
+            for i, child_uv in enumerate(child_uvs):
+                child.set_value_from_df(res, f"{k}_{i}")
+                child_uv_snap = get_snap(child_uv)
+                updates = ValueUpdate.if_snap_changed(
+                    child_uv_snap,
+                    child_uv_snap.update_from_df(res),
+                    into=updates,
                 )
-
-            cap = p_uv.get("cap", None)
-
-            # TODO: if only rx, skip backtest
-
-            df = combine_backtest_dfs(
-                df_rx,
-                assert_is(df_scale),
-                df_signal,
-                df_rebalance,
-                dfs_uv.get("calendar", None),
-                dfs_uv.get("weight", None),
-                dfs_uv.get("cap", None),
-                dfs_uv.get("fx", None),
-                dfs_uv.get("px", None),
-                dfs_uv.get("gross", None),
-                cap=(cap if cap is None else float(cap)),
-                # **shifts
-            )
-
-            df = df.pipe(
-                run_backtest,
-                signal=None
-                if "signal" not in dfs_uv
-                else "signal",
-                rebal=None
-                if "rebalance" not in dfs_uv
-                else "rebalance",
-                calendar=None
-                if "calendar" not in dfs_uv
-                else "calendar",
-                fx=None if "fx" not in dfs_uv else "fx",
-                cap=None if "cap" not in dfs_uv else "cap",
-                unit=self.unit,
-            )
-
-            dfs.append(df)
-
-        n = len(dfs_ps_uvs)
-
-        return pfo_weights_df(
-            first,
-            last,
-            dfs,
-            params,
-            ps_mv,
-        )  # type: ignore
+        
+        return ValueUpdate.if_snap_changed(
+            snap,
+            snap.update_from_df(res),
+            into=updates,
+        )
 
 
 #  ------------------
 
+@dataclass(frozen=True)
+class DailyPfolio(
+    Daily,
+    HasDataFrameValue,
+):
+    
+    @dataclass(frozen=True)
+    class Params(Daily.Params):
+        pass
+
+    parent: str | DailyStrategy | DailyBasket
+    params: Params
+
+    rx: DailyBtRx | None = None
+
+    bt_rx: dict[str, DailyBtRx] | None = None
+    bt_pos: dict[str, DailyBtPos] | None = None
+
+    def handle(self, event: Event, snap: Snap):
+        snap = assert_is(snap, self.Snap)
+        
+        data = assert_is(get_daily_pfolio_data(get_parent(self)))
+
+        bt_rx = assert_is(self.bt_rx)
+        bt_pos = assert_is(self.bt_pos)
+
+        assert len(data.series) == len(bt_rx) == len(bt_pos), self
+
+        dfs_rx = []
+
+        updates = frozendict()
+
+        for i, ser in enumerate(data.series):
+            k = ser.key
+
+            try:
+                obj_pos = bt_pos[k]
+                obj_rx = bt_rx[k]
+            except Exception as e:
+                raise ValueError((self, ser)) from e
+
+            context.get().with_obj(obj_pos)
+            context.get().with_obj(obj_rx)
+
+            # log(handle_pfo=k)
+
+            _ = obj_pos.set_value_from_df(
+                ser.pos.select("date", "pos"),
+                "pos",
+            )
+
+            _ = obj_rx.set_value_from_df(
+                ser.rx,
+                "rx",
+            )
+
+            obj_pos_snap = get_snap(obj_pos)
+            obj_rx_snap = get_snap(obj_rx)
+            
+            updates = ValueUpdate.if_snap_changed(
+                obj_pos_snap,
+                obj_pos_snap.update_from_dates(data.start, data.end),
+                into=updates,
+            )
+            updates = ValueUpdate.if_snap_changed(
+                obj_rx_snap,
+                obj_rx_snap.update_from_dates(data.start, data.end),
+                into=updates,
+            )
+
+            dfs_rx.append(
+                ser.rx.rename(
+                    {"rx": f"{ser.key}={ser.rx_id}"}
+                )
+            )
+
+        df_rx = apis.pl.join_dfs(
+            dfs_rx,
+            on="date",
+            how="full",
+            coalesce=True,
+        ).sort(by="date")
+
+        df_rx = df_rx.select(
+            "date",
+            pl.when(
+                pl.all_horizontal(
+                    [
+                        pl.col(k).is_null()
+                        for k in df_rx.columns
+                        if k != "date"
+                    ]
+                )
+            )
+            .then(None)
+            .otherwise(
+                pl.sum_horizontal(pl.exclude("date"))
+            )
+            .alias("rx"),
+        )
+
+        updates = ValueUpdate.if_snap_changed(
+            snap,
+            snap.update_from_dates(data.start, data.end),
+            into=updates,
+        )
+        
+        pfo_rx = assert_is(self.rx)
+
+        _ = pfo_rx.set_value_from_df(
+            df_rx,
+            "rx",
+        )
+
+        pfo_rx_snap = get_snap(pfo_rx)
+        updates = ValueUpdate.if_snap_changed(
+            pfo_rx_snap,
+            pfo_rx_snap.update_from_dates(data.start, data.end),
+            into=updates,
+        )
+        
+        return updates
 
 @dataclass(frozen=True)
 class DailyBtPos(
-    DailyCombinationDeriv,
+    Daily,
+    HasDataFrameValue
 ):
-    parent: DailyBtUvar | DailyBtMvar | str
-
-    key: str = "pos"
-
-    version: int = 0
-    type: Literal["DailyBtPos"] = "DailyBtPos"
-
     @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyBtPosSnap"] = "DailyBtPosSnap"
+    class Params(Daily.Params):
+        pass
 
-    def get_parent(self) -> DailyBtUvar | DailyBtMvar:
-        return context.get().get(
-            self.parent, DailyBtUvar | DailyBtMvar
-        )
+    parent: str | DailyStrategy | DailyBasket
+    params: Params
 
+    def self(self) -> DailyBtPos:
+        return self
+    
+    def get_parent(self) -> DailyStrategy | DailyBasket:
+        return get_parent(self)
+
+    def encode_type(self, params: DailyEM.Params):
+        return "pos"
+
+    def encode_params(self, params: DailyEM.Params):
+        return ""
 
 @dataclass(frozen=True)
 class DailyBtRx(
-    DailyCombinationDeriv,
+    Daily,
+    HasDataFrameValue
 ):
-    parent: DailyBtUvar | DailyBtMvar | str
-
-    key: str = "rx"
-
-    version: int = 0
-    type: Literal["DailyBtRx"] = "DailyBtRx"
-
     @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyBtRxSnap"] = "DailyBtRxSnap"
+    class Params(Daily.Params):
+        pass
 
-    def get_parent(self) -> DailyBtUvar | DailyBtMvar:
-        return context.get().get(
-            self.parent, DailyBtUvar | DailyBtMvar
-        )
+    parent: str | DailyStrategy | DailyBasket
+    params: Params
 
+    def self(self) -> DailyBtRx:
+        return self
+    
+    def get_parent(self) -> DailyStrategy | DailyBasket:
+        return get_parent(self)
+
+    def encode_type(self, params: DailyEM.Params):
+        return "rx"
+
+    def encode_params(self, params: DailyEM.Params):
+        return ""
+
+# TODO: perfect example of needing a bind_anon (the result rx,pos, gross, etc.)
 
 @dataclass(frozen=True)
 class DailyBtPx(
-    DailyCombinationDeriv,
+    Daily,
+    HasDataFrameValue
 ):
-    parent: DailyBtUvar | DailyBtMvar | str
-
-    key: str = "px"
-
-    version: int = 0
-    type: Literal["DailyBtPx"] = "DailyBtPx"
-
     @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyBtPxSnap"] = "DailyBtPxSnap"
+    class Params(Daily.Params):
+        pass
 
-    def get_parent(self) -> DailyBtUvar | DailyBtMvar:
-        return context.get().get(
-            self.parent, DailyBtUvar | DailyBtMvar
-        )
+    parent: str | DailyStrategy | DailyBasket
+    params: Params
+
+    def self(self) -> DailyBtPx:
+        return self
+    
+    def get_parent(self) -> DailyStrategy | DailyBasket:
+        return get_parent(self)
+
+    def encode_type(self, params: DailyEM.Params):
+        return "px"
+
+    def encode_params(self, params: DailyEM.Params):
+        return ""
 
 
 @dataclass(frozen=True)
 class DailyBtGross(
-    DailyCombinationDeriv,
+    Daily,
+    HasDataFrameValue
 ):
-    parent: DailyBtUvar | DailyBtMvar | str
-
-    key: str = "gross"
-
-    version: int = 0
-    type: Literal["DailyBtGross"] = "DailyBtGross"
-
     @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyBtGrossSnap"] = (
-            "DailyBtGrossSnap"
-        )
+    class Params(Daily.Params):
+        pass
 
-    def get_parent(self) -> DailyBtUvar | DailyBtMvar:
-        return context.get().get(
-            self.parent, DailyBtUvar | DailyBtMvar
-        )
+    parent: str | DailyStrategy | DailyBasket
+    params: Params
 
+    def self(self) -> DailyBtGross:
+        return self
+    
+    def get_parent(self) -> DailyStrategy | DailyBasket:
+        return get_parent(self)
 
-@dataclass(frozen=True)
-class DailyBtWeight(
-    DailyCombinationDeriv,
-):
-    parent: DailyBtWeights | str
+    def encode_type(self, params: DailyEM.Params):
+        return "gross"
 
-    # NOTE: key is the param comb
-    # key: str = "weight"
+    def encode_params(self, params: DailyEM.Params):
+        return ""
 
-    version: int = 0
-    type: Literal["DailyBtWeight"] = "DailyBtWeight"
-
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyBtWeightSnap"] = (
-            "DailyBtWeightSnap"
-        )
-
-    def get_parent(self) -> DailyBtWeights:
-        return context.get().get(
-            self.parent, DailyBtWeights
-        )
 
 
 #  ------------------
-# New typed bt types — parented directly on StrategyTyped / BasketTyped.
-# No DailyCombination / Container.comb / args[idx] indirection.
-# Handlers read refs directly off the parent's typed slot fields.
-# Legacy DailyBtUvar / DailyBtMvar / DailyBtWeights stay above for now.
-#  ------------------
 
-
-@dataclass(frozen=True)
-class DailyBtUvarTyped(DailyChunked, DependsParentValue):
-    """Univariate backtest parented on a StrategyTyped namespace.
-
-    Depends on the strategy's ValueUpdate (which fires once all its data
-    slots have first-published, via TriageUpstream). The handler reads
-    strategy.rx / px / gross / signal / scale / cap directly.
-    """
-
-    # parent type kept loose at the bt level; concrete typing happens at the
-    # call site / get_parent.
-    parent: "Object | str"
-
-    version: int = 0
-    type: Literal["DailyBtUvarTyped"] = "DailyBtUvarTyped"
-
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyBtUvarTypedSnap"] = "DailyBtUvarTypedSnap"
-
-    @classmethod
-    def new(cls, parent):
-        return cls(id=parent.extend_id("bt-uv"), parent=parent)
-
-    def get_parent(self):
-        # StrategyTyped resolved at call time to avoid circular imports
-        from ...strat.params import StrategyTyped
-        return context.get().get(self.parent, StrategyTyped)
-
-    def handler(self, event: Event, snap: Snap) -> Handler:
-        if isinstance(event, ValueUpdate):
-            return HandleNewDailyBtUvarTyped()
-        raise ValueError((self, event))
-
-    def rx(self):    return DailyBtRx.new(self, key="rx")
-    def px(self):    return DailyBtPx.new(self, key="px")
-    def gross(self): return DailyBtGross.new(self, key="gross")
-    def pos(self):   return DailyBtPos.new(self, key="pos")
-
-
-@dataclass(frozen=True)
-class HandleNewDailyBtUvarTyped(Handler):
-    """Univariate backtest handler.
-
-    Reads the parent StrategyTyped's typed slot Refs, fetches each Daily
-    series, runs combine_backtest_dfs and writes the bt's value plus
-    fan-out children (DailyBtRx/Px/Gross/Pos).
-
-    Body deferred — needs framework data pipeline; this stub keeps the
-    construction/dispatch contract validated by tests.
-    """
-
-    def handle(
-        self,
-        event: ValueUpdate,
-        snap: "DailyBtUvarTyped.Snap",
-        obj: "DailyBtUvarTyped",
-    ):
-        raise NotImplementedError(
-            "DailyBtUvarTyped handler body deferred to follow-up; the "
-            "construction / depends() / dispatch shape is established."
-        )
-
-
-@dataclass(frozen=True)
-class DailyBtMvarTyped(DailyChunked, DependsParentValue):
-    """Multivariate backtest parented on a BasketTyped namespace.
-
-    Depends on the basket's ValueUpdate (which fires once every member
-    strategy has first-published). The handler iterates basket.members,
-    fetches each Strategy's rx/scale/etc., combines them.
-    """
-
-    parent: "Object | str"
-
-    version: int = 0
-    type: Literal["DailyBtMvarTyped"] = "DailyBtMvarTyped"
-
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyBtMvarTypedSnap"] = "DailyBtMvarTypedSnap"
-
-    @classmethod
-    def new(cls, parent):
-        return cls(id=parent.extend_id("bt-mv"), parent=parent)
-
-    def get_parent(self):
-        from ...strat.params import BasketTyped
-        return context.get().get(self.parent, BasketTyped)
-
-    def handler(self, event: Event, snap: Snap) -> Handler:
-        if isinstance(event, ValueUpdate):
-            return HandleNewDailyBtMvarTyped()
-        raise ValueError((self, event))
-
-    def rx(self, index: int | None = None):
-        return DailyBtRx.new(self, key="rx", index=index)
-
-    def px(self, index: int | None = None):
-        return DailyBtPx.new(self, key="px", index=index)
-
-    def gross(self, index: int | None = None):
-        return DailyBtGross.new(self, key="gross", index=index)
-
-    def pos(self, index: int | None = None):
-        return DailyBtPos.new(self, key="pos", index=index)
-
-
-@dataclass(frozen=True)
-class HandleNewDailyBtMvarTyped(Handler):
-    """Multivariate backtest handler. Body deferred (same as Uvar)."""
-
-    def handle(
-        self,
-        event: ValueUpdate,
-        snap: "DailyBtMvarTyped.Snap",
-        obj: "DailyBtMvarTyped",
-    ):
-        raise NotImplementedError(
-            "DailyBtMvarTyped handler body deferred to follow-up."
-        )
 
 
 __all__ = [
-    "Backtest",
-    "DailyBtUvar",
-    "DailyBtMvar",
-    "DailyBtWeights",
+    "DailyStrategy",
+    "DailyBasket",
     "DailyBtPos",
     "DailyBtRx",
     "DailyBtPx",
-    "DailyBtWeight",
     "DailyBtGross",
-    "DailyBtWeight",
-    "HandleNewDailyBtUvar",
-    "HandleNewDailyBtMvar",
-    # New typed forms (alongside legacy)
-    "DailyBtUvarTyped",
-    "DailyBtMvarTyped",
-    "HandleNewDailyBtUvarTyped",
-    "HandleNewDailyBtMvarTyped",
 ]

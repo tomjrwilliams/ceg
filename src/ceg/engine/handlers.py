@@ -245,30 +245,16 @@ class HandleNewDailyFromDailyParentPl(
             snap, into=frozendict()
         )
 
-
-@dataclass(frozen=True)
-class TriageUpstream(Object):
-    def upstream_paths(self) -> list[str]: ...
-
-    @dataclass(frozen=True)
-    class Snap(Snap):
-        triage: bool = True
-
-        type: Literal["TriageUpstreamSnap"] = (
-            "TriageUpstreamSnap"
-        )
-
-
-@dataclass(frozen=True)
-class HandleUpdateLatestUpstream(Handler):
-    def handle(
-        self,
-        event: ValueUpdate,
-        snap: TriageUpstream.Snap,
-        obj: TriageUpstream,
-    ):
-        es = [ValueUpdate(obj.id)]
-        return frozendict().set(obj.id, (snap, es))
+# @dataclass(frozen=True)
+# class HandleUpdateLatestUpstream(Handler):
+#     def handle(
+#         self,
+#         event: ValueUpdate,
+#         snap: TriageUpstream.Snap,
+#         obj: TriageUpstream,
+#     ):
+#         es = [ValueUpdate(obj.id)]
+#         return frozendict().set(obj.id, (snap, es))
 
 
 __all__ = [
@@ -277,9 +263,8 @@ __all__ = [
     "HandleNewValueFromPl",
     "HandleFromParentPl",
     "HandleNewValueFromParentPl",
-    "HandleNewDailyFromDf",
+    # "HandleNewDailyFromDf",
     "HandleNewDailyFromDailyParent",
     "HandleNewDailyFromDailyParentPl",
-    "TriageUpstream",
-    "HandleUpdateLatestUpstream",
+    # "HandleUpdateLatestUpstream",
 ]

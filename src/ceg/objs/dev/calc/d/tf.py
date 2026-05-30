@@ -41,113 +41,6 @@ O = TypeVar("O", bound=Object)
 #  ------------------
 
 
-@dataclass(frozen=True)
-class DailyTFParams(DailyParams):
-    chunk: int = 32
-    # TODO: db?
-
-    f: str | None = None
-
-    a: float | None = None
-    b: float | None = None
-
-    m: float | None = None
-    c: float | None = None
-
-    params: tuple[float | None, ...] | None = None
-
-    # NOTE: chunk not in path, as doesnt change value
-    # only back-end layout
-    # NOTE: likewise for back-end type: np vs pq etc.
-
-    def build_id(
-        self,
-        cls: Type[DailyTF],
-    ):
-        f = self.f
-        a = self.a
-        b = self.b
-        m = self.m
-        c = self.c
-        params = self.params
-        s = ""
-        if a is not None:
-            s += ("_" if len(s) else "") + f"a{a}"
-        if b is not None:
-            s += ("_" if len(s) else "") + f"b{b}"
-        if f is not None:
-            s += ("_" if len(s) else "") + f"f{f}"
-        if params is not None:
-            for p in params:
-                if p is None:
-                    s += ("_" if len(s) else "") + f"N"
-                else:
-                    s += ("_" if len(s) else "") + f"{p}"
-        if m is not None:
-            s += ("_" if len(s) else "") + f"m{m}"
-        if c is not None:
-            s += ("_" if len(s) else "") + f"c{c}"
-        s = s.replace("-", "n").replace(".0_", "_")
-        if s.endswith(".0"):
-            s = s[:-2]
-        assert len(s) > 0
-        return s
-
-
-@dataclass(frozen=True)
-class DailyTF(DailyWithDailyParent, DailyChunked):
-    parent: Object | str
-    # tags: DailyTags
-
-    params: DailyTFParams
-
-    project: Project | None = None
-
-    version: int = 0
-    type: Literal["DailyTF"] = "DailyTF"
-    # NOTE: to change
-
-    SUFFIX: ClassVar[str] = "tf"
-    # NOTE: to override
-
-    @dataclass(frozen=True)
-    class Snap(Daily.Snap):
-        type: Literal["DailyTFSnap"] = "DailyTFSnap"
-
-    @classmethod
-    def new(
-        cls,
-        parent: Daily,
-        f: str | None = None,
-        a: float | None = None,
-        b: float | None = None,
-        m: float | None = None,
-        c: float | None = None,
-        params: tuple[float | None, ...] | None = None,
-        project: Project | None = None,
-    ) -> DailyTF:
-        param = DailyTFParams(
-            f=f,
-            a=a,
-            b=b,
-            m=m,
-            c=c,
-            params=params,
-        )
-        assert cls.SUFFIX != "M", cls
-        id=parent.extend_id(param.build_id(cls))
-        if project is not None:
-            id=project.extend_id(path)
-        return cls(
-            id=id,
-            parent=parent,
-            params=param,
-            project=project,
-        )
-
-    def handler_object_new(self) -> HandleNewDailyTF:
-        return HandleNewDailyTF()
-
 
 def binary(v: pl.Expr):
     return (
@@ -160,28 +53,82 @@ def binary(v: pl.Expr):
         .otherwise(0)
     )
 
-
 @dataclass(frozen=True)
-class HandleNewDailyTF(HandleNewDailyFromDailyParentPl):
+class DailyTF(
+    Daily,
+    DependsParent,
+    HasDataFrameValue
+):
+    
+    @dataclass(frozen=True)
+    class Params(Daily.Params):
+
+        f: str | None = None
+
+        a: float | None = None
+        b: float | None = None
+
+        m: float | None = None
+        c: float | None = None
+
+        # params: tuple[float | None, ...] | None = None
+
+        def encode(self):
+            tags = []
+
+            if self.a is not None:
+                tags.append(f"a{self.a}")
+            if self.b is not None:
+                tags.append(f"b{self.b}")
+            if self.f is not None:
+                tags.append(f"f{self.f}")
+            # if params is not None:
+            #     for p in params:
+            #         if p is None:
+            #             s += ("_" if len(s) else "") + f"N"
+            #         else:
+            #             s += ("_" if len(s) else "") + f"{p}"
+            if self.m is not None:
+                tags.append(f"m{self.m}")
+            if self.c is not None:
+                tags.append(f"c{self.c}")
+
+            # s = s.replace("-", "n").replace(".0_", "_")
+            # if s.endswith(".0"):
+            #     s = s[:-2]
+            
+            return "-".join(tags)
+        
+    parent: Daily | str
+    params: Params
+        
+    def self(self) -> DailyTF:
+        return self
+    
+    def encode_type(self, params: DailyTF.Params):
+        return self.SUFFIX
+
+    def encode_params(self, params: DailyTF.Params):
+        return params.encode()
+
+    SUFFIX: ClassVar[str] = "tf"
+
     def calc_expr(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
-        obj: DailyTF,
     ) -> pl.Expr:
         return self._calc_expr(
             df,
             event,
-            obj,
         )
 
     def _calc_expr(
         self,
         df: pl.DataFrame,
         event: ObjectChange,
-        obj: DailyTF,
     ) -> pl.Expr:
-        params = obj.params
+        params = self.params
         f = params.f
         v = pl.col(VALUE).fill_nan(None)
         if params.b is not None:
@@ -246,170 +193,170 @@ class HandleNewDailyTF(HandleNewDailyFromDailyParentPl):
         #         -1 * (-1 * ser).log().tanh()
         #     ).fill_nan(None)
 
-        elif f == "capratio":
-            assert params.params is not None, params
-            if len(params.params) == 1:
-                (cap,) = params.params
+        # elif f == "capratio":
+        #     assert params.params is not None, params
+        #     if len(params.params) == 1:
+        #         (cap,) = params.params
 
-                v = (
-                    pl.when(v.is_null())
-                    .then(None)
-                    .when(v.abs() < cap)
-                    .then(1.0)
-                    .when(v < 0)
-                    .then(v.abs() / cap)
-                    .when(v > 0)
-                    .then(v / cap)
-                    .otherwise(v)
-                    .alias(VALUE)
-                    .fill_nan(None)
-                )
+        #         v = (
+        #             pl.when(v.is_null())
+        #             .then(None)
+        #             .when(v.abs() < cap)
+        #             .then(1.0)
+        #             .when(v < 0)
+        #             .then(v.abs() / cap)
+        #             .when(v > 0)
+        #             .then(v / cap)
+        #             .otherwise(v)
+        #             .alias(VALUE)
+        #             .fill_nan(None)
+        #         )
 
-            else:
-                raise ValueError(self)
+        #     else:
+        #         raise ValueError(self)
 
-        # TODO: outright sign, needs three param for 0
-        elif f == "lsign" or f == "rsign":
-            pass
+        # # TODO: outright sign, needs three param for 0
+        # elif f == "lsign" or f == "rsign":
+        #     pass
 
-        elif f == "zclip" or f == "zflip":
-            # TODO: rms variant?
-            assert params.params is not None, params
-            if len(params.params) == 2:
-                z_span, z_width = params.params
-                v_l = v.log()
-                z_sd = v_l.ewm_std(
-                    span=z_span,
-                    ignore_nulls=True,
-                    min_samples=2,
-                )
-                z_mu = v_l.ewm_mean(
-                    span=z_span,
-                    ignore_nulls=True,
-                    min_samples=2,
-                )
-                mul = -1 if f == "zflip" else 1.0
-                v_d = v_l - z_mu
-                v_w = (
-                    z_sd * z_width if z_width != 0 else v_d
-                )
-                lim_up = v_w if z_width != 0 else 0
-                lim_dn = -(v_w if z_width != 0 else 0)
-                v_up = z_mu + (v_w * mul)
-                v_dn = z_mu - (v_w * mul)
-                v = (
-                    (
-                        pl.when(v_d >= lim_up)
-                        .then(v_up)
-                        .when(v_d <= lim_dn)
-                        .then(v_dn)
-                        .otherwise(z_mu + (mul * v_d))
-                    )
-                    .exp()
-                    .fill_nan(None)
-                )
-            else:
-                raise ValueError(params)
+        # elif f == "zclip" or f == "zflip":
+        #     # TODO: rms variant?
+        #     assert params.params is not None, params
+        #     if len(params.params) == 2:
+        #         z_span, z_width = params.params
+        #         v_l = v.log()
+        #         z_sd = v_l.ewm_std(
+        #             span=z_span,
+        #             ignore_nulls=True,
+        #             min_samples=2,
+        #         )
+        #         z_mu = v_l.ewm_mean(
+        #             span=z_span,
+        #             ignore_nulls=True,
+        #             min_samples=2,
+        #         )
+        #         mul = -1 if f == "zflip" else 1.0
+        #         v_d = v_l - z_mu
+        #         v_w = (
+        #             z_sd * z_width if z_width != 0 else v_d
+        #         )
+        #         lim_up = v_w if z_width != 0 else 0
+        #         lim_dn = -(v_w if z_width != 0 else 0)
+        #         v_up = z_mu + (v_w * mul)
+        #         v_dn = z_mu - (v_w * mul)
+        #         v = (
+        #             (
+        #                 pl.when(v_d >= lim_up)
+        #                 .then(v_up)
+        #                 .when(v_d <= lim_dn)
+        #                 .then(v_dn)
+        #                 .otherwise(z_mu + (mul * v_d))
+        #             )
+        #             .exp()
+        #             .fill_nan(None)
+        #         )
+        #     else:
+        #         raise ValueError(params)
 
-        elif f == "levl" or f == "levlt":
-            assert params.params is not None, params
-            if len(params.params) == 2:
-                n, l = params.params
-                assert l is not None, l
-                r = l + 1
-            elif len(params.params) == 3:
-                n, l, r = params.params
-            else:
-                raise ValueError(params)
+        # elif f == "levl" or f == "levlt":
+        #     assert params.params is not None, params
+        #     if len(params.params) == 2:
+        #         n, l = params.params
+        #         assert l is not None, l
+        #         r = l + 1
+        #     elif len(params.params) == 3:
+        #         n, l, r = params.params
+        #     else:
+        #         raise ValueError(params)
 
-            # TODO: same approach but fixed levels
-            # eg. _, -75, -25, 25, 75, _
+        #     # TODO: same approach but fixed levels
+        #     # eg. _, -75, -25, 25, 75, _
 
-        # TODO: allow specifying r > l
-        # to indicate left of and right of
-        # eg. for TN, does well strong pos or neg
-        # but not middle
+        # # TODO: allow specifying r > l
+        # # to indicate left of and right of
+        # # eg. for TN, does well strong pos or neg
+        # # but not middle
 
-        elif f == "qile" or f == "qilet":
-            assert params.params is not None, params
-            if len(params.params) == 2:
-                n, l = params.params
-                assert l is not None, l
-                r = l + 1
-            elif len(params.params) == 3:
-                n, l, r = params.params
-            else:
-                raise ValueError(params)
+        # elif f == "qile" or f == "qilet":
+        #     assert params.params is not None, params
+        #     if len(params.params) == 2:
+        #         n, l = params.params
+        #         assert l is not None, l
+        #         r = l + 1
+        #     elif len(params.params) == 3:
+        #         n, l, r = params.params
+        #     else:
+        #         raise ValueError(params)
 
-            assert n is not None, params
-            n = int(n)
+        #     assert n is not None, params
+        #     n = int(n)
 
-            assert l is not None, params
-            assert r is not None, params
+        #     assert l is not None, params
+        #     assert r is not None, params
 
-            w = 1 / n
-            l = None if l == 0 else l * w
-            r = None if r == n else r * w
+        #     w = 1 / n
+        #     l = None if l == 0 else l * w
+        #     r = None if r == n else r * w
 
-            l_v = (
-                None
-                if l is None
-                else v.rolling_quantile(
-                    l, window_size=len(df), min_samples=10
-                )
-            )
-            r_v = (
-                None
-                if r is None
-                else v.rolling_quantile(
-                    r, window_size=len(df), min_samples=10
-                )
-            )
+        #     l_v = (
+        #         None
+        #         if l is None
+        #         else v.rolling_quantile(
+        #             l, window_size=len(df), min_samples=10
+        #         )
+        #     )
+        #     r_v = (
+        #         None
+        #         if r is None
+        #         else v.rolling_quantile(
+        #             r, window_size=len(df), min_samples=10
+        #         )
+        #     )
 
-        elif f == "zile" or f == "zilet":
-            assert params.params is not None, params
-            if len(params.params) == 3:
-                n, w, i = params.params
-                assert n is not None, params
-                assert w is not None, params
-                assert i is not None, params
-                l, r = apis.stats.sdev_increments(
-                    w, int(n), mu=0
-                )[int(i)]
+        # elif f == "zile" or f == "zilet":
+        #     assert params.params is not None, params
+        #     if len(params.params) == 3:
+        #         n, w, i = params.params
+        #         assert n is not None, params
+        #         assert w is not None, params
+        #         assert i is not None, params
+        #         l, r = apis.stats.sdev_increments(
+        #             w, int(n), mu=0
+        #         )[int(i)]
 
-            elif len(params.params) == 4:
-                n, w, il, ir = params.params
-                assert n is not None, params
-                assert w is not None, params
-                assert il is not None, params
-                assert ir is not None, params
-                if il < ir:
-                    l, _ = apis.stats.sdev_increments(
-                        w, int(n), mu=0
-                    )[int(il)]
-                    _, r = apis.stats.sdev_increments(
-                        w, int(n), mu=0
-                    )[int(ir) - 1]
-                else:
-                    l = None
-                    _, r = apis.stats.sdev_increments(
-                        w, int(n), mu=0
-                    )[int(ir) - 1]
-                    r2 = None
-                    l2, _ = apis.stats.sdev_increments(
-                        w, int(n), mu=0
-                    )[int(il)]
+        #     elif len(params.params) == 4:
+        #         n, w, il, ir = params.params
+        #         assert n is not None, params
+        #         assert w is not None, params
+        #         assert il is not None, params
+        #         assert ir is not None, params
+        #         if il < ir:
+        #             l, _ = apis.stats.sdev_increments(
+        #                 w, int(n), mu=0
+        #             )[int(il)]
+        #             _, r = apis.stats.sdev_increments(
+        #                 w, int(n), mu=0
+        #             )[int(ir) - 1]
+        #         else:
+        #             l = None
+        #             _, r = apis.stats.sdev_increments(
+        #                 w, int(n), mu=0
+        #             )[int(ir) - 1]
+        #             r2 = None
+        #             l2, _ = apis.stats.sdev_increments(
+        #                 w, int(n), mu=0
+        #             )[int(il)]
 
-                    l_v_2 = None if l2 is None else l2 * sd
-                    # r_v_2 = None if r2 is None else r2 * sd
-            else:
-                raise ValueError(params)
+        #             l_v_2 = None if l2 is None else l2 * sd
+        #             # r_v_2 = None if r2 is None else r2 * sd
+        #     else:
+        #         raise ValueError(params)
 
-            l_v = None if l is None else l * sd
-            r_v = None if r is None else r * sd
+        #     l_v = None if l is None else l * sd
+        #     r_v = None if r is None else r * sd
 
-        else:
-            raise ValueError((obj, f))
+        # else:
+        #     raise ValueError((obj, f))
 
         if l_v is not None or r_v is not None:
             assert params.a is None, params
@@ -447,30 +394,30 @@ class HandleNewDailyTF(HandleNewDailyFromDailyParentPl):
             if f == "qilet":
                 v = v.tanh()
 
-        if f == "lsign" or f == "rsign":
-            assert params.params is not None, params
-            assert len(params.params) == 2, params
-            l, r = params.params
-            if l is not None:
-                v = (
-                    (
-                        pl.when(v <= 0)
-                        if f == "lsign"
-                        else pl.when(v < 0)
-                    )
-                    .then(l)
-                    .otherwise(v)
-                )
-            if r is not None:
-                v = (
-                    (
-                        pl.when(v >= 0)
-                        if f == "rsign"
-                        else pl.when(v > 0)
-                    )
-                    .then(r)
-                    .otherwise(v)
-                )
+        # if f == "lsign" or f == "rsign":
+        #     assert params.params is not None, params
+        #     assert len(params.params) == 2, params
+        #     l, r = params.params
+        #     if l is not None:
+        #         v = (
+        #             (
+        #                 pl.when(v <= 0)
+        #                 if f == "lsign"
+        #                 else pl.when(v < 0)
+        #             )
+        #             .then(l)
+        #             .otherwise(v)
+        #         )
+        #     if r is not None:
+        #         v = (
+        #             (
+        #                 pl.when(v >= 0)
+        #                 if f == "rsign"
+        #                 else pl.when(v > 0)
+        #             )
+        #             .then(r)
+        #             .otherwise(v)
+        #         )
 
         if params.m is not None:
             v = params.m * v
@@ -480,8 +427,9 @@ class HandleNewDailyTF(HandleNewDailyFromDailyParentPl):
         return v.fill_nan(None)
 
 
+daily_tf = new(DailyTF, DailyTF.Params)
+
 __all__ = [
-    "DailyTFParams",
     "DailyTF",
-    "HandleNewDailyTF",
+    "daily_tf",
 ]

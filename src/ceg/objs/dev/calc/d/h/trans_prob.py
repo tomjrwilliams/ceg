@@ -1,8 +1,32 @@
+from __future__ import annotations
+import os
+from typing import (
+    TYPE_CHECKING,
+    Type,
+    TypeVar,
+    ClassVar,
+    Literal,
+    Protocol,
+    Callable,
+    TypeAlias,
+    overload,
+    cast,
+    final,
+)
+from pathlib import Path
+import functools
+from dataclasses import replace
 
-import polars as pl
-import numpy as np
+if TYPE_CHECKING:
+    from dataclasses import dataclass
+else:
+    from pydantic.dataclasses import dataclass
 
+import datetime as dt
 from frozendict import frozendict
+
+import numpy as np
+import polars as pl
 
 from......engine import *
 
@@ -21,15 +45,15 @@ def aggregate_transition_probs(
 
     bwd_k, fwd_k = params
 
-    window_bwd = kwargs.get("window_bwd")
-    window_fwd = kwargs.get("window_fwd")
+    window_bwd = assert_is(kwargs.get("window_bwd"), str)
+    window_fwd = assert_is(kwargs.get("window_fwd"), str)
 
-    norm = kwargs.get("norm")
+    norm = assert_is(kwargs.get("norm"), str)
 
-    discretise = kwargs.get("discretise")
+    # discretise = assert_is(kwargs.get("discretise"))
 
-    n_bwd = kwargs.get("n_bwd")
-    n_fwd = kwargs.get("n_fwd")
+    n_bwd = assert_is(kwargs.get("n_bwd"), int)
+    n_fwd = assert_is(kwargs.get("n_fwd"), int)
 
     for kw in [
         window_bwd,
@@ -205,7 +229,8 @@ def get_state_indicator(
     )
 
     if bwd is not None and fwd is not None:
-        i = offset + bwd, offset + n_bwd + fwd
+        # i = offset + bwd, offset + n_bwd + fwd
+        i = offset + bwd + offset + n_bwd + fwd # TODO: +, was tuple?
     elif bwd is not None:
         i = offset + bwd
     elif fwd is not None:
@@ -267,4 +292,114 @@ def get_transition_prob(
 
 # TODO: discretise, prob -> weight (including vol scale?)
 
-__all__ = ["aggregate_transition_probs", "get_transition_prob", "get_state_indicator"]
+
+@dataclass(frozen=True)
+class DailyTransitionProb(
+    Daily,
+    DependsParent,
+    HasDataFrameValue
+):
+    # NOTE: as in a singular probability out of the matrix
+    # also with current bwd state
+
+    @dataclass(frozen=True)
+    class Params(Daily.Params):
+
+        n_bwd: int
+        n_fwd: int
+
+        bwd: int | None
+        fwd: int
+
+    # NOTE: should be state indicator
+    parent: Daily | str
+    params: Params
+
+    def self(self) -> DailyTransitionProb:
+        return self
+    
+    def encode_type(self, params: DailyTransitionProb.Params):
+        return "trans-prob"
+
+    def encode_params(self, params: DailyTransitionProb.Params):
+        tags: list = [params.n_bwd, params.n_fwd]
+        if params.bwd is not None:
+            tags.append(params.bwd)
+        tags.append(params.fwd)
+        return "-".join(map(str, tags))
+
+    # NOTE: assume given == bwd, if bwd has value
+
+    def handle(
+        self,
+        event: Event,
+        snap: Snap
+    ):
+        params = self.params
+
+        event = assert_is(event, ValueUpdate)
+        snap = assert_is(snap, self.Snap)
+
+        # TODO: assert is transiton prob?
+        parent = get_parent(self)
+
+        df_probs = daily_pl_df_cached(parent, alias = parent.id)
+
+        e = pl.col(parent.id)
+
+        df = df_probs.select(
+            "date",
+            (
+                pl.lit(True)
+                if params.bwd is None
+                else get_state_indicator(
+                    e,
+                    params.n_bwd,
+                    params.n_fwd,
+                    bwd=params.bwd,
+                ).cast(pl.Boolean)
+            ).alias("active").forward_fill(),
+            # ...
+            get_transition_prob(
+                e,
+                params.n_bwd,
+                params.n_fwd,
+                bwd=params.bwd,
+                fwd=params.fwd,
+                given="bwd" if params.bwd is not None else None
+            ).alias("prob").forward_fill()
+        )
+
+        try:
+            df = df.select(
+                "date",
+                pl.when(pl.col("active"))
+                .then("prob")
+                .when(pl.col("active").shift(1))
+                .then(0.)
+                .otherwise(None)
+                .alias(self.id)
+            )
+        except Exception as e:
+            raise ValueError(df, list(df_probs.iter_rows())[:2]) from e
+
+        _ = self.set_value_from_df(
+            df,
+            self.id,
+        )
+        return ValueUpdate.if_snap_changed(
+            snap,
+            snap.update_from_df(df),
+        )
+    
+daily_transition_prob = new(
+    DailyTransitionProb, DailyTransitionProb.Params
+)
+
+__all__ = [
+    "aggregate_transition_probs",
+    "get_transition_prob",
+    "get_state_indicator",
+    "daily_transition_prob",
+    "DailyTransitionProb",
+]

@@ -53,8 +53,8 @@ class ProjectGraph(Graph):
             | DailyBtPos
             | DailyBtRx
             | DailyBtPerf
-            | DailyBtMvar
-            | DailyBtUvar
+            | DailyBasket
+            | DailyStrategy
             | DailyBtPx
             | DailyBtGross
 
@@ -88,8 +88,8 @@ class ProjectGraph(Graph):
             | DailyBtPos.Snap
             | DailyBtRx.Snap
             | DailyBtPerf.Snap
-            | DailyBtMvar.Snap
-            | DailyBtUvar.Snap
+            | DailyBasket.Snap
+            | DailyStrategy.Snap
             | DailyBtPx.Snap
             | DailyBtGross.Snap
 

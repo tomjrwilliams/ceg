@@ -192,7 +192,7 @@ class HasBackTest(HasAsset):
     params: StrategyParams
     name: str | None = None
 
-    bt: DailyBtUvar | DailyBtMvar | None = None
+    bt: DailyStrategy | DailyBasket | None = None
     perf: DailyBtPerf | None = None
 
     perf_variants: tuple[DailyBtPerf] | None = None
@@ -278,7 +278,7 @@ class Strategy(HasBackTest, HasAsset, AssetLike):
 
     # TODO: separate the params from the objects?
 
-    bt: DailyBtUvar | None = None
+    bt: DailyStrategy | None = None
     perf: DailyBtPerf | None = None
 
     pfo: DailyPfolio | None = None
@@ -380,7 +380,7 @@ class Strategy(HasBackTest, HasAsset, AssetLike):
     ):
         univ, self, spec = self.bind_spec(univ)
 
-        bt = DailyBtUvar.new(univ, spec)
+        bt = DailyStrategy.new(univ, spec)
         context.get().with_obj(bt)
 
         univ = assert_is(univ, t)
@@ -428,7 +428,7 @@ class Basket(HasBackTest, HasAsset, AssetLike):
 
     name: str = ""
 
-    bt: DailyBtMvar | None = None
+    bt: DailyBasket | None = None
 
     def price_symbols(self):
         res = set()
@@ -516,7 +516,7 @@ class Basket(HasBackTest, HasAsset, AssetLike):
 
         assert self.name != "", self
 
-        bt = DailyBtMvar.new(univ, tuple(specs))
+        bt = DailyBasket.new(univ, tuple(specs))
         context.get().with_obj(bt)
 
         univ = assert_is(univ, t)
@@ -664,6 +664,12 @@ def cv_osc(
 # the new type can already be constructed and registered in a graph.
 # --------------------------------------------------------------------------
 
+
+# TODO: these can be removed if you juts use bt? in which case can maybe rename the bt to Strategy as that reads better?
+
+# Strategy and Basket? rather than uvar and mvar? 
+
+# at whihc point may as well keep as is, bt is more succint
 
 @dataclass(frozen=True)
 class StrategyTyped(TriageUpstream, UseRootStorage):

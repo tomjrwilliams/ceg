@@ -1,4 +1,4 @@
-"""BasketTyped + DailyBtUvarTyped + DailyBtMvarTyped — the new bt shape that
+"""BasketTyped + DailyStrategyTyped + DailyBasketTyped — the new bt shape that
 takes typed Strategy/Basket parents directly (no DailyCombination/Container.comb
 indirection).
 
@@ -26,10 +26,10 @@ from ceg.engine import (
 from ceg.objs.dev.strat import StrategyTyped, BasketTyped, StrategyParams
 from ceg.objs.dev.strat.assets import AssetConcrete
 from ceg.objs.dev.pfo.d.bt import (
-    DailyBtUvarTyped,
-    DailyBtMvarTyped,
-    HandleNewDailyBtUvarTyped,
-    HandleNewDailyBtMvarTyped,
+    DailyStrategyTyped,
+    DailyBasketTyped,
+    HandleNewDailyStrategyTyped,
+    HandleNewDailyBasketTyped,
 )
 
 
@@ -64,20 +64,20 @@ def test_basket_handler_returns_triage_on_value_update():
     assert isinstance(h, HandleUpdateLatestUpstream)
 
 
-# --- DailyBtUvarTyped ---
+# --- DailyStrategyTyped ---
 
 def test_btuvar_constructed_with_strategy_parent_string():
-    bt = DailyBtUvarTyped(id="s-bt-uv", parent="s")
+    bt = DailyStrategyTyped(id="s-bt-uv", parent="s")
     assert bt.parent == "s"
     assert bt.id == "s-bt-uv"
 
 def test_btuvar_new_constructs_id_from_parent():
     strat = StrategyTyped(id="s", parent="p", asset=_ASSET)
-    bt = DailyBtUvarTyped.new(parent=strat)
+    bt = DailyStrategyTyped.new(parent=strat)
     assert bt.id == "s-bt-uv"
 
 def test_btuvar_depends_on_parent_value_update():
-    bt = DailyBtUvarTyped(id="s-bt-uv", parent="s")
+    bt = DailyStrategyTyped(id="s-bt-uv", parent="s")
     deps = bt.depends()
     assert len(deps) == 1
     assert deps[0].obj == "s-bt-uv"
@@ -86,29 +86,29 @@ def test_btuvar_depends_on_parent_value_update():
 
 def test_btuvar_handler_returns_handler_on_value_update():
     strat = StrategyTyped(id="s", parent="p", asset=_ASSET, rx=IdRef("rx"))
-    bt = DailyBtUvarTyped.new(parent=strat)
+    bt = DailyStrategyTyped.new(parent=strat)
     h = bt.handler(ValueUpdate("s"), bt.Snap.new(bt.id))
-    assert isinstance(h, HandleNewDailyBtUvarTyped)
+    assert isinstance(h, HandleNewDailyStrategyTyped)
 
 def test_btuvar_handler_rejects_unrelated_event():
-    bt = DailyBtUvarTyped(id="s-bt-uv", parent="s")
+    bt = DailyStrategyTyped(id="s-bt-uv", parent="s")
     with pytest.raises(ValueError):
         bt.handler(ObjectChange("s", diff=None), bt.Snap.new(bt.id))
 
 
-# --- DailyBtMvarTyped ---
+# --- DailyBasketTyped ---
 
 def test_btmvar_constructed_with_basket_parent_string():
-    bt = DailyBtMvarTyped(id="b-bt-mv", parent="b")
+    bt = DailyBasketTyped(id="b-bt-mv", parent="b")
     assert bt.parent == "b"
 
 def test_btmvar_new_constructs_id_from_parent():
     basket = BasketTyped(id="b", parent="p", members=(IdRef("s-0"),))
-    bt = DailyBtMvarTyped.new(parent=basket)
+    bt = DailyBasketTyped.new(parent=basket)
     assert bt.id == "b-bt-mv"
 
 def test_btmvar_depends_on_basket_value_update():
-    bt = DailyBtMvarTyped(id="b-bt-mv", parent="b")
+    bt = DailyBasketTyped(id="b-bt-mv", parent="b")
     deps = bt.depends()
     assert len(deps) == 1
     assert deps[0].depends == "b"
@@ -116,9 +116,9 @@ def test_btmvar_depends_on_basket_value_update():
 
 def test_btmvar_handler_returns_handler_on_value_update():
     basket = BasketTyped(id="b", parent="p", members=(IdRef("s-0"),))
-    bt = DailyBtMvarTyped.new(parent=basket)
+    bt = DailyBasketTyped.new(parent=basket)
     h = bt.handler(ValueUpdate("b"), bt.Snap.new(bt.id))
-    assert isinstance(h, HandleNewDailyBtMvarTyped)
+    assert isinstance(h, HandleNewDailyBasketTyped)
 
 
 # --- graph round-trip ---
@@ -126,8 +126,8 @@ def test_btmvar_handler_returns_handler_on_value_update():
 def test_strategy_basket_bt_round_trip_in_graph():
     strat = StrategyTyped(id="s", parent="p", asset=_ASSET, rx=IdRef("rx"))
     basket = BasketTyped(id="b", parent="p", members=(IdRef("s"),))
-    btu = DailyBtUvarTyped.new(parent=strat)
-    btm = DailyBtMvarTyped.new(parent=basket)
+    btu = DailyStrategyTyped.new(parent=strat)
+    btm = DailyBasketTyped.new(parent=basket)
     g = (
         Graph(name="t")
         .with_obj(strat)
@@ -139,5 +139,5 @@ def test_strategy_basket_bt_round_trip_in_graph():
     # check ids/relevant fields rather than full equality.
     assert g.get(IdRef("s"), StrategyTyped).id == "s"
     assert g.get(IdRef("b"), BasketTyped).id == "b"
-    assert g.get(IdRef("s-bt-uv"), DailyBtUvarTyped).parent == "s"
-    assert g.get(IdRef("b-bt-mv"), DailyBtMvarTyped).parent == "b"
+    assert g.get(IdRef("s-bt-uv"), DailyStrategyTyped).parent == "s"
+    assert g.get(IdRef("b-bt-mv"), DailyBasketTyped).parent == "b"

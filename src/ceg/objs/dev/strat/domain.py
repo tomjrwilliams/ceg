@@ -94,8 +94,8 @@ class StrategyGraph(Graph):
             | DailyTF
             | DailyPfolioPos
             | DailyPfolioRx
-            | DailyBtMvar
-            | DailyBtUvar
+            | DailyBasket
+            | DailyStrategy
             | DailyPfolio
             | DailyPfolioNotional
             | DailyPfolioNotionalVal
@@ -148,8 +148,8 @@ class StrategyGraph(Graph):
             | DailyTF.Snap
             | DailyPfolioPos.Snap
             | DailyPfolioRx.Snap
-            | DailyBtMvar.Snap
-            | DailyBtUvar.Snap
+            | DailyBasket.Snap
+            | DailyStrategy.Snap
             | DailyPfolio.Snap
             | DailyPfolioNotional.Snap
             | DailyPfolioNotionalVal.Snap

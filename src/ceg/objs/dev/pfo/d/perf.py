@@ -466,7 +466,7 @@ class DailyBtMutation:
         bt = bt_rx.get_parent()
         univ = bt.get_parent()
 
-        if isinstance(bt, DailyBtUvar):
+        if isinstance(bt, DailyStrategy):
             kwargs: list[dict[str, dict]] = (
                 self.expand_kwargs()
             )
@@ -519,7 +519,7 @@ class DailyBtMutation:
 
                 yield kwargs_flat, df
 
-        elif isinstance(bt, DailyBtMvar):
+        elif isinstance(bt, DailyBasket):
             # TODO: basket we just mutate the outer
             # later, optional index for which child to mutate
             # then, pass multiple mutation to target several

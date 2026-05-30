@@ -2126,7 +2126,61 @@ class DailyEOsc(DailyEM):
 
 daily_eosc = new(DailyEOsc, DailyEOsc.Params)
 
-# TODO: encode ..., self, new, all
+from .....apis.calcs.regimes.dd import with_dd_regime
+
+@dataclass(frozen=True)
+class DailyDDRegime(
+    Daily,
+    DependsParent,
+    HasDataFrameValue
+):
+
+    @dataclass(frozen=True)
+    class Params(Daily.Params):
+
+        threshold: float = 1.0
+        span: int = 16
+        window: int = 16
+        continuation: float = 0.1
+
+        def encode(self):
+            tags = [
+                self.span,
+                self.window,
+                self.threshold,
+                self.continuation
+            ]
+            return "-".join(map(str, tags))
+
+    parent: Daily | str
+    params: Params
+
+    def self(self) -> DailyDDRegime:
+        return self
+    
+    def encode_type(self, params: DailyDDRegime.Params):
+        return "dd-regime"
+
+    def encode_params(self, params: DailyDDRegime.Params):
+        return params.encode()
+    
+    def calc_df(
+        self,
+        df: pl.DataFrame,
+        event: ObjectChange,
+        obj: DailyDDRegime,
+    ) -> pl.DataFrame:
+        params = obj.params
+        return df.pipe(
+            with_dd_regime,
+            rx=VALUE,
+            span=params.span,
+            threshold=params.threshold,
+            window=params.window,
+            continuation=params.continuation,
+        ).select("date", pl.col("label").alias(VALUE))
+
+daily_ewdd_regime = new(DailyDDRegime, DailyDDRegime.Params)
 
 #  ------------------
 
@@ -2176,4 +2230,7 @@ __all__ = [
     "daily_ebeta",
     "DailyEOsc",
     "daily_eosc",
+    "DailyDDRegime",
+    "with_dd_regime",
+    "daily_ewdd_regime",
 ]

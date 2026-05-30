@@ -53,6 +53,12 @@ class Daily(Object):
         def with_dates(self, first: dt.date, last: dt.date):
             return replace(self, first=first, last=last)
         
+        def update_from_dates(self, first: dt.date, last: dt.date):
+            return replace(
+                self,
+                first=first,
+                last=last,
+            )
         def update_from_df(self, df: pl.DataFrame):
             d_min, d_max = df.pipe(
                 apis.pl.select_items,
@@ -124,7 +130,7 @@ class Date(DependsGraphSync, Daily):
             )
         return
 
-today = new(Date, Date.Params)
+date = new(Date, Date.Params)
 
 @dataclass(frozen=True)
 class DailyChunked(
@@ -395,8 +401,16 @@ def daily_pl_series(
     )
 
 
+@dataclass(frozen=True)
+class TriageUpstreamDaily(Daily, TriageUpstream):
+
+    @dataclass(frozen=True)
+    class Snap(Daily.Snap, TriageUpstream.Snap):
+        pass
+
 __all__ = [
     "Daily",
+    "TriageUpstreamDaily",
     "DailyChunked",
     "daily_pl_df",
     "daily_pl_df_cached",

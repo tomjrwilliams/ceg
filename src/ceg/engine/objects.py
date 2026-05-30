@@ -1982,6 +1982,16 @@ def new(
     return init
 
 
+@dataclass(frozen=True)
+class TriageUpstream(Object):
+    def upstream_paths(self) -> list[str]: ...
+
+    @dataclass(frozen=True)
+    class Snap(Object.Snap):
+        triage: bool = True
+
+
+
 if TYPE_CHECKING:
 
     @dataclass(frozen=True)
@@ -2054,4 +2064,5 @@ __all__ = [
     "bind",
 
     "get_snap",
+    "TriageUpstream",
 ]
